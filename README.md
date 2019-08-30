@@ -14,6 +14,10 @@
 - Weapons
 - Simple level
 
+## Notes
+
+Cargo.toml contains hardcoded relative path to engine `rg3d = { path = "../rg3d" }`, so you have to change this or put engine folder near the game folder.
+
 ## Dependencies
 
 - rg3d - engine

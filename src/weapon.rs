@@ -14,7 +14,7 @@ use rg3d::{
         node::Node,
         Scene,
     },
-    engine::State,
+    engine::state::State,
     math::vec3::Vec3,
 };
 

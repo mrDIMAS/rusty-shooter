@@ -93,6 +93,11 @@ impl Game {
             .with_height(200.0)
             .build(ui);
 
+        WindowBuilder::new()
+            .with_width(200.0)
+            .with_height(200.0)
+            .build(ui);
+
         self.menu.root = GridBuilder::new()
             .add_row(Row::stretch())
             .add_row(Row::strict(600.0))

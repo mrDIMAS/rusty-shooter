@@ -1,6 +1,6 @@
 use rg3d::{
     physics::Body,
-    engine::State,
+    engine::state::State,
     utils::{
         visitor::{
             Visit,
@@ -54,7 +54,7 @@ impl Default for Controller {
             crouch: false,
             jump: false,
             run: false,
-            last_mouse_pos: Vec2::new(),
+            last_mouse_pos: Vec2::zero(),
             shoot: false,
         }
     }

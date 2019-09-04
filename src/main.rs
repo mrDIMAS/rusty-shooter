@@ -38,6 +38,7 @@ use rg3d::{
     },
 };
 use crate::level::Level;
+use rg3d::engine::duration_to_seconds_f32;
 
 pub struct MenuState {
     save_game: Option<()>,
@@ -60,7 +61,7 @@ pub struct Game {
 
 pub struct GameTime {
     elapsed: f64,
-    delta: f64,
+    delta: f32,
 }
 
 impl Game {
@@ -219,14 +220,21 @@ impl Game {
 
                 // Load engine state first
                 match self.engine.visit("Engine", &mut visitor) {
-                    Ok(_) => println!("Engine state successfully loaded!"),
-                    Err(e) => println!("Failed to load engine state! Reason: {}", e)
-                }
+                    Ok(_) => {
+                        println!("Engine state successfully loaded!");
 
-                // Then load game state.
-                match self.level.visit("Level", &mut visitor) {
-                    Ok(_) => println!("Game state successfully loaded!"),
-                    Err(e) => println!("Failed to load game state! Reason: {}", e)
+                        // Then load game state.
+                        match self.level.visit("Level", &mut visitor) {
+                            Ok(_) => {
+                                println!("Game state successfully loaded!");
+
+                                // Hide menu only of we successfully loaded a save.
+                                self.set_menu_visible(false)
+                            },
+                            Err(e) => println!("Failed to load game state! Reason: {}", e)
+                        }
+                    },
+                    Err(e) => println!("Failed to load engine state! Reason: {}", e)
                 }
             }
             Err(e) => {
@@ -301,10 +309,10 @@ impl Game {
 
         let mut debug_string = String::new();
         while self.engine.is_running() {
-            let mut dt = duration_to_seconds_f64(clock.elapsed()) - game_time.elapsed;
+            let mut dt = (duration_to_seconds_f64(clock.elapsed()) - game_time.elapsed) as f32;
             while dt >= fixed_timestep {
                 dt -= fixed_timestep;
-                game_time.elapsed += fixed_timestep;
+                game_time.elapsed += fixed_timestep as f64;
                 // Get events from OS.
                 self.engine.poll_events();
 

@@ -18,7 +18,6 @@ use rg3d::{
         node::{
             Node,
             NodeKind,
-            Camera,
         },
         Scene,
     },
@@ -31,6 +30,7 @@ use crate::{
     },
     GameTime,
 };
+use rg3d::scene::camera::Camera;
 
 pub struct Controller {
     move_forward: bool,

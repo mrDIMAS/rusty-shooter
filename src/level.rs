@@ -28,6 +28,9 @@ use crate::{
     player::Player,
     GameTime,
 };
+use rg3d::scene::particle_system::{ParticleSystem, Emitter, BoxEmitter, EmitterKind};
+use rg3d::utils::color_gradient::{ColorGradient, GradientPoint};
+use rg3d::gui::draw::Color;
 
 pub struct Level {
     scene: Handle<Scene>,
@@ -112,6 +115,23 @@ impl Level {
                 node.set_local_position(Vec3::make(-0.25, -1.40, 3.0 - i as f32 * 1.40));
             }
         }
+
+        // Test particle system
+        let mut particle_system = ParticleSystem::new();
+        particle_system.set_acceleration(Vec3::make(0.0, -0.1, 0.0));
+        let mut gradient = ColorGradient::new();
+        gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(150, 150, 150, 0)));
+        gradient.add_point(GradientPoint::new(0.05, Color::from_rgba(150, 150, 150, 220)));
+        gradient.add_point(GradientPoint::new(0.85, Color::from_rgba(255, 255, 255, 180)));
+        gradient.add_point(GradientPoint::new(1.00, Color::from_rgba(255, 255, 255, 0)));
+        particle_system.set_color_over_lifetime_gradient(gradient);
+        let box_emitter = BoxEmitter::new(2.0, 0.5, 2.0);
+        let emitter = Emitter::new(EmitterKind::Box(box_emitter));
+        particle_system.add_emitter(emitter);
+        if let Some(texture) = engine.get_state_mut().request_resource(Path::new("data/particles/smoke_04.tga")) {
+            particle_system.set_texture(texture);
+        }
+        scene.add_node(Node::new(NodeKind::ParticleSystem(particle_system)));
 
         Level {
             player: Some(Player::new(engine.get_state_mut(), &mut scene)),

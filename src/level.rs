@@ -11,6 +11,11 @@ use rg3d::{
     scene::{
         node::*,
         *,
+        particle_system::{
+            ParticleSystem, Emitter, BoxEmitter,
+            EmitterKind, CustomEmitter, Particle,
+            Emit, CustomEmitterFactory,
+        },
     },
     engine::*,
     physics::{
@@ -18,6 +23,8 @@ use rg3d::{
         StaticTriangle,
     },
     resource::model::Model,
+    utils::color_gradient::{ColorGradient, GradientPoint},
+    gui::draw::Color,
 };
 use std::{
     path::Path,
@@ -28,9 +35,7 @@ use crate::{
     player::Player,
     GameTime,
 };
-use rg3d::scene::particle_system::{ParticleSystem, Emitter, BoxEmitter, EmitterKind};
-use rg3d::utils::color_gradient::{ColorGradient, GradientPoint};
-use rg3d::gui::draw::Color;
+use rand::Rng;
 
 pub struct Level {
     scene: Handle<Scene>,
@@ -54,6 +59,55 @@ impl Visit for Level {
         self.player.visit("Player", visitor)?;
 
         visitor.leave_region()
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct CylinderEmitter {
+    height: f32,
+    radius: f32,
+}
+
+impl CylinderEmitter {
+    pub fn new() -> Self {
+        Self {
+            height: 1.0,
+            radius: 0.5,
+        }
+    }
+}
+
+impl CustomEmitter for CylinderEmitter {
+    fn box_clone(&self) -> Box<dyn CustomEmitter> {
+        Box::new(self.clone())
+    }
+
+    fn get_kind(&self) -> u8 {
+        3
+    }
+}
+
+impl Visit for CylinderEmitter {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.radius.visit("Radius", visitor)?;
+        self.height.visit("Height", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
+impl Emit for CylinderEmitter {
+    fn emit(&self, emitter: &Emitter, particle_system: &ParticleSystem, particle: &mut Particle) {
+        // Disk point picking extended in 3D - http://mathworld.wolfram.com/DiskPointPicking.html
+        let s: f32 = rand::thread_rng().gen_range(0.0, 1.0);
+        let theta = rand::thread_rng().gen_range(0.0, 2.0 * std::f32::consts::PI);
+        let z = rand::thread_rng().gen_range(0.0, self.height);
+        let r = s.sqrt() * self.radius;
+        let x = r * theta.cos();
+        let y = r * theta.sin();
+        particle.position = Vec3::make(x, y, z);
     }
 }
 
@@ -125,8 +179,7 @@ impl Level {
         gradient.add_point(GradientPoint::new(0.85, Color::from_rgba(255, 255, 255, 180)));
         gradient.add_point(GradientPoint::new(1.00, Color::from_rgba(255, 255, 255, 0)));
         particle_system.set_color_over_lifetime_gradient(gradient);
-        let box_emitter = BoxEmitter::new(2.0, 0.5, 2.0);
-        let emitter = Emitter::new(EmitterKind::Box(box_emitter));
+        let emitter = Emitter::new(EmitterKind::Custom(Box::new(CylinderEmitter::new())));
         particle_system.add_emitter(emitter);
         if let Some(texture) = engine.get_state_mut().request_resource(Path::new("data/particles/smoke_04.tga")) {
             particle_system.set_texture(texture);

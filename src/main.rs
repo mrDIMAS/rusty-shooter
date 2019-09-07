@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
 extern crate rg3d;
+extern crate rand;
+extern crate glutin;
 
 mod level;
 mod player;
@@ -37,8 +39,9 @@ use rg3d::{
         },
     },
 };
-use crate::level::Level;
+use crate::level::{Level, CylinderEmitter};
 use rg3d::engine::duration_to_seconds_f32;
+use rg3d::scene::particle_system::CustomEmitterFactory;
 
 pub struct MenuState {
     save_game: Option<()>,
@@ -67,6 +70,16 @@ pub struct GameTime {
 impl Game {
     pub fn new() -> Game {
         let engine = Engine::new();
+
+        if let Ok(mut factory) = CustomEmitterFactory::get() {
+            factory.set_callback(Box::new(|kind| {
+                match kind {
+                    3 => Ok(Box::new(CylinderEmitter::new())),
+                    _ => Err(String::from("invalid custom emitter kind"))
+                }
+            }))
+        }
+
         let mut game = Game {
             menu: Menu {
                 state: Rc::new(RefCell::new(MenuState {

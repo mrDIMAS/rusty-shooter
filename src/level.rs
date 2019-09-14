@@ -1,13 +1,4 @@
 use rg3d::{
-    utils::{
-        pool::*,
-        visitor::{
-            Visit,
-            VisitResult,
-            Visitor,
-        },
-    },
-    math::vec3::*,
     scene::{
         node::*,
         *,
@@ -23,8 +14,6 @@ use rg3d::{
         StaticTriangle,
     },
     resource::model::Model,
-    utils::color_gradient::{ColorGradient, GradientPoint},
-    gui::draw::Color,
 };
 use std::{
     path::Path,
@@ -36,6 +25,18 @@ use crate::{
     GameTime,
 };
 use rand::Rng;
+
+use rg3d_core::{
+    color::Color,
+    color_gradient::{ColorGradient, GradientPoint},
+    pool::*,
+    visitor::{
+        Visit,
+        VisitResult,
+        Visitor,
+    },
+    math::vec3::*,
+};
 
 pub struct Level {
     scene: Handle<Scene>,

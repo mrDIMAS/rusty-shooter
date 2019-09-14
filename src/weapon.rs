@@ -1,20 +1,21 @@
 use std::path::Path;
 use rg3d::{
     resource::model::Model,
-    utils::{
-        pool::Handle,
-        visitor::{
-            Visit,
-            VisitResult,
-            Visitor,
-            VisitError,
-        },
-    },
     scene::{
         node::Node,
         Scene,
     },
     engine::state::State,
+};
+
+use rg3d_core::{
+    pool::Handle,
+    visitor::{
+        Visit,
+        VisitResult,
+        Visitor,
+        VisitError,
+    },
     math::vec3::Vec3,
 };
 

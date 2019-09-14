@@ -1,19 +1,6 @@
 use rg3d::{
     physics::Body,
     engine::state::State,
-    utils::{
-        visitor::{
-            Visit,
-            Visitor,
-            VisitResult,
-        },
-        pool::Handle,
-    },
-    math::{
-        vec2::Vec2,
-        vec3::Vec3,
-        quat::Quat,
-    },
     scene::{
         node::{
             Node,
@@ -21,6 +8,7 @@ use rg3d::{
         },
         Scene,
     },
+    scene::camera::Camera,
 };
 
 use crate::{
@@ -30,7 +18,20 @@ use crate::{
     },
     GameTime,
 };
-use rg3d::scene::camera::Camera;
+
+use rg3d_core::{
+    visitor::{
+        Visit,
+        Visitor,
+        VisitResult,
+    },
+    pool::Handle,
+    math::{
+        vec2::Vec2,
+        vec3::Vec3,
+        quat::Quat,
+    },
+};
 
 pub struct Controller {
     move_forward: bool,

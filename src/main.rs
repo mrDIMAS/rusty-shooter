@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+extern crate rg3d_core;
 extern crate rg3d;
 extern crate rand;
 extern crate glutin;
@@ -18,8 +19,11 @@ use std::{
 };
 
 use rg3d::{
-    engine::{Engine, duration_to_seconds_f64},
-    math::vec2::Vec2,
+    engine::{
+        Engine,
+        duration_to_seconds_f64,
+        duration_to_seconds_f32,
+    },
     gui::{
         Visibility,
         node::{UINode, UINodeKind},
@@ -30,18 +34,18 @@ use rg3d::{
         scroll_bar::ScrollBarBuilder,
         window::WindowBuilder,
     },
-    utils::{
-        pool::Handle,
-        visitor::{
-            Visitor,
-            VisitResult,
-            Visit,
-        },
-    },
+    scene::particle_system::CustomEmitterFactory,
 };
 use crate::level::{Level, CylinderEmitter};
-use rg3d::engine::duration_to_seconds_f32;
-use rg3d::scene::particle_system::CustomEmitterFactory;
+use rg3d_core::{
+    math::vec2::Vec2,
+    pool::Handle,
+    visitor::{
+        Visitor,
+        VisitResult,
+        Visit,
+    },
+};
 
 pub struct MenuState {
     save_game: Option<()>,
@@ -243,10 +247,10 @@ impl Game {
 
                                 // Hide menu only of we successfully loaded a save.
                                 self.set_menu_visible(false)
-                            },
+                            }
                             Err(e) => println!("Failed to load game state! Reason: {}", e)
                         }
-                    },
+                    }
                     Err(e) => println!("Failed to load engine state! Reason: {}", e)
                 }
             }

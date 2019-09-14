@@ -10,6 +10,7 @@ edition = "2018"
 lto = false
 
 [dependencies]
+rg3d-core = { path = "../rg3d-core" }
 rg3d = { path = "../rg3d" }
 rand = "0.7.0"
 glutin = "0.21.0"

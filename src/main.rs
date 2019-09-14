@@ -16,6 +16,7 @@ use std::{
     time::Instant,
     rc::Rc,
     io::Write,
+    sync::{Arc, Mutex}
 };
 
 use rg3d::{
@@ -45,6 +46,10 @@ use rg3d_core::{
         VisitResult,
         Visit,
     },
+};
+use rg3d_sound::{
+    buffer::{Buffer, BufferKind},
+    source::{Source, SourceKind}
 };
 
 pub struct MenuState {
@@ -83,6 +88,10 @@ impl Game {
                 }
             }))
         }
+
+        let buffer = Buffer::new(Path::new("data/Sonic_Mayhem_Collapse.wav"), BufferKind::Stream).unwrap();
+        let source = Source::new(SourceKind::Flat, Arc::new(Mutex::new(buffer))).unwrap();
+        engine.get_sound_context().lock().unwrap().add_source(source);
 
         let mut game = Game {
             menu: Menu {

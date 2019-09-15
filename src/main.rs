@@ -23,7 +23,6 @@ use rg3d::{
     engine::{
         Engine,
         duration_to_seconds_f64,
-        duration_to_seconds_f32,
     },
     gui::{
         Visibility,
@@ -349,12 +348,12 @@ impl Game {
                         // this allows to catch events by UI for example and don't send them
                         // to player controller so when you click on some button in UI you
                         // won't shoot from your current weapon in game.
-                        let mut event_processed = self.engine.get_ui_mut().process_event(&event);
+                        let event_processed = self.engine.get_ui_mut().process_event(&event);
 
                         if !event_processed {
                             if let Some(ref mut level) = self.level {
                                 if let Some(player) = level.get_player_mut() {
-                                    event_processed = player.process_event(&event);
+                                    player.process_event(&event);
                                 }
                             }
                         }
@@ -373,7 +372,7 @@ impl Game {
                             }
                             glutin::WindowEvent::Resized(new_size) => {
                                 let frame_size = Vec2::make(new_size.width as f32, new_size.height as f32);
-                                self.engine.set_frame_size(frame_size);
+                                self.engine.set_frame_size(frame_size).unwrap();
                                 if let Some(root) = self.engine.get_ui_mut().get_node_mut(self.menu.root) {
                                     root.set_width(frame_size.x);
                                     root.set_height(frame_size.y);
@@ -400,7 +399,7 @@ impl Game {
             }
 
             // Render at max speed
-            self.engine.render();
+            self.engine.render().unwrap();
         }
         self.destroy_level();
     }

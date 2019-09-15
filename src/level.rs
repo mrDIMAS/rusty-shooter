@@ -3,9 +3,9 @@ use rg3d::{
         node::*,
         *,
         particle_system::{
-            ParticleSystem, Emitter, BoxEmitter,
+            ParticleSystem, Emitter,
             EmitterKind, CustomEmitter, Particle,
-            Emit, CustomEmitterFactory,
+            Emit,
         },
     },
     engine::*,
@@ -15,10 +15,7 @@ use rg3d::{
     },
     resource::model::Model,
 };
-use std::{
-    path::Path,
-    rc::Rc,
-};
+use std::path::Path;
 
 use crate::{
     player::Player,
@@ -37,6 +34,7 @@ use rg3d_core::{
     },
     math::vec3::*,
 };
+use std::sync::Arc;
 
 pub struct Level {
     scene: Handle<Scene>,
@@ -100,7 +98,7 @@ impl Visit for CylinderEmitter {
 }
 
 impl Emit for CylinderEmitter {
-    fn emit(&self, emitter: &Emitter, particle_system: &ParticleSystem, particle: &mut Particle) {
+    fn emit(&self, _emitter: &Emitter, _particle_system: &ParticleSystem, particle: &mut Particle) {
         // Disk point picking extended in 3D - http://mathworld.wolfram.com/DiskPointPicking.html
         let s: f32 = rand::thread_rng().gen_range(0.0, 1.0);
         let theta = rand::thread_rng().gen_range(0.0, 2.0 * std::f32::consts::PI);
@@ -130,7 +128,7 @@ impl Level {
                 if let NodeKind::Mesh(mesh) = polygon.borrow_kind() {
                     for surface in mesh.get_surfaces() {
                         let data_rc = surface.get_data();
-                        let shared_data = data_rc.borrow();
+                        let shared_data = data_rc.lock().unwrap();
 
                         let vertices = shared_data.get_vertices();
                         let indices = shared_data.get_indices();
@@ -162,7 +160,7 @@ impl Level {
         let ripper_model_handle = engine.get_state_mut().request_resource(Path::new("data/models/ripper.fbx"));
         if let Some(ripper_model_resource) = ripper_model_handle {
             for _ in 0..4 {
-                ripper_handles.push(Model::instantiate(Rc::clone(&ripper_model_resource), &mut scene).unwrap_or(Handle::none()));
+                ripper_handles.push(Model::instantiate(Arc::clone(&ripper_model_resource), &mut scene).unwrap_or(Handle::none()));
             }
         }
         for (i, handle) in ripper_handles.iter().enumerate() {

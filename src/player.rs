@@ -1,37 +1,26 @@
 use rg3d::{
     physics::Body,
-    engine::state::State,
+    engine::Engine,
     scene::{
-        node::{
-            Node,
-            NodeKind,
-        },
-        Scene,
+        node::{Node, NodeKind},
+        Scene, camera::Camera,
     },
-    scene::camera::Camera,
 };
-
 use crate::{
-    weapon::{
-        Weapon,
-        WeaponKind,
-    },
+    weapon::{Weapon, WeaponKind},
     GameTime,
 };
-
 use rg3d_core::{
-    visitor::{
-        Visit,
-        Visitor,
-        VisitResult,
-    },
+    visitor::{Visit, Visitor, VisitResult},
     pool::Handle,
-    math::{
-        vec2::Vec2,
-        vec3::Vec3,
-        quat::Quat,
-    },
+    math::{vec2::Vec2, vec3::Vec3, quat::Quat},
 };
+use rg3d_sound::{
+    source::{Source, SourceKind},
+    buffer::BufferKind,
+};
+use std::path::Path;
+use rand::Rng;
 
 pub struct Controller {
     move_forward: bool,
@@ -80,6 +69,12 @@ pub struct Player {
     camera_offset: Vec3,
     camera_dest_offset: Vec3,
     current_weapon: u32,
+    footsteps: Vec<Handle<Source>>,
+    path_len: f32,
+    feet_position: Vec3,
+    head_position: Vec3,
+    look_direction: Vec3,
+    up_direction: Vec3,
 }
 
 impl Default for Player {
@@ -103,6 +98,12 @@ impl Default for Player {
             camera_offset: Default::default(),
             camera_dest_offset: Default::default(),
             current_weapon: 0,
+            footsteps: Vec::new(),
+            path_len: 0.0,
+            feet_position: Vec3::zero(),
+            head_position: Vec3::zero(),
+            look_direction: Vec3::zero(),
+            up_direction: Vec3::zero(),
         }
     }
 }
@@ -128,13 +129,14 @@ impl Visit for Player {
         self.camera_offset.visit("CameraOffset", visitor)?;
         self.camera_dest_offset.visit("CameraDestOffset", visitor)?;
         self.current_weapon.visit("CurrentWeapon", visitor)?;
+        self.footsteps.visit("Footsteps", visitor)?;
 
         visitor.leave_region()
     }
 }
 
 impl Player {
-    pub fn new(state: &mut State, scene: &mut Scene) -> Player {
+    pub fn new(engine: &mut Engine, scene: &mut Scene) -> Player {
         let camera_handle = scene.add_node(Node::new(NodeKind::Camera(Camera::default())));
 
         let mut camera_pivot = Node::new(NodeKind::Base);
@@ -159,6 +161,16 @@ impl Player {
         let weapon_pivot_handle = scene.add_node(weapon_pivot);
         scene.link_nodes(weapon_pivot_handle, camera_handle);
 
+        let footsteps = {
+            let state = engine.get_state_mut();
+            [
+                state.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step1.wav"), BufferKind::Normal).unwrap(),
+                state.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step2.wav"), BufferKind::Normal).unwrap(),
+                state.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step3.wav"), BufferKind::Normal).unwrap(),
+                state.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step4.wav"), BufferKind::Normal).unwrap()
+            ]
+        };
+
         let mut player = Player {
             camera: camera_handle,
             pivot: pivot_handle,
@@ -178,12 +190,25 @@ impl Player {
             camera_offset: Vec3::new(),
             weapon_pivot: weapon_pivot_handle,
             current_weapon: 0,
+            path_len: 0.0,
+            feet_position: Vec3::zero(),
+            head_position: Vec3::zero(),
+            look_direction: Vec3::zero(),
+            up_direction: Vec3::zero(),
+            footsteps: {
+                let sound_context = engine.get_sound_context();
+                let mut sound_context = sound_context.lock().unwrap();
+                footsteps.iter().map(|buf| {
+                    let source = Source::new_spatial(buf.clone()).unwrap();
+                    sound_context.add_source(source)
+                }).collect()
+            },
         };
 
-        let ak47 = Weapon::new(WeaponKind::Ak47, state, scene);
+        let ak47 = Weapon::new(WeaponKind::Ak47, engine.get_state_mut(), scene);
         player.add_weapon(scene, ak47);
 
-        let m4 = Weapon::new(WeaponKind::M4, state, scene);
+        let m4 = Weapon::new(WeaponKind::M4, engine.get_state_mut(), scene);
         player.add_weapon(scene, m4);
 
         player
@@ -217,7 +242,7 @@ impl Player {
         false
     }
 
-    pub fn update(&mut self, scene: &mut Scene, time: &GameTime) {
+    fn update_movement(&mut self, scene: &mut Scene, time: &GameTime) {
         let mut look = Vec3::zero();
         let mut side = Vec3::zero();
 
@@ -264,12 +289,16 @@ impl Player {
                 }
                 self.controller.jump = false;
             }
+
+            self.feet_position = body.get_position();
+            self.feet_position.y -= body.get_radius();
         }
 
         if has_ground_contact && is_moving {
             let k = (time.elapsed * 15.0) as f32;
             self.camera_dest_offset.x = 0.05 * (k * 0.5).cos();
             self.camera_dest_offset.y = 0.1 * k.sin();
+            self.path_len += 0.1;
         }
 
         self.camera_offset.x += (self.camera_dest_offset.x - self.camera_offset.x) * 0.1;
@@ -278,6 +307,10 @@ impl Player {
 
         if let Some(camera_node) = scene.get_node_mut(self.camera) {
             camera_node.set_local_position(self.camera_offset);
+
+            self.head_position = camera_node.get_global_position();
+            self.look_direction = camera_node.get_look_vector();
+            self.up_direction = camera_node.get_up_vector();
         }
 
         for (i, weapon) in self.weapons.iter().enumerate() {
@@ -296,13 +329,40 @@ impl Player {
         if let Some(camera_pivot) = scene.get_node_mut(self.camera_pivot) {
             camera_pivot.set_local_rotation(Quat::from_axis_angle(Vec3::right(), self.pitch.to_radians()));
         }
+    }
 
-        if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
-            if self.controller.shoot {
-                current_weapon.shoot(time);
+    fn emit_footstep_sound(&self, engine: &mut Engine) {
+        let handle = self.footsteps[rand::thread_rng().gen_range(0, self.footsteps.len())];
+        if let Some(source) = engine.get_sound_context().lock().unwrap().get_source_mut(handle) {
+            if let SourceKind::Spatial(spatial) = source.get_kind_mut() {
+                spatial.set_position(&self.feet_position);
             }
-            current_weapon.update(scene);
+            source.play();
         }
+    }
+
+    pub fn update(&mut self, engine: &mut Engine, scene_handle: Handle<Scene>, time: &GameTime) {
+        if let Some(scene) = engine.get_state_mut().get_scene_mut(scene_handle) {
+            self.update_movement(scene, time);
+
+            if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
+                if self.controller.shoot {
+                    current_weapon.shoot(time);
+                }
+                current_weapon.update(scene);
+            }
+        }
+
+        if self.path_len > 2.0 {
+            self.emit_footstep_sound(engine);
+            self.path_len = 0.0;
+        }
+
+        let sound_context = engine.get_sound_context();
+        let mut sound_context = sound_context.lock().unwrap();
+        let listener = sound_context.get_listener_mut();
+        listener.set_position(&self.head_position);
+        listener.set_orientation(&self.look_direction, &self.up_direction).unwrap();
     }
 
     pub fn process_event(&mut self, event: &glutin::WindowEvent) -> bool {

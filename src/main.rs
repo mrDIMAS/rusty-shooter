@@ -87,8 +87,10 @@ impl Game {
             }))
         }
 
-        let buffer = engine.get_state_mut().request_sound_buffer(Path::new("data/Sonic_Mayhem_Collapse.wav"), BufferKind::Stream).unwrap();
-        let source = Source::new(SourceKind::Flat, buffer).unwrap();
+        let buffer = engine.get_state_mut().request_sound_buffer(Path::new("data/sounds/Sonic_Mayhem_Collapse.wav"), BufferKind::Stream).unwrap();
+        let mut source = Source::new(SourceKind::Flat, buffer).unwrap();
+        source.play();
+        source.set_gain(0.25);
         engine.get_sound_context().lock().unwrap().add_source(source);
 
         let mut game = Game {

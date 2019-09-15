@@ -186,7 +186,7 @@ impl Level {
         scene.add_node(Node::new(NodeKind::ParticleSystem(particle_system)));
 
         Level {
-            player: Some(Player::new(engine.get_state_mut(), &mut scene)),
+            player: Some(Player::new(engine, &mut scene)),
             scene: engine.get_state_mut().add_scene(scene),
         }
     }
@@ -204,10 +204,8 @@ impl Level {
     }
 
     pub fn update(&mut self, engine: &mut Engine, time: &GameTime) {
-        if let Some(scene) = engine.get_state_mut().get_scene_mut(self.scene) {
-            if let Some(ref mut player) = self.player {
-                player.update(scene, time);
-            }
+        if let Some(ref mut player) = self.player {
+            player.update(engine, self.scene, time);
         }
     }
 }

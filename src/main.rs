@@ -16,7 +16,6 @@ use std::{
     time::Instant,
     rc::Rc,
     io::Write,
-    sync::{Arc, Mutex}
 };
 
 use rg3d::{
@@ -47,7 +46,7 @@ use rg3d_core::{
     },
 };
 use rg3d_sound::{
-    buffer::{Buffer, BufferKind},
+    buffer::BufferKind,
     source::{Source, SourceKind}
 };
 
@@ -77,7 +76,7 @@ pub struct GameTime {
 
 impl Game {
     pub fn new() -> Game {
-        let engine = Engine::new();
+        let mut engine = Engine::new();
 
         if let Ok(mut factory) = CustomEmitterFactory::get() {
             factory.set_callback(Box::new(|kind| {
@@ -88,8 +87,8 @@ impl Game {
             }))
         }
 
-        let buffer = Buffer::new(Path::new("data/Sonic_Mayhem_Collapse.wav"), BufferKind::Stream).unwrap();
-        let source = Source::new(SourceKind::Flat, Arc::new(Mutex::new(buffer))).unwrap();
+        let buffer = engine.get_state_mut().request_sound_buffer(Path::new("data/Sonic_Mayhem_Collapse.wav"), BufferKind::Stream).unwrap();
+        let source = Source::new(SourceKind::Flat, buffer).unwrap();
         engine.get_sound_context().lock().unwrap().add_source(source);
 
         let mut game = Game {

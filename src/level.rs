@@ -115,7 +115,7 @@ impl Level {
         // Create test scene
         let mut scene = Scene::new();
 
-        let map_model_handle = engine.get_state_mut().request_resource(Path::new("data/models/dm6.fbx"));
+        let map_model_handle = engine.get_state_mut().request_model(Path::new("data/models/dm6.fbx"));
         if map_model_handle.is_some() {
             // Instantiate map
             let map_root_handle = Model::instantiate(map_model_handle.unwrap(), &mut scene).unwrap_or(Handle::none());
@@ -157,7 +157,7 @@ impl Level {
         }
 
         let mut ripper_handles: Vec<Handle<Node>> = Vec::new();
-        let ripper_model_handle = engine.get_state_mut().request_resource(Path::new("data/models/ripper.fbx"));
+        let ripper_model_handle = engine.get_state_mut().request_model(Path::new("data/models/ripper.fbx"));
         if let Some(ripper_model_resource) = ripper_model_handle {
             for _ in 0..4 {
                 ripper_handles.push(Model::instantiate(Arc::clone(&ripper_model_resource), &mut scene).unwrap_or(Handle::none()));
@@ -180,7 +180,7 @@ impl Level {
         particle_system.set_color_over_lifetime_gradient(gradient);
         let emitter = Emitter::new(EmitterKind::Custom(Box::new(CylinderEmitter::new())));
         particle_system.add_emitter(emitter);
-        if let Some(texture) = engine.get_state_mut().request_resource(Path::new("data/particles/smoke_04.tga")) {
+        if let Some(texture) = engine.get_state_mut().request_texture(Path::new("data/particles/smoke_04.tga")) {
             particle_system.set_texture(texture);
         }
         scene.add_node(Node::new(NodeKind::ParticleSystem(particle_system)));

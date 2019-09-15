@@ -89,7 +89,7 @@ impl Weapon {
         };
 
         let mut weapon_model = Handle::none();
-        let model_resource_handle = state.request_resource(model_path);
+        let model_resource_handle = state.request_model(model_path);
         if model_resource_handle.is_some() {
             weapon_model = Model::instantiate(model_resource_handle.unwrap(), scene).unwrap_or(Handle::none());
         }

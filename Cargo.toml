@@ -1,10 +1,9 @@
 [package]
 name = "rusty-shooter"
 version = "0.1.0"
-authors = ["Dmitry <d1maxa@yandex.ru>"]
+authors = ["Dmitry Stepanov <d1maxa@yandex.ru>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
 
 [profile.release]
 lto = false

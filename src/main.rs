@@ -47,8 +47,10 @@ use rg3d_core::{
 };
 use rg3d_sound::{
     buffer::BufferKind,
-    source::{Source, SourceKind}
+    source::{Source, SourceKind},
 };
+use rg3d::gui::window::WindowTitle;
+use rg3d::gui::VerticalAlignment;
 
 pub struct MenuState {
     save_game: Option<()>,
@@ -60,6 +62,7 @@ pub struct MenuState {
 pub struct Menu {
     state: Rc<RefCell<MenuState>>,
     root: Handle<UINode>,
+    options_window: Handle<UINode>,
 }
 
 pub struct Game {
@@ -102,6 +105,7 @@ impl Game {
                     load_game: None,
                 })),
                 root: Handle::none(),
+                options_window: Handle::none(),
             },
             debug_text: Handle::none(),
             engine,
@@ -113,6 +117,7 @@ impl Game {
 
     pub fn create_ui(&mut self) {
         let frame_size = self.engine.get_frame_size();
+        let sound_context = self.engine.get_sound_context();
         let ui = self.engine.get_ui_mut();
 
         self.debug_text = TextBuilder::new()
@@ -120,9 +125,58 @@ impl Game {
             .with_height(200.0)
             .build(ui);
 
-        WindowBuilder::new()
-            .with_width(200.0)
-            .with_height(200.0)
+        let margin = Thickness::uniform(2.0);
+
+        self.menu.options_window = WindowBuilder::new()
+            .with_width(400.0)
+            .with_height(500.0)
+            .with_title(WindowTitle::Text("Options"))
+            .with_content(GridBuilder::new()
+                .with_margin(Thickness::uniform(5.0))
+                .add_row(Row::strict(34.0))
+                .add_row(Row::strict(34.0))
+                .add_column(Column::strict(150.0))
+                .add_column(Column::stretch())
+                .with_child(TextBuilder::new()
+                    .with_text("Sound Volume")
+                    .on_row(0)
+                    .on_column(0)
+                    .with_margin(margin)
+                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                    .build(ui))
+                .with_child(ScrollBarBuilder::new()
+                    .with_min(0.0)
+                    .with_max(1.0)
+                    .with_value(1.0)
+                    .on_row(0)
+                    .on_column(1)
+                    .with_margin(margin)
+                    .with_value_changed({
+                        Box::new(move |ui, args| {
+                            sound_context.lock().unwrap().set_master_gain(args.new_value)
+                        })
+                    })
+                    .build(ui))
+                .with_child(TextBuilder::new()
+                    .with_text("Music Volume")
+                    .on_row(1)
+                    .with_margin(margin)
+                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                    .on_column(0)
+                    .build(ui))
+                .with_child(ScrollBarBuilder::new()
+                    .with_min(0.0)
+                    .with_max(1.0)
+                    .with_margin(margin)
+                    .with_value(1.0)
+                    .on_row(1)
+                    .on_column(1)
+                    .with_value_changed({
+                        Box::new(move |ui, args| {
+                        })
+                    })
+                    .build(ui))
+                .build(ui))
             .build(ui);
 
         self.menu.root = GridBuilder::new()
@@ -137,6 +191,7 @@ impl Game {
             .with_child(WindowBuilder::new()
                 .on_row(1)
                 .on_column(1)
+                .with_title(WindowTitle::Text("Rusty Shooter"))
                 .with_content(GridBuilder::new()
                     .with_margin(Thickness::uniform(20.0))
                     .add_column(Column::stretch())

@@ -20,6 +20,14 @@ use rg3d_core::{
 };
 
 use crate::GameTime;
+use rg3d::scene::light::Light;
+use rg3d_core::color::Color;
+use rg3d::scene::node::NodeKind;
+use rg3d_core::math::ray::Ray;
+use rg3d::physics::RayCastOptions;
+use rg3d::engine::Engine;
+use rg3d_sound::source::{Source, SourceKind};
+use rg3d_sound::buffer::BufferKind;
 
 pub enum WeaponKind {
     Unknown,
@@ -30,19 +38,23 @@ pub enum WeaponKind {
 pub struct Weapon {
     kind: WeaponKind,
     model: Handle<Node>,
+    laser_dot: Handle<Node>,
     offset: Vec3,
     dest_offset: Vec3,
     last_shot_time: f64,
+    shot_position: Vec3,
 }
 
 impl Default for Weapon {
     fn default() -> Self {
         Self {
             kind: WeaponKind::Unknown,
+            laser_dot: Handle::none(),
             model: Handle::none(),
             offset: Vec3::new(),
             dest_offset: Vec3::new(),
             last_shot_time: 0.0,
+            shot_position: Vec3::zero(),
         }
     }
 }
@@ -72,6 +84,7 @@ impl Visit for Weapon {
         }
 
         self.model.visit("Model", visitor)?;
+        self.laser_dot.visit("LaserDot", visitor)?;
         self.offset.visit("Offset", visitor)?;
         self.dest_offset.visit("DestOffset", visitor)?;
         self.last_shot_time.visit("LastShotTime", visitor)?;
@@ -94,8 +107,15 @@ impl Weapon {
             weapon_model = Model::instantiate(model_resource_handle.unwrap(), scene).unwrap_or(Handle::none());
         }
 
+        let mut light = Light::new();
+        light.set_color(Color::opaque(255, 0, 0));
+        light.set_radius(0.5);
+        let laser_dot = scene.add_node(Node::new(NodeKind::Light(light)));
+
         Weapon {
             kind,
+            shot_position: Vec3::zero(),
+            laser_dot,
             model: weapon_model,
             offset: Vec3::new(),
             dest_offset: Vec3::new(),
@@ -103,7 +123,16 @@ impl Weapon {
         }
     }
 
-    #[inline]
+    pub fn set_visibility(&self, visibility: bool, scene: &mut Scene) {
+        if let Some(model) = scene.get_node_mut(self.model) {
+            model.set_visibility(visibility)
+        }
+
+        if let Some(laser_dot) = scene.get_node_mut(self.laser_dot) {
+            laser_dot.set_visibility(visibility);
+        }
+    }
+
     pub fn get_model(&self) -> Handle<Node> {
         self.model
     }
@@ -113,15 +142,44 @@ impl Weapon {
         self.offset.y += (self.dest_offset.y - self.offset.y) * 0.2;
         self.offset.z += (self.dest_offset.z - self.offset.z) * 0.2;
 
+        let mut laser_dot_position = Vec3::new();
+        if let Some(model) = scene.get_node(self.model) {
+            let begin = model.get_global_position();
+            let end = begin + model.get_look_vector().scale(100.0);
+            if let Some(ray) = Ray::from_two_points(&begin, &end) {
+                let mut result = Vec::new();
+                if scene.get_physics().ray_cast(&ray, RayCastOptions::default(), &mut result) {
+                    laser_dot_position = result[0].position + result[0].normal.normalized().unwrap().scale(0.2);
+                }
+            }
+        }
+
+        if let Some(laser_dot) = scene.get_node_mut(self.laser_dot) {
+            laser_dot.get_local_transform_mut().set_position(laser_dot_position);
+        }
+
         if let Some(node) = scene.get_node_mut(self.model) {
-            node.set_local_position(self.offset);
+            node.get_local_transform_mut().set_position(self.offset);
+            self.shot_position = node.get_global_position();
         }
     }
 
-    pub fn shoot(&mut self, time: &GameTime) {
+    pub fn shoot(&mut self, engine: &mut Engine, time: &GameTime) {
         if time.elapsed - self.last_shot_time >= 0.1 {
             self.offset = Vec3::make(0.0, 0.0, -0.05);
             self.last_shot_time = time.elapsed;
+
+            let sound_context = engine.get_sound_context();
+            let mut sound_context =sound_context.lock().unwrap();
+            let shot_buffer = engine.get_state_mut().request_sound_buffer(
+                Path::new("data/sounds/m4_shot.wav"), BufferKind::Normal).unwrap();
+            let mut shot_sound = Source::new_spatial(shot_buffer).unwrap();
+            shot_sound.set_play_once(true);
+            shot_sound.play();
+            if let SourceKind::Spatial(spatial) = shot_sound.get_kind_mut() {
+                spatial.set_position(&self.shot_position)
+            }
+            sound_context.add_source(shot_sound);
         }
     }
 }

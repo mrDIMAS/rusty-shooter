@@ -81,8 +81,8 @@ impl CustomEmitter for CylinderEmitter {
         Box::new(self.clone())
     }
 
-    fn get_kind(&self) -> u8 {
-        3
+    fn get_kind(&self) -> i32 {
+        0
     }
 }
 
@@ -125,7 +125,7 @@ impl Level {
             if let Some(polygon) = scene.get_node(polygon_handle) {
                 let global_transform = polygon.get_global_transform();
                 let mut static_geometry = StaticGeometry::new();
-                if let NodeKind::Mesh(mesh) = polygon.borrow_kind() {
+                if let NodeKind::Mesh(mesh) = polygon.get_kind() {
                     for surface in mesh.get_surfaces() {
                         let data_rc = surface.get_data();
                         let shared_data = data_rc.lock().unwrap();
@@ -140,7 +140,7 @@ impl Level {
                             let b = global_transform.transform_vector(vertices[indices[i + 1] as usize].position);
                             let c = global_transform.transform_vector(vertices[indices[i + 2] as usize].position);
 
-                            if let Some(triangle) = StaticTriangle::from_points(a, b, c) {
+                            if let Some(triangle) = StaticTriangle::from_points(&a, &b, &c) {
                                 static_geometry.add_triangle(triangle);
                             } else {
                                 println!("degenerated triangle!");
@@ -165,7 +165,7 @@ impl Level {
         }
         for (i, handle) in ripper_handles.iter().enumerate() {
             if let Some(node) = scene.get_node_mut(*handle) {
-                node.set_local_position(Vec3::make(-0.25, -1.40, 3.0 - i as f32 * 1.40));
+                node.get_local_transform_mut().set_position(Vec3::make(-0.25, -1.40, 3.0 - i as f32 * 1.40));
             }
         }
 

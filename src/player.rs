@@ -21,6 +21,7 @@ use rg3d_sound::{
 };
 use std::path::Path;
 use rand::Rng;
+use rg3d::physics::shape::{SphereShape, ConvexShape};
 
 pub struct Controller {
     move_forward: bool,
@@ -140,16 +141,15 @@ impl Player {
         let camera_handle = scene.add_node(Node::new(NodeKind::Camera(Camera::default())));
 
         let mut camera_pivot = Node::new(NodeKind::Base);
-        camera_pivot.set_local_position(Vec3 { x: 0.0, y: 1.0, z: 0.0 });
+        camera_pivot.get_local_transform_mut().set_position(Vec3 { x: 0.0, y: 1.0, z: 0.0 });
         let camera_pivot_handle = scene.add_node(camera_pivot);
         scene.link_nodes(camera_handle, camera_pivot_handle);
 
         let mut pivot = Node::new(NodeKind::Base);
-        pivot.set_local_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
+        pivot.get_local_transform_mut().set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
 
         let stand_body_radius = 0.5;
-        let mut body = Body::new();
-        body.set_radius(stand_body_radius);
+        let mut body = Body::new(ConvexShape::Sphere(SphereShape::new(stand_body_radius)));
         let body_handle = scene.get_physics_mut().add_body(body);
         pivot.set_body(body_handle);
 
@@ -157,7 +157,7 @@ impl Player {
         scene.link_nodes(camera_pivot_handle, pivot_handle);
 
         let mut weapon_pivot = Node::new(NodeKind::Base);
-        weapon_pivot.set_local_position(Vec3::make(-0.065, -0.052, 0.02));
+        weapon_pivot.get_local_transform_mut().set_position(Vec3::make(-0.065, -0.052, 0.02));
         let weapon_pivot_handle = scene.add_node(weapon_pivot);
         scene.link_nodes(weapon_pivot_handle, camera_handle);
 
@@ -291,7 +291,10 @@ impl Player {
             }
 
             self.feet_position = body.get_position();
-            self.feet_position.y -= body.get_radius();
+
+            if let ConvexShape::Sphere(sphere) = body.get_shape() {
+                self.feet_position.y -= sphere.get_radius();
+            }
         }
 
         if has_ground_contact && is_moving {
@@ -306,7 +309,7 @@ impl Player {
         self.camera_offset.z += (self.camera_dest_offset.z - self.camera_offset.z) * 0.1;
 
         if let Some(camera_node) = scene.get_node_mut(self.camera) {
-            camera_node.set_local_position(self.camera_offset);
+            camera_node.get_local_transform_mut().set_position(self.camera_offset);
 
             self.head_position = camera_node.get_global_position();
             self.look_direction = camera_node.get_look_vector();
@@ -314,20 +317,18 @@ impl Player {
         }
 
         for (i, weapon) in self.weapons.iter().enumerate() {
-            if let Some(model) = scene.get_node_mut(weapon.get_model()) {
-                model.set_visibility(i == self.current_weapon as usize);
-            }
+            weapon.set_visibility( i == self.current_weapon as usize, scene);
         }
 
         self.yaw += (self.dest_yaw - self.yaw) * 0.2;
         self.pitch += (self.dest_pitch - self.pitch) * 0.2;
 
         if let Some(pivot_node) = scene.get_node_mut(self.pivot) {
-            pivot_node.set_local_rotation(Quat::from_axis_angle(Vec3::up(), self.yaw.to_radians()));
+            pivot_node.get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::up(), self.yaw.to_radians()));
         }
 
         if let Some(camera_pivot) = scene.get_node_mut(self.camera_pivot) {
-            camera_pivot.set_local_rotation(Quat::from_axis_angle(Vec3::right(), self.pitch.to_radians()));
+            camera_pivot.get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::right(), self.pitch.to_radians()));
         }
     }
 
@@ -346,10 +347,13 @@ impl Player {
             self.update_movement(scene, time);
 
             if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
-                if self.controller.shoot {
-                    current_weapon.shoot(time);
-                }
                 current_weapon.update(scene);
+            }
+        }
+
+        if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
+            if self.controller.shoot {
+                current_weapon.shoot(engine, time);
             }
         }
 

@@ -84,7 +84,7 @@ impl Game {
         if let Ok(mut factory) = CustomEmitterFactory::get() {
             factory.set_callback(Box::new(|kind| {
                 match kind {
-                    3 => Ok(Box::new(CylinderEmitter::new())),
+                    0 => Ok(Box::new(CylinderEmitter::new())),
                     _ => Err(String::from("invalid custom emitter kind"))
                 }
             }))

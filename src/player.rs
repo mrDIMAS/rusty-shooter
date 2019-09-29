@@ -1,5 +1,4 @@
 use rg3d::{
-    physics::Body,
     engine::Engine,
     scene::{
         node::{Node, NodeKind},
@@ -21,7 +20,10 @@ use rg3d_sound::{
 };
 use std::path::Path;
 use rand::Rng;
-use rg3d::physics::shape::{SphereShape, ConvexShape};
+use rg3d_physics::{
+    shape::{SphereShape, ConvexShape},
+    Body
+};
 
 pub struct Controller {
     move_forward: bool,
@@ -149,7 +151,7 @@ impl Player {
         pivot.get_local_transform_mut().set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
 
         let stand_body_radius = 0.5;
-        let mut body = Body::new(ConvexShape::Sphere(SphereShape::new(stand_body_radius)));
+        let body = Body::new(ConvexShape::Sphere(SphereShape::new(stand_body_radius)));
         let body_handle = scene.get_physics_mut().add_body(body);
         pivot.set_body(body_handle);
 
@@ -340,6 +342,12 @@ impl Player {
             }
             source.play();
         }
+    }
+
+    pub fn get_position(&self, scene: &Scene) -> Vec3 {
+        scene.get_physics().borrow_body(self.body)
+            .and_then(|body| Some(body.get_position()))
+            .unwrap_or(Vec3::zero())
     }
 
     pub fn update(&mut self, engine: &mut Engine, scene_handle: Handle<Scene>, time: &GameTime) {

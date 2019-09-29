@@ -1,14 +1,8 @@
 use std::path::Path;
-use rg3d::{
-    resource::model::Model,
-    scene::{
-        node::Node,
-        Scene,
-    },
-    engine::state::State,
-};
 
+use crate::GameTime;
 use rg3d_core::{
+    color::Color,
     pool::Handle,
     visitor::{
         Visit,
@@ -16,18 +10,29 @@ use rg3d_core::{
         Visitor,
         VisitError,
     },
-    math::vec3::Vec3,
+    math::{
+        vec3::Vec3,
+        ray::Ray,
+    },
 };
-
-use crate::GameTime;
-use rg3d::scene::light::Light;
-use rg3d_core::color::Color;
-use rg3d::scene::node::NodeKind;
-use rg3d_core::math::ray::Ray;
-use rg3d::physics::RayCastOptions;
-use rg3d::engine::Engine;
-use rg3d_sound::source::{Source, SourceKind};
-use rg3d_sound::buffer::BufferKind;
+use rg3d::{
+    scene::{
+        node::NodeKind,
+        light::Light,
+        node::Node,
+        Scene,
+    },
+    resource::model::Model,
+    engine::{
+        state::State,
+        Engine,
+    },
+};
+use rg3d_physics::RayCastOptions;
+use rg3d_sound::{
+    source::{Source, SourceKind},
+    buffer::BufferKind,
+};
 
 pub enum WeaponKind {
     Unknown,
@@ -104,7 +109,7 @@ impl Weapon {
         let mut weapon_model = Handle::none();
         let model_resource_handle = state.request_model(model_path);
         if model_resource_handle.is_some() {
-            weapon_model = Model::instantiate(model_resource_handle.unwrap(), scene).unwrap_or(Handle::none());
+            weapon_model = Model::instantiate(model_resource_handle.unwrap(), scene).root;
         }
 
         let mut light = Light::new();
@@ -142,21 +147,7 @@ impl Weapon {
         self.offset.y += (self.dest_offset.y - self.offset.y) * 0.2;
         self.offset.z += (self.dest_offset.z - self.offset.z) * 0.2;
 
-        let mut laser_dot_position = Vec3::new();
-        if let Some(model) = scene.get_node(self.model) {
-            let begin = model.get_global_position();
-            let end = begin + model.get_look_vector().scale(100.0);
-            if let Some(ray) = Ray::from_two_points(&begin, &end) {
-                let mut result = Vec::new();
-                if scene.get_physics().ray_cast(&ray, RayCastOptions::default(), &mut result) {
-                    laser_dot_position = result[0].position + result[0].normal.normalized().unwrap().scale(0.2);
-                }
-            }
-        }
-
-        if let Some(laser_dot) = scene.get_node_mut(self.laser_dot) {
-            laser_dot.get_local_transform_mut().set_position(laser_dot_position);
-        }
+        self.update_laser_sight(scene);
 
         if let Some(node) = scene.get_node_mut(self.model) {
             node.get_local_transform_mut().set_position(self.offset);
@@ -164,22 +155,45 @@ impl Weapon {
         }
     }
 
+    fn update_laser_sight(&self, scene: &mut Scene) {
+        let mut laser_dot_position = Vec3::new();
+        if let Some(model) = scene.get_node(self.model) {
+            let begin = model.get_global_position();
+            let end = begin + model.get_look_vector().scale(100.0);
+            if let Some(ray) = Ray::from_two_points(&begin, &end) {
+                let mut result = Vec::new();
+                if scene.get_physics().ray_cast(&ray, RayCastOptions::default(), &mut result) {
+                    let offset = result[0].normal.normalized().unwrap().scale(0.2);
+                    laser_dot_position = result[0].position + offset;
+                }
+            }
+        }
+
+        if let Some(laser_dot) = scene.get_node_mut(self.laser_dot) {
+            laser_dot.get_local_transform_mut().set_position(laser_dot_position);
+        }
+    }
+
+    fn play_shot_sound(&self, engine: &mut Engine) {
+        let sound_context = engine.get_sound_context();
+        let mut sound_context = sound_context.lock().unwrap();
+        let shot_buffer = engine.get_state_mut().request_sound_buffer(
+            Path::new("data/sounds/m4_shot.wav"), BufferKind::Normal).unwrap();
+        let mut shot_sound = Source::new_spatial(shot_buffer).unwrap();
+        shot_sound.set_play_once(true);
+        shot_sound.play();
+        if let SourceKind::Spatial(spatial) = shot_sound.get_kind_mut() {
+            spatial.set_position(&self.shot_position)
+        }
+        sound_context.add_source(shot_sound);
+    }
+
     pub fn shoot(&mut self, engine: &mut Engine, time: &GameTime) {
         if time.elapsed - self.last_shot_time >= 0.1 {
             self.offset = Vec3::make(0.0, 0.0, -0.05);
             self.last_shot_time = time.elapsed;
 
-            let sound_context = engine.get_sound_context();
-            let mut sound_context =sound_context.lock().unwrap();
-            let shot_buffer = engine.get_state_mut().request_sound_buffer(
-                Path::new("data/sounds/m4_shot.wav"), BufferKind::Normal).unwrap();
-            let mut shot_sound = Source::new_spatial(shot_buffer).unwrap();
-            shot_sound.set_play_once(true);
-            shot_sound.play();
-            if let SourceKind::Spatial(spatial) = shot_sound.get_kind_mut() {
-                spatial.set_position(&self.shot_position)
-            }
-            sound_context.add_source(shot_sound);
+            self.play_shot_sound(engine);
         }
     }
 }

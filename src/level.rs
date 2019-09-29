@@ -9,24 +9,29 @@ use rg3d::{
         },
     },
     engine::*,
-    physics::{
-        StaticGeometry,
-        StaticTriangle,
-    },
     resource::model::Model,
 };
-use std::path::Path;
-
+use std::{
+    path::Path,
+    sync::Arc
+};
+use rg3d_physics::{
+    StaticGeometry,
+    StaticTriangle,
+};
 use crate::{
     player::Player,
     GameTime,
+    bot::{
+        Bot,
+        BotKind
+    }
 };
 use rand::Rng;
-
 use rg3d_core::{
     color::Color,
     color_gradient::{ColorGradient, GradientPoint},
-    pool::*,
+    pool::{Pool, Handle},
     visitor::{
         Visit,
         VisitResult,
@@ -34,11 +39,11 @@ use rg3d_core::{
     },
     math::vec3::*,
 };
-use std::sync::Arc;
 
 pub struct Level {
     scene: Handle<Scene>,
     player: Option<Player>,
+    bots: Pool<Bot>
 }
 
 impl Default for Level {
@@ -46,6 +51,7 @@ impl Default for Level {
         Self {
             scene: Handle::none(),
             player: None,
+            bots: Pool::new()
         }
     }
 }
@@ -56,6 +62,7 @@ impl Visit for Level {
 
         self.scene.visit("Scene", visitor)?;
         self.player.visit("Player", visitor)?;
+        self.bots.visit("Bots", visitor)?;
 
         visitor.leave_region()
     }
@@ -118,7 +125,7 @@ impl Level {
         let map_model_handle = engine.get_state_mut().request_model(Path::new("data/models/dm6.fbx"));
         if map_model_handle.is_some() {
             // Instantiate map
-            let map_root_handle = Model::instantiate(map_model_handle.unwrap(), &mut scene).unwrap_or(Handle::none());
+            let map_root_handle = Model::instantiate(map_model_handle.unwrap(), &mut scene).root;
 
             // Create collision geometry
             let polygon_handle = scene.find_node_by_name(map_root_handle, "Polygon");
@@ -156,19 +163,6 @@ impl Level {
             }
         }
 
-        let mut ripper_handles: Vec<Handle<Node>> = Vec::new();
-        let ripper_model_handle = engine.get_state_mut().request_model(Path::new("data/models/ripper.fbx"));
-        if let Some(ripper_model_resource) = ripper_model_handle {
-            for _ in 0..4 {
-                ripper_handles.push(Model::instantiate(Arc::clone(&ripper_model_resource), &mut scene).unwrap_or(Handle::none()));
-            }
-        }
-        for (i, handle) in ripper_handles.iter().enumerate() {
-            if let Some(node) = scene.get_node_mut(*handle) {
-                node.get_local_transform_mut().set_position(Vec3::make(-0.25, -1.40, 3.0 - i as f32 * 1.40));
-            }
-        }
-
         // Test particle system
         let mut particle_system = ParticleSystem::new();
         particle_system.set_acceleration(Vec3::make(0.0, -0.1, 0.0));
@@ -185,9 +179,14 @@ impl Level {
         }
         scene.add_node(Node::new(NodeKind::ParticleSystem(particle_system)));
 
+        let mut bots = Pool::new();
+        bots.spawn(Bot::new(BotKind::Mutant, engine, &mut scene).unwrap());
+        //bots.spawn(Bot::new(BotKind::Ripper, engine, &mut scene).unwrap());
+
         Level {
             player: Some(Player::new(engine, &mut scene)),
             scene: engine.get_state_mut().add_scene(scene),
+            bots
         }
     }
 
@@ -206,6 +205,14 @@ impl Level {
     pub fn update(&mut self, engine: &mut Engine, time: &GameTime) {
         if let Some(ref mut player) = self.player {
             player.update(engine, self.scene, time);
+
+            if let Some(scene) = engine.get_state_mut().get_scene_mut(self.scene) {
+                let player_position = player.get_position(scene);
+
+                for bot in self.bots.iter_mut() {
+                    bot.update(scene, player_position, time)
+                }
+            }
         }
     }
 }

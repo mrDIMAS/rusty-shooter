@@ -4,10 +4,12 @@ extern crate rg3d_core;
 extern crate rg3d;
 extern crate rand;
 extern crate glutin;
+extern crate rg3d_physics;
 
 mod level;
 mod player;
 mod weapon;
+mod bot;
 
 use std::{
     cell::RefCell,
@@ -16,13 +18,13 @@ use std::{
     time::Instant,
     rc::Rc,
     io::Write,
+    time,
+    thread,
+    time::Duration
 };
 
 use rg3d::{
-    engine::{
-        Engine,
-        duration_to_seconds_f64,
-    },
+    engine::Engine,
     gui::{
         Visibility,
         node::{UINode, UINodeKind},
@@ -32,6 +34,8 @@ use rg3d::{
         text::TextBuilder,
         scroll_bar::ScrollBarBuilder,
         window::WindowBuilder,
+        window::WindowTitle,
+        VerticalAlignment,
     },
     scene::particle_system::CustomEmitterFactory,
 };
@@ -49,8 +53,6 @@ use rg3d_sound::{
     buffer::BufferKind,
     source::{Source, SourceKind},
 };
-use rg3d::gui::window::WindowTitle;
-use rg3d::gui::VerticalAlignment;
 
 pub struct MenuState {
     save_game: Option<()>,
@@ -70,6 +72,8 @@ pub struct Game {
     engine: Engine,
     level: Option<Level>,
     debug_text: Handle<UINode>,
+    debug_string: String,
+    last_tick_time: time::Instant,
 }
 
 pub struct GameTime {
@@ -110,6 +114,8 @@ impl Game {
             debug_text: Handle::none(),
             engine,
             level: None,
+            debug_string: String::new(),
+            last_tick_time: time::Instant::now(),
         };
         game.create_ui();
         game
@@ -121,7 +127,7 @@ impl Game {
         let ui = self.engine.get_ui_mut();
 
         self.debug_text = TextBuilder::new()
-            .with_width(200.0)
+            .with_width(400.0)
             .with_height(200.0)
             .build(ui);
 
@@ -152,7 +158,7 @@ impl Game {
                     .on_column(1)
                     .with_margin(margin)
                     .with_value_changed({
-                        Box::new(move |ui, args| {
+                        Box::new(move |_ui, args| {
                             sound_context.lock().unwrap().set_master_gain(args.new_value)
                         })
                     })
@@ -172,8 +178,7 @@ impl Game {
                     .on_row(1)
                     .on_column(1)
                     .with_value_changed({
-                        Box::new(move |ui, args| {
-                        })
+                        Box::new(move |_ui, _args| {})
                     })
                     .build(ui))
                 .build(ui))
@@ -382,17 +387,50 @@ impl Game {
         self.update_menu();
     }
 
+    pub fn update_statistics(&mut self, elapsed: f64) {
+        self.debug_string.clear();
+        use std::fmt::Write;
+        let statistics = self.engine.get_rendering_statisting();
+        write!(self.debug_string,
+               "Pure frame time: {:.2} ms\n\
+               Capped frame time: {:.2} ms\n\
+               FPS: {}\n\
+               Potential FPS: {}\n\
+               Up time: {:.2} s",
+               statistics.pure_frame_time * 1000.0,
+               statistics.capped_frame_time * 1000.0,
+               statistics.frames_per_second,
+               statistics.potential_frame_per_second,
+               elapsed
+        ).unwrap();
+
+        if let Some(ui_node) = self.engine.get_ui_mut().get_node_mut(self.debug_text) {
+            if let UINodeKind::Text(text) = ui_node.get_kind_mut() {
+                text.set_text(self.debug_string.as_str());
+            }
+        }
+    }
+
+    pub fn limit_fps(&mut self, value: f64) {
+        let current_time = time::Instant::now();
+        let render_call_duration = current_time.duration_since(self.last_tick_time).as_secs_f64();
+        self.last_tick_time = current_time;
+        let desired_frame_time = 1.0 / value;
+        if render_call_duration < desired_frame_time {
+            thread::sleep(Duration::from_secs_f64(desired_frame_time - render_call_duration));
+        }
+    }
+
     pub fn run(&mut self) {
         let fixed_fps = 60.0;
         let fixed_timestep = 1.0 / fixed_fps;
         let clock = Instant::now();
         let mut game_time = GameTime { elapsed: 0.0, delta: fixed_timestep };
 
-        let mut debug_string = String::new();
         while self.engine.is_running() {
-            let mut dt = (duration_to_seconds_f64(clock.elapsed()) - game_time.elapsed) as f32;
-            while dt >= fixed_timestep {
-                dt -= fixed_timestep;
+            let mut dt = clock.elapsed().as_secs_f64() - game_time.elapsed;
+            while dt >= fixed_timestep as f64 {
+                dt -= fixed_timestep as f64;
                 game_time.elapsed += fixed_timestep as f64;
                 // Get events from OS.
                 self.engine.poll_events();
@@ -441,21 +479,13 @@ impl Game {
                 self.update(&game_time);
             }
 
-            debug_string.clear();
-            use std::fmt::Write;
-            write!(debug_string, "Frame time: {:.2} ms\nFPS: {}\nUp time: {:.2} s",
-                   self.engine.get_rendering_statisting().frame_time * 1000.0,
-                   self.engine.get_rendering_statisting().current_fps,
-                   game_time.elapsed).unwrap();
-
-            if let Some(ui_node) = self.engine.get_ui_mut().get_node_mut(self.debug_text) {
-                if let UINodeKind::Text(text) = ui_node.get_kind_mut() {
-                    text.set_text(debug_string.as_str());
-                }
-            }
+            self.update_statistics(game_time.elapsed);
 
             // Render at max speed
             self.engine.render().unwrap();
+
+            // Make sure to cap update rate to 60 FPS.
+            self.limit_fps(fixed_fps as f64);
         }
         self.destroy_level();
     }

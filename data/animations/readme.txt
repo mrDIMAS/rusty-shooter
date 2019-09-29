@@ -1,0 +1,1 @@
+Animations were taken from mixamo.com

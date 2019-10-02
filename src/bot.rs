@@ -17,13 +17,14 @@ use rg3d::{
 };
 use std::path::Path;
 use rg3d_physics::{
-    Body,
-    shape::{ConvexShape, CapsuleShape, Axis},
+    rigid_body::RigidBody,
+    convex_shape::{ConvexShape, CapsuleShape, Axis},
 };
 use rg3d::scene::animation::Animation;
 use crate::GameTime;
 use rg3d_core::math::quat::Quat;
 use rg3d::scene::node::NodeKind;
+use rg3d::engine::EngineInterfaceMut;
 
 pub enum BotKind {
     Mutant,
@@ -51,7 +52,7 @@ pub struct Bot {
     pivot: Handle<Node>,
     kind: BotKind,
     model: Handle<Node>,
-    body: Handle<Body>,
+    body: Handle<RigidBody>,
     idle_animation: Handle<Animation>,
     walk_animation: Handle<Animation>,
 }
@@ -71,13 +72,16 @@ impl Default for Bot {
 
 impl Bot {
     pub fn new(kind: BotKind, engine: &mut Engine, scene: &mut Scene) -> Result<Self, ()> {
+        let EngineInterfaceMut { resource_manager, ..} = engine.interface_mut();
+
         let path = match kind {
             BotKind::Mutant => Path::new("data/models/mutant.fbx"),
             BotKind::Ripper => Path::new("data/models/ripper.fbx"),
         };
 
         let body_height = 1.25;
-        let resource = engine.get_state_mut().request_model(path).ok_or(())?;
+
+        let resource = resource_manager.request_model(path).ok_or(())?;
         let pivot = scene.add_node(Node::new(NodeKind::Base));
         let model = Model::instantiate_geometry(resource.clone(), scene);
         scene.link_nodes(model, pivot);
@@ -95,23 +99,23 @@ impl Bot {
         }
 
         let idle_animation = *Model::retarget_animations(
-            engine.get_state_mut().request_model(
+            resource_manager.request_model(
                 Path::new("data/animations/idle.fbx")).ok_or(())?,
             model, scene,
         ).get(0).ok_or(())?;
 
         let walk_animation = *Model::retarget_animations(
-            engine.get_state_mut().request_model(
+            resource_manager.request_model(
                 Path::new("data/animations/walk.fbx")).ok_or(())?,
             model, scene,
         ).get(0).ok_or(())?;
 
         let capsule_shape = CapsuleShape::new(0.25, body_height, Axis::Y);
-        let capsule_body = Body::new(ConvexShape::Capsule(capsule_shape));
+        let capsule_body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
         let body = scene.get_physics_mut().add_body(capsule_body);
 
         if let Some(pivot) = scene.get_node_mut(pivot) {
-            pivot.set_body(body);
+            pivot.set_rigid_body(body);
         }
 
         Ok(Self {

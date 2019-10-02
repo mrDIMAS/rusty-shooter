@@ -1,10 +1,7 @@
-use rg3d::{
-    engine::Engine,
-    scene::{
-        node::{Node, NodeKind},
-        Scene, camera::Camera,
-    },
-};
+use rg3d::{engine::Engine, scene::{
+    node::{Node, NodeKind},
+    Scene, camera::Camera,
+}, WindowEvent, MouseButton, MouseScrollDelta, ElementState, VirtualKeyCode};
 use crate::{
     weapon::{Weapon, WeaponKind},
     GameTime,
@@ -21,9 +18,12 @@ use rg3d_sound::{
 use std::path::Path;
 use rand::Rng;
 use rg3d_physics::{
-    shape::{SphereShape, ConvexShape},
-    Body
+    convex_shape::{SphereShape, ConvexShape},
+    rigid_body::RigidBody
 };
+use rg3d::engine::{EngineInterfaceMut, EngineInterface};
+use rg3d_sound::context::Context;
+use std::sync::{Arc, Mutex};
 
 pub struct Controller {
     move_forward: bool,
@@ -57,7 +57,7 @@ pub struct Player {
     camera: Handle<Node>,
     camera_pivot: Handle<Node>,
     pivot: Handle<Node>,
-    body: Handle<Body>,
+    body: Handle<RigidBody>,
     weapon_pivot: Handle<Node>,
     controller: Controller,
     yaw: f32,
@@ -151,9 +151,9 @@ impl Player {
         pivot.get_local_transform_mut().set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
 
         let stand_body_radius = 0.5;
-        let body = Body::new(ConvexShape::Sphere(SphereShape::new(stand_body_radius)));
+        let body = RigidBody::new(ConvexShape::Sphere(SphereShape::new(stand_body_radius)));
         let body_handle = scene.get_physics_mut().add_body(body);
-        pivot.set_body(body_handle);
+        pivot.set_rigid_body(body_handle);
 
         let pivot_handle = scene.add_node(pivot);
         scene.link_nodes(camera_pivot_handle, pivot_handle);
@@ -163,13 +163,14 @@ impl Player {
         let weapon_pivot_handle = scene.add_node(weapon_pivot);
         scene.link_nodes(weapon_pivot_handle, camera_handle);
 
+        let EngineInterfaceMut { sound_context, resource_manager, ..} = engine.interface_mut();
+
         let footsteps = {
-            let state = engine.get_state_mut();
             [
-                state.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step1.wav"), BufferKind::Normal).unwrap(),
-                state.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step2.wav"), BufferKind::Normal).unwrap(),
-                state.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step3.wav"), BufferKind::Normal).unwrap(),
-                state.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step4.wav"), BufferKind::Normal).unwrap()
+                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step1.wav"), BufferKind::Normal).unwrap(),
+                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step2.wav"), BufferKind::Normal).unwrap(),
+                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step3.wav"), BufferKind::Normal).unwrap(),
+                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step4.wav"), BufferKind::Normal).unwrap()
             ]
         };
 
@@ -198,7 +199,6 @@ impl Player {
             look_direction: Vec3::zero(),
             up_direction: Vec3::zero(),
             footsteps: {
-                let sound_context = engine.get_sound_context();
                 let mut sound_context = sound_context.lock().unwrap();
                 footsteps.iter().map(|buf| {
                     let source = Source::new_spatial(buf.clone()).unwrap();
@@ -207,10 +207,10 @@ impl Player {
             },
         };
 
-        let ak47 = Weapon::new(WeaponKind::Ak47, engine.get_state_mut(), scene);
+        let ak47 = Weapon::new(WeaponKind::Ak47, resource_manager, scene);
         player.add_weapon(scene, ak47);
 
-        let m4 = Weapon::new(WeaponKind::M4, engine.get_state_mut(), scene);
+        let m4 = Weapon::new(WeaponKind::M4, resource_manager, scene);
         player.add_weapon(scene, m4);
 
         player
@@ -335,8 +335,10 @@ impl Player {
     }
 
     fn emit_footstep_sound(&self, engine: &mut Engine) {
+        let EngineInterface { sound_context, ..} = engine.interface();
+        let mut sound_context = sound_context.lock().unwrap();
         let handle = self.footsteps[rand::thread_rng().gen_range(0, self.footsteps.len())];
-        if let Some(source) = engine.get_sound_context().lock().unwrap().get_source_mut(handle) {
+        if let Some(source) = sound_context.get_source_mut(handle) {
             if let SourceKind::Spatial(spatial) = source.get_kind_mut() {
                 spatial.set_position(&self.feet_position);
             }
@@ -350,8 +352,17 @@ impl Player {
             .unwrap_or(Vec3::zero())
     }
 
+    fn update_listener(&mut self, sound_context: Arc<Mutex<Context>>) {
+        let mut sound_context = sound_context.lock().unwrap();
+        let listener = sound_context.get_listener_mut();
+        listener.set_position(&self.head_position);
+        listener.set_orientation(&self.look_direction, &self.up_direction).unwrap();
+    }
+
     pub fn update(&mut self, engine: &mut Engine, scene_handle: Handle<Scene>, time: &GameTime) {
-        if let Some(scene) = engine.get_state_mut().get_scene_mut(scene_handle) {
+        let EngineInterfaceMut { scenes, sound_context, resource_manager, ..} = engine.interface_mut();
+
+        if let Some(scene) = scenes.borrow_mut(scene_handle) {
             self.update_movement(scene, time);
 
             if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
@@ -361,7 +372,7 @@ impl Player {
 
         if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
             if self.controller.shoot {
-                current_weapon.shoot(engine, time);
+                current_weapon.shoot(resource_manager, sound_context.clone(), time);
             }
         }
 
@@ -370,16 +381,10 @@ impl Player {
             self.path_len = 0.0;
         }
 
-        let sound_context = engine.get_sound_context();
-        let mut sound_context = sound_context.lock().unwrap();
-        let listener = sound_context.get_listener_mut();
-        listener.set_position(&self.head_position);
-        listener.set_orientation(&self.look_direction, &self.up_direction).unwrap();
+        self.update_listener(sound_context);
     }
 
-    pub fn process_event(&mut self, event: &glutin::WindowEvent) -> bool {
-        use glutin::*;
-
+    pub fn process_event(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::CursorMoved { position, .. } => {
                 let mouse_velocity = Vec2 {

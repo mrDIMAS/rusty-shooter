@@ -23,16 +23,15 @@ use rg3d::{
         Scene,
     },
     resource::model::Model,
-    engine::{
-        state::State,
-        Engine,
-    },
 };
 use rg3d_physics::RayCastOptions;
 use rg3d_sound::{
     source::{Source, SourceKind},
     buffer::BufferKind,
 };
+use std::sync::{Mutex, Arc};
+use rg3d_sound::context::Context;
+use rg3d::engine::resource_manager::ResourceManager;
 
 pub enum WeaponKind {
     Unknown,
@@ -99,7 +98,7 @@ impl Visit for Weapon {
 }
 
 impl Weapon {
-    pub fn new(kind: WeaponKind, state: &mut State, scene: &mut Scene) -> Weapon {
+    pub fn new(kind: WeaponKind, resource_manager: &mut ResourceManager, scene: &mut Scene) -> Weapon {
         let model_path = match kind {
             WeaponKind::Unknown => panic!("must not be here"),
             WeaponKind::Ak47 => Path::new("data/models/ak47.fbx"),
@@ -107,7 +106,7 @@ impl Weapon {
         };
 
         let mut weapon_model = Handle::none();
-        let model_resource_handle = state.request_model(model_path);
+        let model_resource_handle = resource_manager.request_model(model_path);
         if model_resource_handle.is_some() {
             weapon_model = Model::instantiate(model_resource_handle.unwrap(), scene).root;
         }
@@ -174,10 +173,9 @@ impl Weapon {
         }
     }
 
-    fn play_shot_sound(&self, engine: &mut Engine) {
-        let sound_context = engine.get_sound_context();
+    fn play_shot_sound(&self, resource_manager: &mut ResourceManager, sound_context: Arc<Mutex<Context>>) {
         let mut sound_context = sound_context.lock().unwrap();
-        let shot_buffer = engine.get_state_mut().request_sound_buffer(
+        let shot_buffer = resource_manager.request_sound_buffer(
             Path::new("data/sounds/m4_shot.wav"), BufferKind::Normal).unwrap();
         let mut shot_sound = Source::new_spatial(shot_buffer).unwrap();
         shot_sound.set_play_once(true);
@@ -188,12 +186,12 @@ impl Weapon {
         sound_context.add_source(shot_sound);
     }
 
-    pub fn shoot(&mut self, engine: &mut Engine, time: &GameTime) {
+    pub fn shoot(&mut self, resource_manager: &mut ResourceManager, sound_context: Arc<Mutex<Context>>, time: &GameTime) {
         if time.elapsed - self.last_shot_time >= 0.1 {
             self.offset = Vec3::make(0.0, 0.0, -0.05);
             self.last_shot_time = time.elapsed;
 
-            self.play_shot_sound(engine);
+            self.play_shot_sound(resource_manager, sound_context);
         }
     }
 }

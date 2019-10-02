@@ -14,4 +14,3 @@ rg3d-sound = { path = "../rg3d-sound" }
 rg3d-physics = { path = "../rg3d-physics" }
 rg3d = { path = "../rg3d" }
 rand = "0.7.0"
-glutin = "0.21.0"

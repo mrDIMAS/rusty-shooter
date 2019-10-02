@@ -12,10 +12,9 @@ use rg3d::{
     resource::model::Model,
 };
 use std::{
-    path::Path,
-    sync::Arc
+    path::Path
 };
-use rg3d_physics::{
+use rg3d_physics::static_geometry::{
     StaticGeometry,
     StaticTriangle,
 };
@@ -118,11 +117,11 @@ impl Emit for CylinderEmitter {
 }
 
 impl Level {
-    pub fn new(engine: &mut Engine) -> Level {
-        // Create test scene
+    fn load_level(engine: &mut Engine) -> Scene {
         let mut scene = Scene::new();
 
-        let map_model_handle = engine.get_state_mut().request_model(Path::new("data/models/dm6.fbx"));
+        let EngineInterfaceMut { resource_manager, ..} = engine.interface_mut();
+        let map_model_handle = resource_manager.request_model(Path::new("data/models/dm6.fbx"));
         if map_model_handle.is_some() {
             // Instantiate map
             let map_root_handle = Model::instantiate(map_model_handle.unwrap(), &mut scene).root;
@@ -174,24 +173,36 @@ impl Level {
         particle_system.set_color_over_lifetime_gradient(gradient);
         let emitter = Emitter::new(EmitterKind::Custom(Box::new(CylinderEmitter::new())));
         particle_system.add_emitter(emitter);
-        if let Some(texture) = engine.get_state_mut().request_texture(Path::new("data/particles/smoke_04.tga")) {
+        if let Some(texture) = resource_manager.request_texture(Path::new("data/particles/smoke_04.tga")) {
             particle_system.set_texture(texture);
         }
         scene.add_node(Node::new(NodeKind::ParticleSystem(particle_system)));
 
-        let mut bots = Pool::new();
-        bots.spawn(Bot::new(BotKind::Mutant, engine, &mut scene).unwrap());
-        //bots.spawn(Bot::new(BotKind::Ripper, engine, &mut scene).unwrap());
+        scene
+    }
 
+    fn create_bots(engine: &mut Engine, scene: &mut Scene) -> Pool<Bot> {
+        let mut bots = Pool::new();
+        bots.spawn(Bot::new(BotKind::Mutant, engine, scene).unwrap());
+        bots
+    }
+
+    pub fn new(engine: &mut Engine) -> Level {
+        let mut scene = Self::load_level(engine);
+        let player = Player::new(engine, &mut scene);
+        let bots = Self::create_bots(engine, &mut scene);
+        let EngineInterfaceMut { scenes, ..} = engine.interface_mut();
+        let scene = scenes.spawn(scene);
         Level {
-            player: Some(Player::new(engine, &mut scene)),
-            scene: engine.get_state_mut().add_scene(scene),
-            bots
+            player: Some(player),
+            bots,
+            scene,
         }
     }
 
     pub fn destroy(&mut self, engine: &mut Engine) {
-        engine.get_state_mut().destroy_scene(self.scene);
+        let EngineInterfaceMut { scenes, ..} = engine.interface_mut();
+        scenes.free(self.scene);
     }
 
     pub fn get_player(&self) -> Option<&Player> {
@@ -206,7 +217,8 @@ impl Level {
         if let Some(ref mut player) = self.player {
             player.update(engine, self.scene, time);
 
-            if let Some(scene) = engine.get_state_mut().get_scene_mut(self.scene) {
+            let EngineInterfaceMut { scenes, ..} = engine.interface_mut();
+            if let Some(scene) = scenes.borrow_mut(self.scene) {
                 let player_position = player.get_position(scene);
 
                 for bot in self.bots.iter_mut() {

@@ -3,7 +3,6 @@
 extern crate rg3d_core;
 extern crate rg3d;
 extern crate rand;
-extern crate glutin;
 extern crate rg3d_physics;
 
 mod level;
@@ -20,11 +19,15 @@ use std::{
     io::Write,
     time,
     thread,
-    time::Duration
+    time::Duration,
+    collections::VecDeque
 };
-
 use rg3d::{
-    engine::Engine,
+    engine::{
+        Engine,
+        EngineInterfaceMut,
+        EngineInterface
+    },
     gui::{
         Visibility,
         node::{UINode, UINodeKind},
@@ -38,10 +41,14 @@ use rg3d::{
         VerticalAlignment,
     },
     scene::particle_system::CustomEmitterFactory,
+    WindowEvent,
+    ElementState,
+    VirtualKeyCode,
+    Event,
+    EventsLoop,
 };
 use crate::level::{Level, CylinderEmitter};
 use rg3d_core::{
-    math::vec2::Vec2,
     pool::Handle,
     visitor::{
         Visitor,
@@ -69,10 +76,12 @@ pub struct Menu {
 
 pub struct Game {
     menu: Menu,
+    events_loop: EventsLoop,
     engine: Engine,
     level: Option<Level>,
     debug_text: Handle<UINode>,
     debug_string: String,
+    running: bool,
     last_tick_time: time::Instant,
 }
 
@@ -83,7 +92,20 @@ pub struct GameTime {
 
 impl Game {
     pub fn new() -> Game {
-        let mut engine = Engine::new();
+        let events_loop = EventsLoop::new();
+
+        let primary_monitor = events_loop.get_primary_monitor();
+        let mut monitor_dimensions = primary_monitor.get_dimensions();
+        monitor_dimensions.height *= 0.7;
+        monitor_dimensions.width *= 0.7;
+        let window_size = monitor_dimensions.to_logical(primary_monitor.get_hidpi_factor());
+
+        let window_builder = rg3d::WindowBuilder::new()
+            .with_title("Rusty Shooter")
+            .with_dimensions(window_size)
+            .with_resizable(true);
+
+        let mut engine = Engine::new(window_builder, &events_loop).unwrap();
 
         if let Ok(mut factory) = CustomEmitterFactory::get() {
             factory.set_callback(Box::new(|kind| {
@@ -94,13 +116,17 @@ impl Game {
             }))
         }
 
-        let buffer = engine.get_state_mut().request_sound_buffer(Path::new("data/sounds/Sonic_Mayhem_Collapse.wav"), BufferKind::Stream).unwrap();
+        let EngineInterfaceMut { sound_context, resource_manager, .. } = engine.interface_mut();
+
+        let buffer = resource_manager.request_sound_buffer(Path::new("data/sounds/Sonic_Mayhem_Collapse.wav"), BufferKind::Stream).unwrap();
         let mut source = Source::new(SourceKind::Flat, buffer).unwrap();
         source.play();
         source.set_gain(0.25);
-        engine.get_sound_context().lock().unwrap().add_source(source);
+        sound_context.lock().unwrap().add_source(source);
 
         let mut game = Game {
+            running: true,
+            events_loop,
             menu: Menu {
                 state: Rc::new(RefCell::new(MenuState {
                     start_new_game: None,
@@ -122,10 +148,9 @@ impl Game {
     }
 
     pub fn create_ui(&mut self) {
-        let frame_size = self.engine.get_frame_size();
-        let sound_context = self.engine.get_sound_context();
-        let ui = self.engine.get_ui_mut();
+        let EngineInterfaceMut { ui, sound_context, renderer, .. } = self.engine.interface_mut();
 
+        let frame_size = renderer.get_frame_size();
         self.debug_text = TextBuilder::new()
             .with_width(400.0)
             .with_height(200.0)
@@ -191,8 +216,8 @@ impl Game {
             .add_column(Column::stretch())
             .add_column(Column::strict(450.0))
             .add_column(Column::stretch())
-            .with_width(frame_size.x)
-            .with_height(frame_size.y)
+            .with_width(frame_size.0 as f32)
+            .with_height(frame_size.1 as f32)
             .with_child(WindowBuilder::new()
                 .on_row(1)
                 .on_column(1)
@@ -349,7 +374,7 @@ impl Game {
 
             if state.quit_game.take().is_some() {
                 self.destroy_level();
-                self.engine.stop();
+                self.running = false;
             }
 
             if state.save_game.take().is_some() {
@@ -366,13 +391,15 @@ impl Game {
     }
 
     pub fn set_menu_visible(&mut self, visible: bool) {
-        if let Some(root) = self.engine.get_ui_mut().get_node_mut(self.menu.root) {
+        let EngineInterfaceMut { ui, ..} = self.engine.interface_mut();
+        if let Some(root) = ui.get_node_mut(self.menu.root) {
             root.set_visibility(if visible { Visibility::Visible } else { Visibility::Collapsed })
         }
     }
 
     pub fn is_menu_visible(&self) -> bool {
-        if let Some(root) = self.engine.get_ui().get_node(self.menu.root) {
+        let EngineInterface { ui, ..} = self.engine.interface();
+        if let Some(root) = ui.get_node(self.menu.root) {
             root.get_visibility() == Visibility::Visible
         } else {
             false
@@ -388,9 +415,11 @@ impl Game {
     }
 
     pub fn update_statistics(&mut self, elapsed: f64) {
+        let EngineInterfaceMut { ui, renderer, ..} = self.engine.interface_mut();
+
         self.debug_string.clear();
         use std::fmt::Write;
-        let statistics = self.engine.get_rendering_statisting();
+        let statistics = renderer.get_statistics();
         write!(self.debug_string,
                "Pure frame time: {:.2} ms\n\
                Capped frame time: {:.2} ms\n\
@@ -404,7 +433,7 @@ impl Game {
                elapsed
         ).unwrap();
 
-        if let Some(ui_node) = self.engine.get_ui_mut().get_node_mut(self.debug_text) {
+        if let Some(ui_node) = ui.get_node_mut(self.debug_text) {
             if let UINodeKind::Text(text) = ui_node.get_kind_mut() {
                 text.set_text(self.debug_string.as_str());
             }
@@ -421,60 +450,75 @@ impl Game {
         }
     }
 
+    fn process_dispatched_event(&mut self, event: &WindowEvent) {
+        let EngineInterfaceMut { ui, ..} = self.engine.interface_mut();
+
+        // Some events can be consumed so they won't be dispatched further,
+        // this allows to catch events by UI for example and don't send them
+        // to player controller so when you click on some button in UI you
+        // won't shoot from your current weapon in game.
+        let event_processed = ui.process_event(event);
+
+        if !event_processed {
+            if let Some(ref mut level) = self.level {
+                if let Some(player) = level.get_player_mut() {
+                    player.process_event(event);
+                }
+            }
+        }
+    }
+
+    pub fn process_event(&mut self, event: Event) {
+        if let Event::WindowEvent { event, .. } = event {
+            self.process_dispatched_event(&event);
+
+            // Some events processed in any case.
+            match event {
+                WindowEvent::CloseRequested => self.running = false,
+                WindowEvent::KeyboardInput { input, .. } => {
+                    if let ElementState::Pressed = input.state {
+                        if let Some(key) = input.virtual_keycode {
+                            if key == VirtualKeyCode::Escape {
+                                self.set_menu_visible(!self.is_menu_visible());
+                            }
+                        }
+                    }
+                }
+                WindowEvent::Resized(new_size) => {
+                    let EngineInterfaceMut { ui, renderer,..} = self.engine.interface_mut();
+                    renderer.set_frame_size(new_size.into()).unwrap();
+                    if let Some(root) = ui.get_node_mut(self.menu.root) {
+                        root.set_width(new_size.width as f32);
+                        root.set_height(new_size.height as f32);
+                    }
+                }
+                _ => ()
+            }
+        }
+    }
+
     pub fn run(&mut self) {
         let fixed_fps = 60.0;
         let fixed_timestep = 1.0 / fixed_fps;
         let clock = Instant::now();
-        let mut game_time = GameTime { elapsed: 0.0, delta: fixed_timestep };
+        let mut game_time = GameTime {
+            elapsed: 0.0,
+            delta: fixed_timestep,
+        };
 
-        while self.engine.is_running() {
+        let mut events = VecDeque::new();
+        while self.running {
             let mut dt = clock.elapsed().as_secs_f64() - game_time.elapsed;
             while dt >= fixed_timestep as f64 {
                 dt -= fixed_timestep as f64;
                 game_time.elapsed += fixed_timestep as f64;
-                // Get events from OS.
-                self.engine.poll_events();
 
-                // Feed engine with events.
-                while let Some(event) = self.engine.pop_event() {
-                    if let glutin::Event::WindowEvent { event, .. } = event {
-                        // Some events can be consumed so they won't be dispatched further,
-                        // this allows to catch events by UI for example and don't send them
-                        // to player controller so when you click on some button in UI you
-                        // won't shoot from your current weapon in game.
-                        let event_processed = self.engine.get_ui_mut().process_event(&event);
+                self.events_loop.poll_events(|event| {
+                    events.push_back(event);
+                });
 
-                        if !event_processed {
-                            if let Some(ref mut level) = self.level {
-                                if let Some(player) = level.get_player_mut() {
-                                    player.process_event(&event);
-                                }
-                            }
-                        }
-
-                        // Some events processed in any case.
-                        match event {
-                            glutin::WindowEvent::CloseRequested => self.engine.stop(),
-                            glutin::WindowEvent::KeyboardInput { input, .. } => {
-                                if let glutin::ElementState::Pressed = input.state {
-                                    if let Some(key) = input.virtual_keycode {
-                                        if key == glutin::VirtualKeyCode::Escape {
-                                            self.set_menu_visible(!self.is_menu_visible());
-                                        }
-                                    }
-                                }
-                            }
-                            glutin::WindowEvent::Resized(new_size) => {
-                                let frame_size = Vec2::make(new_size.width as f32, new_size.height as f32);
-                                self.engine.set_frame_size(frame_size).unwrap();
-                                if let Some(root) = self.engine.get_ui_mut().get_node_mut(self.menu.root) {
-                                    root.set_width(frame_size.x);
-                                    root.set_height(frame_size.y);
-                                }
-                            }
-                            _ => ()
-                        }
-                    }
+                while let Some(event) = events.pop_front() {
+                    self.process_event(event);
                 }
                 self.update(&game_time);
             }

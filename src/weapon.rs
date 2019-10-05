@@ -24,7 +24,7 @@ use rg3d::{
     },
     resource::model::Model,
 };
-use rg3d_physics::RayCastOptions;
+use rg3d_physics::{RayCastOptions, Physics};
 use rg3d_sound::{
     source::{Source, SourceKind},
     buffer::BufferKind,
@@ -32,6 +32,10 @@ use rg3d_sound::{
 use std::sync::{Mutex, Arc};
 use rg3d_sound::context::Context;
 use rg3d::engine::resource_manager::ResourceManager;
+use rg3d::scene::{SceneInterfaceMut, SceneInterface};
+use rg3d::scene::graph::Graph;
+use rg3d_core::pool::Pool;
+use crate::projectile::{Projectile, ProjectileKind};
 
 pub enum WeaponKind {
     Unknown,
@@ -53,8 +57,8 @@ impl Default for Weapon {
     fn default() -> Self {
         Self {
             kind: WeaponKind::Unknown,
-            laser_dot: Handle::none(),
-            model: Handle::none(),
+            laser_dot: Handle::NONE,
+            model: Handle::NONE,
             offset: Vec3::new(),
             dest_offset: Vec3::new(),
             last_shot_time: 0.0,
@@ -105,16 +109,17 @@ impl Weapon {
             WeaponKind::M4 => Path::new("data/models/m4.fbx"),
         };
 
-        let mut weapon_model = Handle::none();
+        let mut weapon_model = Handle::NONE;
         let model_resource_handle = resource_manager.request_model(model_path);
         if model_resource_handle.is_some() {
             weapon_model = Model::instantiate(model_resource_handle.unwrap(), scene).root;
         }
 
+        let SceneInterfaceMut { graph, .. } = scene.interface_mut();
         let mut light = Light::new();
         light.set_color(Color::opaque(255, 0, 0));
         light.set_radius(0.5);
-        let laser_dot = scene.add_node(Node::new(NodeKind::Light(light)));
+        let laser_dot = graph.add_node(Node::new(NodeKind::Light(light)));
 
         Weapon {
             kind,
@@ -127,12 +132,12 @@ impl Weapon {
         }
     }
 
-    pub fn set_visibility(&self, visibility: bool, scene: &mut Scene) {
-        if let Some(model) = scene.get_node_mut(self.model) {
+    pub fn set_visibility(&self, visibility: bool, graph: &mut Graph) {
+        if let Some(model) = graph.get_mut(self.model) {
             model.set_visibility(visibility)
         }
 
-        if let Some(laser_dot) = scene.get_node_mut(self.laser_dot) {
+        if let Some(laser_dot) = graph.get_mut(self.laser_dot) {
             laser_dot.set_visibility(visibility);
         }
     }
@@ -142,33 +147,35 @@ impl Weapon {
     }
 
     pub fn update(&mut self, scene: &mut Scene) {
+        let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
+
         self.offset.x += (self.dest_offset.x - self.offset.x) * 0.2;
         self.offset.y += (self.dest_offset.y - self.offset.y) * 0.2;
         self.offset.z += (self.dest_offset.z - self.offset.z) * 0.2;
 
-        self.update_laser_sight(scene);
+        self.update_laser_sight(graph, physics);
 
-        if let Some(node) = scene.get_node_mut(self.model) {
+        if let Some(node) = graph.get_mut(self.model) {
             node.get_local_transform_mut().set_position(self.offset);
             self.shot_position = node.get_global_position();
         }
     }
 
-    fn update_laser_sight(&self, scene: &mut Scene) {
+    fn update_laser_sight(&self, graph: &mut Graph, physics: &Physics) {
         let mut laser_dot_position = Vec3::new();
-        if let Some(model) = scene.get_node(self.model) {
+        if let Some(model) = graph.get(self.model) {
             let begin = model.get_global_position();
             let end = begin + model.get_look_vector().scale(100.0);
             if let Some(ray) = Ray::from_two_points(&begin, &end) {
                 let mut result = Vec::new();
-                if scene.get_physics().ray_cast(&ray, RayCastOptions::default(), &mut result) {
+                if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
                     let offset = result[0].normal.normalized().unwrap().scale(0.2);
                     laser_dot_position = result[0].position + offset;
                 }
             }
         }
 
-        if let Some(laser_dot) = scene.get_node_mut(self.laser_dot) {
+        if let Some(laser_dot) = graph.get_mut(self.laser_dot) {
             laser_dot.get_local_transform_mut().set_position(laser_dot_position);
         }
     }
@@ -186,12 +193,32 @@ impl Weapon {
         sound_context.add_source(shot_sound);
     }
 
-    pub fn shoot(&mut self, resource_manager: &mut ResourceManager, sound_context: Arc<Mutex<Context>>, time: &GameTime) {
+    pub fn shoot(&mut self,
+                 resource_manager: &mut ResourceManager,
+                 scene: &mut Scene,
+                 sound_context: Arc<Mutex<Context>>,
+                 time: &GameTime,
+                 projectiles: &mut Pool<Projectile>) {
         if time.elapsed - self.last_shot_time >= 0.1 {
             self.offset = Vec3::make(0.0, 0.0, -0.05);
             self.last_shot_time = time.elapsed;
 
             self.play_shot_sound(resource_manager, sound_context);
+
+            let (dir, pos) = {
+                let SceneInterface { graph, .. } = scene.interface();
+
+                if let Some(model) = graph.get(self.model) {
+                    (model.get_look_vector(), model.get_global_position())
+                } else {
+                    return;
+                }
+            };
+
+            projectiles.spawn(Projectile::new(
+                ProjectileKind::Bullet,
+                resource_manager,
+                scene, dir, pos));
         }
     }
 }

@@ -1,7 +1,18 @@
-use rg3d::{engine::Engine, scene::{
-    node::{Node, NodeKind},
-    Scene, camera::Camera,
-}, WindowEvent, MouseButton, MouseScrollDelta, ElementState, VirtualKeyCode};
+use rg3d::{
+    engine::Engine,
+    scene::{
+        node::{Node, NodeKind},
+        Scene, camera::Camera,
+    },
+    WindowEvent,
+    MouseButton,
+    MouseScrollDelta,
+    ElementState,
+    VirtualKeyCode,
+    engine::{EngineInterfaceMut, EngineInterface},
+    scene::{SceneInterfaceMut, SceneInterface},
+    scene::graph::Graph,
+};
 use crate::{
     weapon::{Weapon, WeaponKind},
     GameTime,
@@ -14,16 +25,16 @@ use rg3d_core::{
 use rg3d_sound::{
     source::{Source, SourceKind},
     buffer::BufferKind,
+    context::Context,
 };
-use std::path::Path;
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
 use rand::Rng;
-use rg3d_physics::{
-    convex_shape::{SphereShape, ConvexShape},
-    rigid_body::RigidBody
-};
-use rg3d::engine::{EngineInterfaceMut, EngineInterface};
-use rg3d_sound::context::Context;
-use std::sync::{Arc, Mutex};
+use rg3d_physics::{convex_shape::{SphereShape, ConvexShape}, rigid_body::RigidBody, Physics};
+use rg3d_core::pool::Pool;
+use crate::projectile::Projectile;
 
 pub struct Controller {
     move_forward: bool,
@@ -140,30 +151,30 @@ impl Visit for Player {
 
 impl Player {
     pub fn new(engine: &mut Engine, scene: &mut Scene) -> Player {
-        let camera_handle = scene.add_node(Node::new(NodeKind::Camera(Camera::default())));
+        let EngineInterfaceMut { sound_context, resource_manager, .. } = engine.interface_mut();
+        let SceneInterfaceMut { graph, physics, node_rigid_body_map, .. } = scene.interface_mut();
+
+        let camera_handle = graph.add_node(Node::new(NodeKind::Camera(Camera::default())));
 
         let mut camera_pivot = Node::new(NodeKind::Base);
         camera_pivot.get_local_transform_mut().set_position(Vec3 { x: 0.0, y: 1.0, z: 0.0 });
-        let camera_pivot_handle = scene.add_node(camera_pivot);
-        scene.link_nodes(camera_handle, camera_pivot_handle);
+        let camera_pivot_handle = graph.add_node(camera_pivot);
+        graph.link_nodes(camera_handle, camera_pivot_handle);
 
         let mut pivot = Node::new(NodeKind::Base);
         pivot.get_local_transform_mut().set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
 
         let stand_body_radius = 0.5;
         let body = RigidBody::new(ConvexShape::Sphere(SphereShape::new(stand_body_radius)));
-        let body_handle = scene.get_physics_mut().add_body(body);
-        pivot.set_rigid_body(body_handle);
-
-        let pivot_handle = scene.add_node(pivot);
-        scene.link_nodes(camera_pivot_handle, pivot_handle);
+        let body_handle = physics.add_body(body);
+        let pivot_handle = graph.add_node(pivot);
+        node_rigid_body_map.insert(pivot_handle, body_handle);
+        graph.link_nodes(camera_pivot_handle, pivot_handle);
 
         let mut weapon_pivot = Node::new(NodeKind::Base);
         weapon_pivot.get_local_transform_mut().set_position(Vec3::make(-0.065, -0.052, 0.02));
-        let weapon_pivot_handle = scene.add_node(weapon_pivot);
-        scene.link_nodes(weapon_pivot_handle, camera_handle);
-
-        let EngineInterfaceMut { sound_context, resource_manager, ..} = engine.interface_mut();
+        let weapon_pivot_handle = graph.add_node(weapon_pivot);
+        graph.link_nodes(weapon_pivot_handle, camera_handle);
 
         let footsteps = {
             [
@@ -174,7 +185,7 @@ impl Player {
             ]
         };
 
-        let mut player = Player {
+        Player {
             camera: camera_handle,
             pivot: pivot_handle,
             camera_pivot: camera_pivot_handle,
@@ -205,19 +216,11 @@ impl Player {
                     sound_context.add_source(source)
                 }).collect()
             },
-        };
-
-        let ak47 = Weapon::new(WeaponKind::Ak47, resource_manager, scene);
-        player.add_weapon(scene, ak47);
-
-        let m4 = Weapon::new(WeaponKind::M4, resource_manager, scene);
-        player.add_weapon(scene, m4);
-
-        player
+        }
     }
 
-    pub fn add_weapon(&mut self, scene: &mut Scene, weapon: Weapon) {
-        scene.link_nodes(weapon.get_model(), self.weapon_pivot);
+    pub fn add_weapon(&mut self, graph: &mut Graph, weapon: Weapon) {
+        graph.link_nodes(weapon.get_model(), self.weapon_pivot);
         self.weapons.push(weapon);
     }
 
@@ -233,8 +236,8 @@ impl Player {
         }
     }
 
-    pub fn has_ground_contact(&self, scene: &Scene) -> bool {
-        if let Some(body) = scene.get_physics().borrow_body(self.body) {
+    pub fn has_ground_contact(&self, physics: &Physics) -> bool {
+        if let Some(body) = physics.borrow_body(self.body) {
             for contact in body.get_contacts() {
                 if contact.normal.y >= 0.7 {
                     return true;
@@ -245,18 +248,20 @@ impl Player {
     }
 
     fn update_movement(&mut self, scene: &mut Scene, time: &GameTime) {
+        let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
+
         let mut look = Vec3::zero();
         let mut side = Vec3::zero();
 
-        if let Some(pivot_node) = scene.get_node(self.pivot) {
+        if let Some(pivot_node) = graph.get(self.pivot) {
             look = pivot_node.get_look_vector();
             side = pivot_node.get_side_vector();
         }
 
-        let has_ground_contact = self.has_ground_contact(scene);
+        let has_ground_contact = self.has_ground_contact(physics);
 
         let mut is_moving = false;
-        if let Some(body) = scene.get_physics_mut().borrow_body_mut(self.body) {
+        if let Some(body) = physics.borrow_body_mut(self.body) {
             let mut velocity = Vec3::new();
             if self.controller.move_forward {
                 velocity += look;
@@ -310,7 +315,7 @@ impl Player {
         self.camera_offset.y += (self.camera_dest_offset.y - self.camera_offset.y) * 0.1;
         self.camera_offset.z += (self.camera_dest_offset.z - self.camera_offset.z) * 0.1;
 
-        if let Some(camera_node) = scene.get_node_mut(self.camera) {
+        if let Some(camera_node) = graph.get_mut(self.camera) {
             camera_node.get_local_transform_mut().set_position(self.camera_offset);
 
             self.head_position = camera_node.get_global_position();
@@ -319,23 +324,23 @@ impl Player {
         }
 
         for (i, weapon) in self.weapons.iter().enumerate() {
-            weapon.set_visibility( i == self.current_weapon as usize, scene);
+            weapon.set_visibility(i == self.current_weapon as usize, graph);
         }
 
         self.yaw += (self.dest_yaw - self.yaw) * 0.2;
         self.pitch += (self.dest_pitch - self.pitch) * 0.2;
 
-        if let Some(pivot_node) = scene.get_node_mut(self.pivot) {
+        if let Some(pivot_node) = graph.get_mut(self.pivot) {
             pivot_node.get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::up(), self.yaw.to_radians()));
         }
 
-        if let Some(camera_pivot) = scene.get_node_mut(self.camera_pivot) {
+        if let Some(camera_pivot) = graph.get_mut(self.camera_pivot) {
             camera_pivot.get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::right(), self.pitch.to_radians()));
         }
     }
 
     fn emit_footstep_sound(&self, engine: &mut Engine) {
-        let EngineInterface { sound_context, ..} = engine.interface();
+        let EngineInterface { sound_context, .. } = engine.interface();
         let mut sound_context = sound_context.lock().unwrap();
         let handle = self.footsteps[rand::thread_rng().gen_range(0, self.footsteps.len())];
         if let Some(source) = sound_context.get_source_mut(handle) {
@@ -347,7 +352,8 @@ impl Player {
     }
 
     pub fn get_position(&self, scene: &Scene) -> Vec3 {
-        scene.get_physics().borrow_body(self.body)
+        let SceneInterface { physics, .. } = scene.interface();
+        physics.borrow_body(self.body)
             .and_then(|body| Some(body.get_position()))
             .unwrap_or(Vec3::zero())
     }
@@ -359,20 +365,18 @@ impl Player {
         listener.set_orientation(&self.look_direction, &self.up_direction).unwrap();
     }
 
-    pub fn update(&mut self, engine: &mut Engine, scene_handle: Handle<Scene>, time: &GameTime) {
-        let EngineInterfaceMut { scenes, sound_context, resource_manager, ..} = engine.interface_mut();
+    pub fn update(&mut self, engine: &mut Engine, scene_handle: Handle<Scene>, time: &GameTime, projectiles: &mut Pool<Projectile>) {
+        let EngineInterfaceMut { scenes, sound_context, resource_manager, .. } = engine.interface_mut();
 
-        if let Some(scene) = scenes.borrow_mut(scene_handle) {
+        if let Some(scene) = scenes.get_mut(scene_handle) {
             self.update_movement(scene, time);
 
             if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
                 current_weapon.update(scene);
-            }
-        }
 
-        if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
-            if self.controller.shoot {
-                current_weapon.shoot(resource_manager, sound_context.clone(), time);
+                if self.controller.shoot {
+                    current_weapon.shoot(resource_manager, scene, sound_context.clone(), time, projectiles);
+                }
             }
         }
 

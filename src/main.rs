@@ -9,6 +9,7 @@ mod level;
 mod player;
 mod weapon;
 mod bot;
+mod projectile;
 
 use std::{
     cell::RefCell,
@@ -134,10 +135,10 @@ impl Game {
                     save_game: None,
                     load_game: None,
                 })),
-                root: Handle::none(),
-                options_window: Handle::none(),
+                root: Handle::NONE,
+                options_window: Handle::NONE,
             },
-            debug_text: Handle::none(),
+            debug_text: Handle::NONE,
             engine,
             level: None,
             debug_string: String::new(),

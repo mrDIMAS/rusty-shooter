@@ -25,6 +25,7 @@ use crate::GameTime;
 use rg3d_core::math::quat::Quat;
 use rg3d::scene::node::NodeKind;
 use rg3d::engine::EngineInterfaceMut;
+use rg3d::scene::SceneInterfaceMut;
 
 pub enum BotKind {
     Mutant,
@@ -60,12 +61,12 @@ pub struct Bot {
 impl Default for Bot {
     fn default() -> Self {
         Self {
-            pivot: Handle::none(),
+            pivot: Handle::NONE,
             kind: BotKind::Mutant,
-            model: Handle::none(),
-            body: Handle::none(),
-            idle_animation: Handle::none(),
-            walk_animation: Handle::none(),
+            model: Handle::NONE,
+            body: Handle::NONE,
+            idle_animation: Handle::NONE,
+            walk_animation: Handle::NONE,
         }
     }
 }
@@ -73,6 +74,7 @@ impl Default for Bot {
 impl Bot {
     pub fn new(kind: BotKind, engine: &mut Engine, scene: &mut Scene) -> Result<Self, ()> {
         let EngineInterfaceMut { resource_manager, ..} = engine.interface_mut();
+
 
         let path = match kind {
             BotKind::Mutant => Path::new("data/models/mutant.fbx"),
@@ -82,21 +84,31 @@ impl Bot {
         let body_height = 1.25;
 
         let resource = resource_manager.request_model(path).ok_or(())?;
-        let pivot = scene.add_node(Node::new(NodeKind::Base));
         let model = Model::instantiate_geometry(resource.clone(), scene);
-        scene.link_nodes(model, pivot);
-        if let Some(model) = scene.get_node_mut(model) {
-            model.get_local_transform_mut().set_position(Vec3::make(0.0, -body_height * 0.5, 0.0));
-        }
-
-        match kind {
-            BotKind::Mutant => {
-                if let Some(model) = scene.get_node_mut(model) {
-                    model.get_local_transform_mut().set_scale(Vec3::make(0.025, 0.025, 0.025));
-                }
+        let (pivot, body) =  {
+            let SceneInterfaceMut { graph, physics, node_rigid_body_map, .. } = scene.interface_mut();
+            let pivot = graph.add_node(Node::new(NodeKind::Base));
+            graph.link_nodes(model, pivot);
+            if let Some(model) = graph.get_mut(model) {
+                model.get_local_transform_mut().set_position(Vec3::make(0.0, -body_height * 0.5, 0.0));
             }
-            _ => {}
-        }
+
+            match kind {
+                BotKind::Mutant => {
+                    if let Some(model) = graph.get_mut(model) {
+                        model.get_local_transform_mut().set_scale(Vec3::make(0.025, 0.025, 0.025));
+                    }
+                }
+                _ => {}
+            }
+
+            let capsule_shape = CapsuleShape::new(0.25, body_height, Axis::Y);
+            let capsule_body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
+            let body = physics.add_body(capsule_body);
+            node_rigid_body_map.insert(pivot, body);
+
+            (pivot, body)
+        };
 
         let idle_animation = *Model::retarget_animations(
             resource_manager.request_model(
@@ -110,14 +122,6 @@ impl Bot {
             model, scene,
         ).get(0).ok_or(())?;
 
-        let capsule_shape = CapsuleShape::new(0.25, body_height, Axis::Y);
-        let capsule_body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
-        let body = scene.get_physics_mut().add_body(capsule_body);
-
-        if let Some(pivot) = scene.get_node_mut(pivot) {
-            pivot.set_rigid_body(body);
-        }
-
         Ok(Self {
             pivot,
             model,
@@ -129,11 +133,13 @@ impl Bot {
     }
 
     pub fn update(&mut self, scene: &mut Scene, player_position: Vec3, time: &GameTime) {
+        let SceneInterfaceMut { graph, physics, animations, .. } = scene.interface_mut();
+
         let threshold = 2.0;
 
         let mut distance = 0.0;
 
-        if let Some(body) = scene.get_physics_mut().borrow_body_mut(self.body) {
+        if let Some(body) = physics.borrow_body_mut(self.body) {
             let dir = player_position - body.get_position();
             distance = dir.len();
 
@@ -142,7 +148,7 @@ impl Bot {
                     body.move_by(dir.scale(0.35 * time.delta));
                 }
 
-                if let Some(pivot) = scene.get_node_mut(self.pivot) {
+                if let Some(pivot) = graph.get_mut(self.pivot) {
                     let transform = pivot.get_local_transform_mut();
                     let angle = dir.x.atan2(dir.z);
                     transform.set_rotation(Quat::from_axis_angle(Vec3::up(), angle))
@@ -153,20 +159,20 @@ impl Bot {
         let fade_speed = 1.5;
 
         if distance > threshold {
-            if let Some(walk_animation) = scene.get_animation_mut(self.walk_animation) {
+            if let Some(walk_animation) = animations.get_mut(self.walk_animation) {
                 walk_animation.fade_in(fade_speed);
                 walk_animation.set_enabled(true);
             }
-            if let Some(idle_animation) = scene.get_animation_mut(self.idle_animation) {
+            if let Some(idle_animation) = animations.get_mut(self.idle_animation) {
                 idle_animation.fade_out(fade_speed);
                 idle_animation.set_enabled(true);
             }
         } else {
-            if let Some(walk_animation) = scene.get_animation_mut(self.walk_animation) {
+            if let Some(walk_animation) = animations.get_mut(self.walk_animation) {
                 walk_animation.fade_out(fade_speed);
                 walk_animation.set_enabled(true);
             }
-            if let Some(idle_animation) = scene.get_animation_mut(self.idle_animation) {
+            if let Some(idle_animation) = animations.get_mut(self.idle_animation) {
                 idle_animation.fade_in(fade_speed);
                 idle_animation.set_enabled(true);
             }

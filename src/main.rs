@@ -10,36 +10,26 @@ mod player;
 mod weapon;
 mod bot;
 mod projectile;
+mod menu;
 
 use std::{
-    cell::RefCell,
     fs::File,
     path::Path,
     time::Instant,
-    rc::Rc,
     io::Write,
     time,
     thread,
     time::Duration,
-    collections::VecDeque
+    collections::VecDeque,
 };
 use rg3d::{
     engine::{
         Engine,
         EngineInterfaceMut,
-        EngineInterface
     },
     gui::{
-        Visibility,
         node::{UINode, UINodeKind},
-        button::ButtonBuilder,
-        Thickness,
-        grid::{GridBuilder, Column, Row},
         text::TextBuilder,
-        scroll_bar::ScrollBarBuilder,
-        window::WindowBuilder,
-        window::WindowTitle,
-        VerticalAlignment,
     },
     scene::particle_system::CustomEmitterFactory,
     WindowEvent,
@@ -61,19 +51,9 @@ use rg3d_sound::{
     buffer::BufferKind,
     source::{Source, SourceKind},
 };
+use crate::menu::Menu;
+use rg3d::gui::event::{UIEvent, UIEventKind};
 
-pub struct MenuState {
-    save_game: Option<()>,
-    load_game: Option<()>,
-    start_new_game: Option<()>,
-    quit_game: Option<()>,
-}
-
-pub struct Menu {
-    state: Rc<RefCell<MenuState>>,
-    root: Handle<UINode>,
-    options_window: Handle<UINode>,
-}
 
 pub struct Game {
     menu: Menu,
@@ -128,16 +108,7 @@ impl Game {
         let mut game = Game {
             running: true,
             events_loop,
-            menu: Menu {
-                state: Rc::new(RefCell::new(MenuState {
-                    start_new_game: None,
-                    quit_game: None,
-                    save_game: None,
-                    load_game: None,
-                })),
-                root: Handle::NONE,
-                options_window: Handle::NONE,
-            },
+            menu: Menu::new(&mut engine),
             debug_text: Handle::NONE,
             engine,
             level: None,
@@ -149,162 +120,11 @@ impl Game {
     }
 
     pub fn create_ui(&mut self) {
-        let EngineInterfaceMut { ui, sound_context, renderer, .. } = self.engine.interface_mut();
+        let EngineInterfaceMut { ui, .. } = self.engine.interface_mut();
 
-        let frame_size = renderer.get_frame_size();
         self.debug_text = TextBuilder::new()
             .with_width(400.0)
             .with_height(200.0)
-            .build(ui);
-
-        let margin = Thickness::uniform(2.0);
-
-        self.menu.options_window = WindowBuilder::new()
-            .with_width(400.0)
-            .with_height(500.0)
-            .with_title(WindowTitle::Text("Options"))
-            .with_content(GridBuilder::new()
-                .with_margin(Thickness::uniform(5.0))
-                .add_row(Row::strict(34.0))
-                .add_row(Row::strict(34.0))
-                .add_column(Column::strict(150.0))
-                .add_column(Column::stretch())
-                .with_child(TextBuilder::new()
-                    .with_text("Sound Volume")
-                    .on_row(0)
-                    .on_column(0)
-                    .with_margin(margin)
-                    .with_vertical_text_alignment(VerticalAlignment::Center)
-                    .build(ui))
-                .with_child(ScrollBarBuilder::new()
-                    .with_min(0.0)
-                    .with_max(1.0)
-                    .with_value(1.0)
-                    .on_row(0)
-                    .on_column(1)
-                    .with_margin(margin)
-                    .with_value_changed({
-                        Box::new(move |_ui, args| {
-                            sound_context.lock().unwrap().set_master_gain(args.new_value)
-                        })
-                    })
-                    .build(ui))
-                .with_child(TextBuilder::new()
-                    .with_text("Music Volume")
-                    .on_row(1)
-                    .with_margin(margin)
-                    .with_vertical_text_alignment(VerticalAlignment::Center)
-                    .on_column(0)
-                    .build(ui))
-                .with_child(ScrollBarBuilder::new()
-                    .with_min(0.0)
-                    .with_max(1.0)
-                    .with_margin(margin)
-                    .with_value(1.0)
-                    .on_row(1)
-                    .on_column(1)
-                    .with_value_changed({
-                        Box::new(move |_ui, _args| {})
-                    })
-                    .build(ui))
-                .build(ui))
-            .build(ui);
-
-        self.menu.root = GridBuilder::new()
-            .add_row(Row::stretch())
-            .add_row(Row::strict(600.0))
-            .add_row(Row::stretch())
-            .add_column(Column::stretch())
-            .add_column(Column::strict(450.0))
-            .add_column(Column::stretch())
-            .with_width(frame_size.0 as f32)
-            .with_height(frame_size.1 as f32)
-            .with_child(WindowBuilder::new()
-                .on_row(1)
-                .on_column(1)
-                .with_title(WindowTitle::Text("Rusty Shooter"))
-                .with_content(GridBuilder::new()
-                    .with_margin(Thickness::uniform(20.0))
-                    .add_column(Column::stretch())
-                    .add_row(Row::strict(50.0))
-                    .add_row(Row::strict(50.0))
-                    .add_row(Row::strict(50.0))
-                    .add_row(Row::strict(50.0))
-                    .add_row(Row::strict(50.0))
-                    .add_row(Row::strict(50.0))
-                    .with_child({
-                        let menu_state = self.menu.state.clone();
-                        ButtonBuilder::new()
-                            .with_text("New Game")
-                            .on_column(0)
-                            .on_row(0)
-                            .with_margin(Thickness::uniform(4.0))
-                            .with_click(Box::new(move |_ui, _handle| {
-                                if let Ok(mut state) = menu_state.try_borrow_mut() {
-                                    state.start_new_game = Some(());
-                                }
-                            }))
-                            .build(ui)
-                    })
-                    .with_child({
-                        let menu_state = self.menu.state.clone();
-                        ButtonBuilder::new()
-                            .with_text("Save Game")
-                            .on_column(0)
-                            .on_row(1)
-                            .with_margin(Thickness::uniform(4.0))
-                            .with_click(Box::new(move |_ui, _handle| {
-                                if let Ok(mut state) = menu_state.try_borrow_mut() {
-                                    state.save_game = Some(());
-                                }
-                            }))
-                            .build(ui)
-                    })
-                    .with_child({
-                        let menu_state = self.menu.state.clone();
-                        ButtonBuilder::new()
-                            .with_text("Load Game")
-                            .on_column(0)
-                            .on_row(2)
-                            .with_margin(Thickness::uniform(4.0))
-                            .with_click(Box::new(move |_ui, _handle| {
-                                if let Ok(mut state) = menu_state.try_borrow_mut() {
-                                    state.load_game = Some(());
-                                }
-                            }))
-                            .build(ui)
-                    })
-                    .with_child({
-                        ButtonBuilder::new()
-                            .with_text("Settings")
-                            .on_column(0)
-                            .on_row(3)
-                            .with_margin(Thickness::uniform(4.0))
-                            .with_click(Box::new(|_ui, _handle| {
-                                println!("Settings Clicked!");
-                            }))
-                            .build(ui)
-                    })
-                    .with_child({
-                        let menu_state = self.menu.state.clone();
-                        ButtonBuilder::new()
-                            .with_text("Quit")
-                            .on_column(0)
-                            .on_row(4)
-                            .with_margin(Thickness::uniform(4.0))
-                            .with_click(Box::new(move |_ui, _handle| {
-                                if let Ok(mut state) = menu_state.try_borrow_mut() {
-                                    state.quit_game = Some(());
-                                }
-                            }))
-                            .build(ui)
-                    })
-                    .with_child(ScrollBarBuilder::new()
-                        .on_row(5)
-                        .with_margin(Thickness::uniform(4.0))
-                        .build(ui))
-                    .build(ui))
-                .build(ui))
             .build(ui);
     }
 
@@ -367,44 +187,37 @@ impl Game {
         self.set_menu_visible(false);
     }
 
-    pub fn update_menu(&mut self) {
-        if let Ok(mut state) = self.menu.state.clone().try_borrow_mut() {
-            if state.start_new_game.take().is_some() {
-                self.start_new_game();
-            }
-
-            if state.quit_game.take().is_some() {
-                self.destroy_level();
-                self.running = false;
-            }
-
-            if state.save_game.take().is_some() {
-                match self.save_game() {
-                    Ok(_) => println!("successfully saved"),
-                    Err(e) => println!("failed to make a save, reason: {}", e),
+    pub fn process_ui_event(&mut self, event: &mut UIEvent) {
+        match event.kind {
+            UIEventKind::Click => {
+                if event.source() == self.menu.btn_new_game {
+                    self.start_new_game();
+                    event.handled = true;
+                } else if event.source() == self.menu.btn_save_game {
+                    match self.save_game() {
+                        Ok(_) => println!("successfully saved"),
+                        Err(e) => println!("failed to make a save, reason: {}", e),
+                    }
+                    event.handled = true;
+                } else if event.source() == self.menu.btn_load_game {
+                    self.load_game();
+                    event.handled = true;
+                } else if event.source() == self.menu.btn_quit_game {
+                    self.destroy_level();
+                    self.running = false;
+                    event.handled = true;
                 }
             }
-
-            if state.load_game.take().is_some() {
-                self.load_game();
-            }
+            _ => ()
         }
     }
 
     pub fn set_menu_visible(&mut self, visible: bool) {
-        let EngineInterfaceMut { ui, ..} = self.engine.interface_mut();
-        if let Some(root) = ui.get_node_mut(self.menu.root) {
-            root.set_visibility(if visible { Visibility::Visible } else { Visibility::Collapsed })
-        }
+        self.menu.set_visible(&mut self.engine, visible)
     }
 
     pub fn is_menu_visible(&self) -> bool {
-        let EngineInterface { ui, ..} = self.engine.interface();
-        if let Some(root) = ui.get_node(self.menu.root) {
-            root.get_visibility() == Visibility::Visible
-        } else {
-            false
-        }
+        self.menu.is_visible(&self.engine)
     }
 
     pub fn update(&mut self, time: &GameTime) {
@@ -412,11 +225,10 @@ impl Game {
             level.update(&mut self.engine, time);
         }
         self.engine.update(time.delta);
-        self.update_menu();
     }
 
     pub fn update_statistics(&mut self, elapsed: f64) {
-        let EngineInterfaceMut { ui, renderer, ..} = self.engine.interface_mut();
+        let EngineInterfaceMut { ui, renderer, .. } = self.engine.interface_mut();
 
         self.debug_string.clear();
         use std::fmt::Write;
@@ -452,13 +264,13 @@ impl Game {
     }
 
     fn process_dispatched_event(&mut self, event: &WindowEvent) {
-        let EngineInterfaceMut { ui, ..} = self.engine.interface_mut();
+        let EngineInterfaceMut { ui, .. } = self.engine.interface_mut();
 
         // Some events can be consumed so they won't be dispatched further,
         // this allows to catch events by UI for example and don't send them
         // to player controller so when you click on some button in UI you
         // won't shoot from your current weapon in game.
-        let event_processed = ui.process_event(event);
+        let event_processed = ui.process_input_event(event);
 
         if !event_processed {
             if let Some(ref mut level) = self.level {
@@ -469,7 +281,7 @@ impl Game {
         }
     }
 
-    pub fn process_event(&mut self, event: Event) {
+    pub fn process_input_event(&mut self, event: Event) {
         if let Event::WindowEvent { event, .. } = event {
             self.process_dispatched_event(&event);
 
@@ -485,16 +297,10 @@ impl Game {
                         }
                     }
                 }
-                WindowEvent::Resized(new_size) => {
-                    let EngineInterfaceMut { ui, renderer,..} = self.engine.interface_mut();
-                    renderer.set_frame_size(new_size.into()).unwrap();
-                    if let Some(root) = ui.get_node_mut(self.menu.root) {
-                        root.set_width(new_size.width as f32);
-                        root.set_height(new_size.height as f32);
-                    }
-                }
                 _ => ()
             }
+
+            self.menu.process_input_event(&mut self.engine, &event);
         }
     }
 
@@ -519,8 +325,14 @@ impl Game {
                 });
 
                 while let Some(event) = events.pop_front() {
-                    self.process_event(event);
+                    self.process_input_event(event);
                 }
+
+                while let Some(mut ui_event) = self.engine.get_ui_mut().poll_ui_event() {
+                    self.menu.process_ui_event(&mut self.engine, &mut ui_event);
+                    self.process_ui_event(&mut ui_event);
+                }
+
                 self.update(&game_time);
             }
 

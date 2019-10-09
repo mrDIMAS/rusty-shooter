@@ -1,31 +1,21 @@
 use rg3d_core::{
     pool::Handle,
-    visitor::{
-        Visit,
-        VisitResult,
-        Visitor,
-    },
-    math::vec3::Vec3,
-};
-use rg3d::{
-    engine::Engine,
-    scene::{
-        node::Node,
-        Scene,
-    },
-    resource::model::Model,
+    visitor::{Visit, VisitResult, Visitor},
+    math::{vec3::Vec3, quat::Quat},
 };
 use std::path::Path;
-use rg3d_physics::{
-    rigid_body::RigidBody,
-    convex_shape::{ConvexShape, CapsuleShape, Axis},
-};
-use rg3d::scene::animation::Animation;
+use rg3d_physics::{rigid_body::RigidBody, convex_shape::{ConvexShape, CapsuleShape, Axis}, Physics};
 use crate::GameTime;
-use rg3d_core::math::quat::Quat;
-use rg3d::scene::node::NodeKind;
-use rg3d::engine::EngineInterfaceMut;
-use rg3d::scene::SceneInterfaceMut;
+use rg3d::{
+    engine::EngineInterfaceMut,
+    scene::{
+        node::{NodeKind, Node},
+        animation::Animation,
+        Scene, SceneInterfaceMut,
+    },
+    engine::Engine,
+    resource::model::Model,
+};
 
 pub enum BotKind {
     Mutant,
@@ -72,9 +62,8 @@ impl Default for Bot {
 }
 
 impl Bot {
-    pub fn new(kind: BotKind, engine: &mut Engine, scene: &mut Scene) -> Result<Self, ()> {
-        let EngineInterfaceMut { resource_manager, ..} = engine.interface_mut();
-
+    pub fn new(kind: BotKind, engine: &mut Engine, scene: &mut Scene, position: Vec3) -> Result<Self, ()> {
+        let EngineInterfaceMut { resource_manager, .. } = engine.interface_mut();
 
         let path = match kind {
             BotKind::Mutant => Path::new("data/models/mutant.fbx"),
@@ -85,7 +74,7 @@ impl Bot {
 
         let resource = resource_manager.request_model(path).ok_or(())?;
         let model = Model::instantiate_geometry(resource.clone(), scene);
-        let (pivot, body) =  {
+        let (pivot, body) = {
             let SceneInterfaceMut { graph, physics, node_rigid_body_map, .. } = scene.interface_mut();
             let pivot = graph.add_node(Node::new(NodeKind::Base));
             graph.link_nodes(model, pivot);
@@ -102,8 +91,9 @@ impl Bot {
                 _ => {}
             }
 
-            let capsule_shape = CapsuleShape::new(0.25, body_height, Axis::Y);
-            let capsule_body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
+            let capsule_shape = CapsuleShape::new(0.35, body_height, Axis::Y);
+            let mut capsule_body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
+            capsule_body.set_position(position);
             let body = physics.add_body(capsule_body);
             node_rigid_body_map.insert(pivot, body);
 
@@ -130,6 +120,12 @@ impl Bot {
             idle_animation,
             walk_animation,
         })
+    }
+
+    pub fn set_position(&mut self, physics: &mut Physics, position: Vec3) {
+        if let Some(body) = physics.borrow_body_mut(self.body) {
+            body.set_position(position);
+        }
     }
 
     pub fn update(&mut self, scene: &mut Scene, player_position: Vec3, time: &GameTime) {

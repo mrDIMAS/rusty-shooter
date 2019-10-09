@@ -1,18 +1,20 @@
-use rg3d_core::{
-    pool::Handle,
-    color::Color,
-    math::vec3::Vec3,
-};
 use rg3d::{
     scene::{
         Scene, SceneInterfaceMut,
         node::{Node, NodeKind},
-        sprite::Sprite,
     },
     engine::resource_manager::ResourceManager,
+    resource::texture::TextureKind,
+    scene::sprite::SpriteBuilder,
 };
-use rg3d_core::visitor::{Visit, VisitResult, Visitor};
+use rg3d_core::{
+    visitor::{Visit, VisitResult, Visitor},
+    pool::{Handle, Pool, PoolIterator},
+    color::Color,
+    math::vec3::Vec3,
+};
 use crate::GameTime;
+use std::path::Path;
 
 pub enum ProjectileKind {
     Bullet,
@@ -69,10 +71,11 @@ impl Projectile {
         let mut model = {
             match &kind {
                 ProjectileKind::Bullet => {
-                    let mut sprite = Sprite::new();
-                    sprite.set_size(0.025);
-                    sprite.set_color(Color::opaque(255, 0, 0));
-                    Node::new(NodeKind::Sprite(sprite))
+                    Node::new(NodeKind::Sprite(SpriteBuilder::new()
+                        .with_size(0.025)
+                        .with_color(Color::opaque(255, 255, 0))
+                        .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/light_01.png"), TextureKind::R8))
+                        .build()))
                 }
             }
         };
@@ -82,7 +85,7 @@ impl Projectile {
         Self {
             lifetime: 6.0,
             speed: match kind {
-                ProjectileKind::Bullet => 10.0,
+                ProjectileKind::Bullet => 25.0,
             },
             dir: dir.normalized().unwrap_or(Vec3::up()),
             kind,
@@ -130,6 +133,48 @@ impl Visit for Projectile {
         self.dir.visit("Direction", visitor)?;
         self.speed.visit("Speed", visitor)?;
         self.model.visit("Model", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
+pub struct ProjectileContainer {
+    pool: Pool<Projectile>
+}
+
+impl ProjectileContainer {
+    pub fn new() -> Self {
+        Self {
+            pool: Pool::new()
+        }
+    }
+
+    pub fn add(&mut self, projectile: Projectile) -> Handle<Projectile> {
+        self.pool.spawn(projectile)
+    }
+
+    pub fn iter(&self) -> PoolIterator<Projectile> {
+        self.pool.iter()
+    }
+
+    pub fn update(&mut self, scene: &mut Scene, time: &GameTime) {
+        for projectile in self.pool.iter_mut() {
+            projectile.update(scene, time);
+
+            if projectile.is_dead() {
+                projectile.remove_self(scene);
+            }
+        }
+
+        self.pool.retain(|proj| !proj.is_dead());
+    }
+}
+
+impl Visit for ProjectileContainer {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.pool.visit("Pool", visitor)?;
 
         visitor.leave_region()
     }

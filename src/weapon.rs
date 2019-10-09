@@ -1,41 +1,30 @@
 use std::path::Path;
 
-use crate::GameTime;
+use crate::{
+    GameTime,
+    projectile::{Projectile, ProjectileKind, ProjectileContainer},
+};
 use rg3d_core::{
     color::Color,
     pool::Handle,
-    visitor::{
-        Visit,
-        VisitResult,
-        Visitor,
-        VisitError,
-    },
-    math::{
-        vec3::Vec3,
-        ray::Ray,
-    },
-};
-use rg3d::{
-    scene::{
-        node::NodeKind,
-        light::Light,
-        node::Node,
-        Scene,
-    },
-    resource::model::Model,
+    visitor::{Visit, VisitResult, Visitor, VisitError},
+    math::{vec3::Vec3, ray::Ray},
 };
 use rg3d_physics::{RayCastOptions, Physics};
 use rg3d_sound::{
     source::{Source, SourceKind},
     buffer::BufferKind,
+    context::Context,
 };
 use std::sync::{Mutex, Arc};
-use rg3d_sound::context::Context;
-use rg3d::engine::resource_manager::ResourceManager;
-use rg3d::scene::{SceneInterfaceMut, SceneInterface};
-use rg3d::scene::graph::Graph;
-use rg3d_core::pool::Pool;
-use crate::projectile::{Projectile, ProjectileKind};
+use rg3d::{
+    engine::resource_manager::ResourceManager,
+    resource::model::Model,
+    scene::{
+        SceneInterfaceMut, SceneInterface, node::{NodeKind, Node},
+        light::Light, Scene, graph::Graph, light::LightKind,
+    },
+};
 
 pub enum WeaponKind {
     Unknown,
@@ -116,7 +105,7 @@ impl Weapon {
         }
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
-        let mut light = Light::new();
+        let mut light = Light::new(LightKind::Point);
         light.set_color(Color::opaque(255, 0, 0));
         light.set_radius(0.5);
         let laser_dot = graph.add_node(Node::new(NodeKind::Light(light)));
@@ -198,7 +187,7 @@ impl Weapon {
                  scene: &mut Scene,
                  sound_context: Arc<Mutex<Context>>,
                  time: &GameTime,
-                 projectiles: &mut Pool<Projectile>) {
+                 projectiles: &mut ProjectileContainer) {
         if time.elapsed - self.last_shot_time >= 0.1 {
             self.offset = Vec3::make(0.0, 0.0, -0.05);
             self.last_shot_time = time.elapsed;
@@ -215,7 +204,7 @@ impl Weapon {
                 }
             };
 
-            projectiles.spawn(Projectile::new(
+            projectiles.add(Projectile::new(
                 ProjectileKind::Bullet,
                 resource_manager,
                 scene, dir, pos));

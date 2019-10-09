@@ -14,7 +14,7 @@ use rg3d::{
     scene::graph::Graph,
 };
 use crate::{
-    weapon::{Weapon, WeaponKind},
+    weapon::Weapon,
     GameTime,
 };
 use rg3d_core::{
@@ -33,8 +33,7 @@ use std::{
 };
 use rand::Rng;
 use rg3d_physics::{convex_shape::{SphereShape, ConvexShape}, rigid_body::RigidBody, Physics};
-use rg3d_core::pool::Pool;
-use crate::projectile::Projectile;
+use crate::projectile::{ProjectileContainer};
 
 pub struct Controller {
     move_forward: bool,
@@ -365,7 +364,7 @@ impl Player {
         listener.set_orientation(&self.look_direction, &self.up_direction).unwrap();
     }
 
-    pub fn update(&mut self, engine: &mut Engine, scene_handle: Handle<Scene>, time: &GameTime, projectiles: &mut Pool<Projectile>) {
+    pub fn update(&mut self, engine: &mut Engine, scene_handle: Handle<Scene>, time: &GameTime, projectiles: &mut ProjectileContainer) {
         let EngineInterfaceMut { scenes, sound_context, resource_manager, .. } = engine.interface_mut();
 
         if let Some(scene) = scenes.get_mut(scene_handle) {

@@ -10,6 +10,7 @@ use rg3d::{
     },
     engine::*,
     resource::model::Model,
+    resource::texture::TextureKind
 };
 use std::{
     path::Path
@@ -38,20 +39,20 @@ use crate::{
         Bot,
         BotKind,
     },
-    projectile::Projectile,
+    projectile::ProjectileContainer
 };
 
 pub struct Level {
     scene: Handle<Scene>,
     player: Option<Player>,
     bots: Pool<Bot>,
-    projectiles: Pool<Projectile>,
+    projectiles: ProjectileContainer,
 }
 
 impl Default for Level {
     fn default() -> Self {
         Self {
-            projectiles: Pool::new(),
+            projectiles: ProjectileContainer::new(),
             scene: Handle::NONE,
             player: None,
             bots: Pool::new(),
@@ -179,7 +180,7 @@ impl Level {
         particle_system.set_color_over_lifetime_gradient(gradient);
         let emitter = Emitter::new(EmitterKind::Custom(Box::new(CylinderEmitter::new())));
         particle_system.add_emitter(emitter);
-        if let Some(texture) = resource_manager.request_texture(Path::new("data/particles/smoke_04.tga")) {
+        if let Some(texture) = resource_manager.request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8) {
             particle_system.set_texture(texture);
         }
         graph.add_node(Node::new(NodeKind::ParticleSystem(particle_system)));
@@ -189,7 +190,8 @@ impl Level {
 
     fn create_bots(engine: &mut Engine, scene: &mut Scene) -> Pool<Bot> {
         let mut bots = Pool::new();
-        bots.spawn(Bot::new(BotKind::Mutant, engine, scene).unwrap());
+        bots.spawn(Bot::new(BotKind::Mutant, engine, scene, Vec3::make(0.0, 0.0, -1.0)).unwrap());
+        bots.spawn(Bot::new(BotKind::Mutant, engine, scene, Vec3::make(1.0, 0.0, 0.0)).unwrap());
         bots
     }
 
@@ -211,7 +213,7 @@ impl Level {
         let EngineInterfaceMut { scenes, .. } = engine.interface_mut();
         let scene = scenes.add(scene);
         Level {
-            projectiles: Pool::new(),
+            projectiles: ProjectileContainer::new(),
             player,
             bots,
             scene,
@@ -243,16 +245,7 @@ impl Level {
                     bot.update(scene, player_position, time)
                 }
 
-                // Update projectiles
-                for (handle, projectile) in self.projectiles.pair_iter_mut() {
-                    projectile.update(scene, time);
-
-                    if projectile.is_dead() {
-                        projectile.remove_self(scene);
-                    }
-                }
-
-                self.projectiles.retain(|proj| !proj.is_dead());
+                self.projectiles.update(scene, time);
             }
         }
     }

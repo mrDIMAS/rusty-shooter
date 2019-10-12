@@ -33,7 +33,7 @@ use std::{
 };
 use rand::Rng;
 use rg3d_physics::{convex_shape::{SphereShape, ConvexShape}, rigid_body::RigidBody, Physics};
-use crate::projectile::{ProjectileContainer};
+use crate::projectile::ProjectileContainer;
 
 pub struct Controller {
     move_forward: bool,
@@ -236,11 +236,10 @@ impl Player {
     }
 
     pub fn has_ground_contact(&self, physics: &Physics) -> bool {
-        if let Some(body) = physics.borrow_body(self.body) {
-            for contact in body.get_contacts() {
-                if contact.normal.y >= 0.7 {
-                    return true;
-                }
+        let body = physics.borrow_body(self.body);
+        for contact in body.get_contacts() {
+            if contact.normal.y >= 0.7 {
+                return true;
             }
         }
         false
@@ -249,58 +248,54 @@ impl Player {
     fn update_movement(&mut self, scene: &mut Scene, time: &GameTime) {
         let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
 
-        let mut look = Vec3::zero();
-        let mut side = Vec3::zero();
-
-        if let Some(pivot_node) = graph.get(self.pivot) {
-            look = pivot_node.get_look_vector();
-            side = pivot_node.get_side_vector();
-        }
+        let (look, side) = {
+            let pivot_node = graph.get(self.pivot);
+            (pivot_node.get_look_vector(), pivot_node.get_side_vector())
+        };
 
         let has_ground_contact = self.has_ground_contact(physics);
 
         let mut is_moving = false;
-        if let Some(body) = physics.borrow_body_mut(self.body) {
-            let mut velocity = Vec3::new();
-            if self.controller.move_forward {
-                velocity += look;
-            }
-            if self.controller.move_backward {
-                velocity -= look;
-            }
-            if self.controller.move_left {
-                velocity += side;
-            }
-            if self.controller.move_right {
-                velocity -= side;
-            }
+        let body = physics.borrow_body_mut(self.body);
+        let mut velocity = Vec3::new();
+        if self.controller.move_forward {
+            velocity += look;
+        }
+        if self.controller.move_backward {
+            velocity -= look;
+        }
+        if self.controller.move_left {
+            velocity += side;
+        }
+        if self.controller.move_right {
+            velocity -= side;
+        }
 
-            let speed_mult =
-                if self.controller.run {
-                    self.run_speed_multiplier
-                } else {
-                    1.0
-                };
+        let speed_mult =
+            if self.controller.run {
+                self.run_speed_multiplier
+            } else {
+                1.0
+            };
 
-            if let Some(normalized_velocity) = velocity.normalized() {
-                body.set_x_velocity(normalized_velocity.x * self.move_speed * speed_mult);
-                body.set_z_velocity(normalized_velocity.z * self.move_speed * speed_mult);
+        if let Some(normalized_velocity) = velocity.normalized() {
+            body.set_x_velocity(normalized_velocity.x * self.move_speed * speed_mult);
+            body.set_z_velocity(normalized_velocity.z * self.move_speed * speed_mult);
 
-                is_moving = true;
+            is_moving = true;
+        }
+
+        if self.controller.jump {
+            if has_ground_contact {
+                body.set_y_velocity(0.07);
             }
+            self.controller.jump = false;
+        }
 
-            if self.controller.jump {
-                if has_ground_contact {
-                    body.set_y_velocity(0.07);
-                }
-                self.controller.jump = false;
-            }
+        self.feet_position = body.get_position();
 
-            self.feet_position = body.get_position();
-
-            if let ConvexShape::Sphere(sphere) = body.get_shape() {
-                self.feet_position.y -= sphere.get_radius();
-            }
+        if let ConvexShape::Sphere(sphere) = body.get_shape() {
+            self.feet_position.y -= sphere.get_radius();
         }
 
         if has_ground_contact && is_moving {
@@ -314,7 +309,8 @@ impl Player {
         self.camera_offset.y += (self.camera_dest_offset.y - self.camera_offset.y) * 0.1;
         self.camera_offset.z += (self.camera_dest_offset.z - self.camera_offset.z) * 0.1;
 
-        if let Some(camera_node) = graph.get_mut(self.camera) {
+        {
+            let camera_node = graph.get_mut(self.camera);
             camera_node.get_local_transform_mut().set_position(self.camera_offset);
 
             self.head_position = camera_node.get_global_position();
@@ -329,32 +325,24 @@ impl Player {
         self.yaw += (self.dest_yaw - self.yaw) * 0.2;
         self.pitch += (self.dest_pitch - self.pitch) * 0.2;
 
-        if let Some(pivot_node) = graph.get_mut(self.pivot) {
-            pivot_node.get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::up(), self.yaw.to_radians()));
-        }
-
-        if let Some(camera_pivot) = graph.get_mut(self.camera_pivot) {
-            camera_pivot.get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::right(), self.pitch.to_radians()));
-        }
+        graph.get_mut(self.pivot).get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::up(), self.yaw.to_radians()));
+        graph.get_mut(self.camera_pivot).get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::right(), self.pitch.to_radians()));
     }
 
     fn emit_footstep_sound(&self, engine: &mut Engine) {
         let EngineInterface { sound_context, .. } = engine.interface();
         let mut sound_context = sound_context.lock().unwrap();
         let handle = self.footsteps[rand::thread_rng().gen_range(0, self.footsteps.len())];
-        if let Some(source) = sound_context.get_source_mut(handle) {
-            if let SourceKind::Spatial(spatial) = source.get_kind_mut() {
-                spatial.set_position(&self.feet_position);
-            }
-            source.play();
+        let source = sound_context.get_source_mut(handle);
+        if let SourceKind::Spatial(spatial) = source.get_kind_mut() {
+            spatial.set_position(&self.feet_position);
         }
+        source.play();
     }
 
     pub fn get_position(&self, scene: &Scene) -> Vec3 {
         let SceneInterface { physics, .. } = scene.interface();
-        physics.borrow_body(self.body)
-            .and_then(|body| Some(body.get_position()))
-            .unwrap_or(Vec3::zero())
+        physics.borrow_body(self.body).get_position()
     }
 
     fn update_listener(&mut self, sound_context: Arc<Mutex<Context>>) {
@@ -367,15 +355,14 @@ impl Player {
     pub fn update(&mut self, engine: &mut Engine, scene_handle: Handle<Scene>, time: &GameTime, projectiles: &mut ProjectileContainer) {
         let EngineInterfaceMut { scenes, sound_context, resource_manager, .. } = engine.interface_mut();
 
-        if let Some(scene) = scenes.get_mut(scene_handle) {
-            self.update_movement(scene, time);
+        let scene = scenes.get_mut(scene_handle);
+        self.update_movement(scene, time);
 
-            if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
-                current_weapon.update(scene);
+        if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
+            current_weapon.update(scene);
 
-                if self.controller.shoot {
-                    current_weapon.shoot(resource_manager, scene, sound_context.clone(), time, projectiles);
-                }
+            if self.controller.shoot {
+                current_weapon.shoot(resource_manager, scene, sound_context.clone(), time, projectiles);
             }
         }
 

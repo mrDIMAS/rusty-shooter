@@ -78,15 +78,11 @@ impl Bot {
             let SceneInterfaceMut { graph, physics, node_rigid_body_map, .. } = scene.interface_mut();
             let pivot = graph.add_node(Node::new(NodeKind::Base));
             graph.link_nodes(model, pivot);
-            if let Some(model) = graph.get_mut(model) {
-                model.get_local_transform_mut().set_position(Vec3::make(0.0, -body_height * 0.5, 0.0));
-            }
+            graph.get_mut(model).get_local_transform_mut().set_position(Vec3::make(0.0, -body_height * 0.5, 0.0));
 
             match kind {
                 BotKind::Mutant => {
-                    if let Some(model) = graph.get_mut(model) {
-                        model.get_local_transform_mut().set_scale(Vec3::make(0.025, 0.025, 0.025));
-                    }
+                    graph.get_mut(model).get_local_transform_mut().set_scale(Vec3::make(0.025, 0.025, 0.025));
                 }
                 _ => {}
             }
@@ -123,52 +119,50 @@ impl Bot {
     }
 
     pub fn set_position(&mut self, physics: &mut Physics, position: Vec3) {
-        if let Some(body) = physics.borrow_body_mut(self.body) {
-            body.set_position(position);
-        }
+        physics.borrow_body_mut(self.body).set_position(position);
     }
 
     pub fn update(&mut self, scene: &mut Scene, player_position: Vec3, time: &GameTime) {
         let SceneInterfaceMut { graph, physics, animations, .. } = scene.interface_mut();
 
         let threshold = 2.0;
+        let body = physics.borrow_body_mut(self.body);
+        let dir = player_position - body.get_position();
+        let distance = dir.len();
 
-        let mut distance = 0.0;
-
-        if let Some(body) = physics.borrow_body_mut(self.body) {
-            let dir = player_position - body.get_position();
-            distance = dir.len();
-
-            if let Some(dir) = dir.normalized() {
-                if distance > threshold {
-                    body.move_by(dir.scale(0.35 * time.delta));
-                }
-
-                if let Some(pivot) = graph.get_mut(self.pivot) {
-                    let transform = pivot.get_local_transform_mut();
-                    let angle = dir.x.atan2(dir.z);
-                    transform.set_rotation(Quat::from_axis_angle(Vec3::up(), angle))
-                }
+        if let Some(dir) = dir.normalized() {
+            if distance > threshold {
+                body.move_by(dir.scale(0.35 * time.delta));
             }
+
+            let pivot = graph.get_mut(self.pivot);
+            let transform = pivot.get_local_transform_mut();
+            let angle = dir.x.atan2(dir.z);
+            transform.set_rotation(Quat::from_axis_angle(Vec3::up(), angle))
         }
+
 
         let fade_speed = 1.5;
 
         if distance > threshold {
-            if let Some(walk_animation) = animations.get_mut(self.walk_animation) {
+            {
+                let walk_animation = animations.get_mut(self.walk_animation);
                 walk_animation.fade_in(fade_speed);
                 walk_animation.set_enabled(true);
             }
-            if let Some(idle_animation) = animations.get_mut(self.idle_animation) {
+            {
+                let idle_animation = animations.get_mut(self.idle_animation);
                 idle_animation.fade_out(fade_speed);
                 idle_animation.set_enabled(true);
             }
         } else {
-            if let Some(walk_animation) = animations.get_mut(self.walk_animation) {
+            {
+                let walk_animation = animations.get_mut(self.walk_animation);
                 walk_animation.fade_out(fade_speed);
                 walk_animation.set_enabled(true);
             }
-            if let Some(idle_animation) = animations.get_mut(self.idle_animation) {
+            {
+                let idle_animation = animations.get_mut(self.idle_animation);
                 idle_animation.fade_in(fade_speed);
                 idle_animation.set_enabled(true);
             }

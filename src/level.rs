@@ -10,7 +10,7 @@ use rg3d::{
     },
     engine::*,
     resource::model::Model,
-    resource::texture::TextureKind
+    resource::texture::TextureKind,
 };
 use std::{
     path::Path
@@ -39,8 +39,9 @@ use crate::{
         Bot,
         BotKind,
     },
-    projectile::ProjectileContainer
+    projectile::ProjectileContainer,
 };
+use rg3d::scene::particle_system::{ParticleSystemBuilder, EmitterBuilder};
 
 pub struct Level {
     scene: Handle<Scene>,
@@ -134,7 +135,8 @@ impl Level {
             let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
             // Create collision geometry
             let polygon_handle = graph.find_by_name(map_root_handle, "Polygon");
-            if let Some(polygon) = graph.get(polygon_handle) {
+            if polygon_handle.is_some() {
+                let polygon = graph.get(polygon_handle);
                 let global_transform = polygon.get_global_transform();
                 let mut static_geometry = StaticGeometry::new();
                 if let NodeKind::Mesh(mesh) = polygon.get_kind() {
@@ -169,21 +171,24 @@ impl Level {
         }
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
-        // Test particle system
-        let mut particle_system = ParticleSystem::new();
-        particle_system.set_acceleration(Vec3::make(0.0, -0.1, 0.0));
-        let mut gradient = ColorGradient::new();
-        gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(150, 150, 150, 0)));
-        gradient.add_point(GradientPoint::new(0.05, Color::from_rgba(150, 150, 150, 220)));
-        gradient.add_point(GradientPoint::new(0.85, Color::from_rgba(255, 255, 255, 180)));
-        gradient.add_point(GradientPoint::new(1.00, Color::from_rgba(255, 255, 255, 0)));
-        particle_system.set_color_over_lifetime_gradient(gradient);
-        let emitter = Emitter::new(EmitterKind::Custom(Box::new(CylinderEmitter::new())));
-        particle_system.add_emitter(emitter);
-        if let Some(texture) = resource_manager.request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8) {
-            particle_system.set_texture(texture);
-        }
-        graph.add_node(Node::new(NodeKind::ParticleSystem(particle_system)));
+
+        NodeBuilder::new(NodeKind::ParticleSystem(
+            ParticleSystemBuilder::new()
+                .with_acceleration(Vec3::make(0.0, -0.1, 0.0))
+                .with_color_over_lifetime_gradient({
+                    let mut gradient = ColorGradient::new();
+                    gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(150, 150, 150, 0)));
+                    gradient.add_point(GradientPoint::new(0.05, Color::from_rgba(150, 150, 150, 220)));
+                    gradient.add_point(GradientPoint::new(0.85, Color::from_rgba(255, 255, 255, 180)));
+                    gradient.add_point(GradientPoint::new(1.00, Color::from_rgba(255, 255, 255, 0)));
+                    gradient
+                })
+                .with_emitters(vec![
+                    EmitterBuilder::new(EmitterKind::Custom(Box::new(CylinderEmitter::new()))).build()
+                ])
+                .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8))
+                .build()))
+            .build(graph);
 
         scene
     }
@@ -198,11 +203,13 @@ impl Level {
     fn create_player(engine: &mut Engine, scene: &mut Scene) -> Player {
         let mut player = Player::new(engine, scene);
         let EngineInterfaceMut { resource_manager, .. } = engine.interface_mut();
+        let plasma_rifle = Weapon::new(WeaponKind::PlasmaRifle, resource_manager, scene);
         let ak47 = Weapon::new(WeaponKind::Ak47, resource_manager, scene);
         let m4 = Weapon::new(WeaponKind::M4, resource_manager, scene);
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
         player.add_weapon(graph, m4);
         player.add_weapon(graph, ak47);
+        player.add_weapon(graph, plasma_rifle);
         player
     }
 
@@ -237,16 +244,15 @@ impl Level {
         if let Some(ref mut player) = self.player {
             player.update(engine, self.scene, time, &mut self.projectiles);
 
-            let EngineInterfaceMut { scenes, .. } = engine.interface_mut();
-            if let Some(scene) = scenes.get_mut(self.scene) {
-                let player_position = player.get_position(scene);
+            let EngineInterfaceMut { scenes, resource_manager, .. } = engine.interface_mut();
+            let scene = scenes.get_mut(self.scene);
+            let player_position = player.get_position(scene);
 
-                for bot in self.bots.iter_mut() {
-                    bot.update(scene, player_position, time)
-                }
-
-                self.projectiles.update(scene, time);
+            for bot in self.bots.iter_mut() {
+                bot.update(scene, player_position, time)
             }
+
+            self.projectiles.update(scene, resource_manager, time);
         }
     }
 }

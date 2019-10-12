@@ -175,24 +175,18 @@ impl Menu {
             btn_load_game,
             btn_quit_game,
             sb_sound_volume,
-            sb_music_volume
+            sb_music_volume,
         }
     }
 
     pub fn set_visible(&mut self, engine: &mut Engine, visible: bool) {
         let EngineInterfaceMut { ui, .. } = engine.interface_mut();
-        if let Some(root) = ui.get_node_mut(self.root) {
-            root.set_visibility(if visible { Visibility::Visible } else { Visibility::Collapsed })
-        }
+        ui.get_node_mut(self.root).set_visibility(if visible { Visibility::Visible } else { Visibility::Collapsed })
     }
 
     pub fn is_visible(&self, engine: &Engine) -> bool {
         let EngineInterface { ui, .. } = engine.interface();
-        if let Some(root) = ui.get_node(self.root) {
-            root.get_visibility() == Visibility::Visible
-        } else {
-            false
-        }
+        ui.get_node(self.root).get_visibility() == Visibility::Visible
     }
 
     pub fn process_input_event(&mut self, engine: &mut Engine, event: &WindowEvent) {
@@ -200,10 +194,9 @@ impl Menu {
             WindowEvent::Resized(new_size) => {
                 let EngineInterfaceMut { ui, renderer, .. } = engine.interface_mut();
                 renderer.set_frame_size((*new_size).into()).unwrap();
-                if let Some(root) = ui.get_node_mut(self.root) {
-                    root.set_width(new_size.width as f32);
-                    root.set_height(new_size.height as f32);
-                }
+                let root = ui.get_node_mut(self.root);
+                root.set_width(new_size.width as f32);
+                root.set_height(new_size.height as f32);
             }
             _ => ()
         }

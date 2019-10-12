@@ -21,8 +21,17 @@ use rg3d::{
     engine::resource_manager::ResourceManager,
     resource::model::Model,
     scene::{
-        SceneInterfaceMut, SceneInterface, node::{NodeKind, Node},
-        light::Light, Scene, graph::Graph, light::LightKind,
+        SceneInterfaceMut,
+        SceneInterface,
+        node::{
+            NodeKind,
+            Node,
+            NodeBuilder,
+        },
+        Scene,
+        graph::Graph,
+        light::LightKind,
+        light::{LightBuilder, PointLight},
     },
 };
 
@@ -30,6 +39,7 @@ pub enum WeaponKind {
     Unknown,
     M4,
     Ak47,
+    PlasmaRifle,
 }
 
 pub struct Weapon {
@@ -67,6 +77,7 @@ impl Visit for Weapon {
                 WeaponKind::Unknown => return Err(VisitError::User(String::from("unknown weapon kind on save???"))),
                 WeaponKind::M4 => 0,
                 WeaponKind::Ak47 => 1,
+                WeaponKind::PlasmaRifle => 2
             }
         };
 
@@ -76,6 +87,7 @@ impl Visit for Weapon {
             self.kind = match kind_id {
                 0 => WeaponKind::M4,
                 1 => WeaponKind::Ak47,
+                2 => WeaponKind::PlasmaRifle,
                 _ => return Err(VisitError::User(format!("unknown weapon kind {}", kind_id)))
             }
         }
@@ -96,6 +108,7 @@ impl Weapon {
             WeaponKind::Unknown => panic!("must not be here"),
             WeaponKind::Ak47 => Path::new("data/models/ak47.fbx"),
             WeaponKind::M4 => Path::new("data/models/m4.fbx"),
+            WeaponKind::PlasmaRifle => Path::new("data/models/plasma_rifle.fbx"),
         };
 
         let mut weapon_model = Handle::NONE;
@@ -105,10 +118,11 @@ impl Weapon {
         }
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
-        let mut light = Light::new(LightKind::Point);
-        light.set_color(Color::opaque(255, 0, 0));
-        light.set_radius(0.5);
-        let laser_dot = graph.add_node(Node::new(NodeKind::Light(light)));
+        let laser_dot = NodeBuilder::new(NodeKind::Light(
+            LightBuilder::new(LightKind::Point(PointLight::new(0.5)))
+                .with_color(Color::opaque(255, 0, 0))
+                .build()))
+            .build(graph);
 
         Weapon {
             kind,
@@ -122,13 +136,8 @@ impl Weapon {
     }
 
     pub fn set_visibility(&self, visibility: bool, graph: &mut Graph) {
-        if let Some(model) = graph.get_mut(self.model) {
-            model.set_visibility(visibility)
-        }
-
-        if let Some(laser_dot) = graph.get_mut(self.laser_dot) {
-            laser_dot.set_visibility(visibility);
-        }
+        graph.get_mut(self.model).set_visibility(visibility);
+        graph.get_mut(self.laser_dot).set_visibility(visibility);
     }
 
     pub fn get_model(&self) -> Handle<Node> {
@@ -144,29 +153,25 @@ impl Weapon {
 
         self.update_laser_sight(graph, physics);
 
-        if let Some(node) = graph.get_mut(self.model) {
-            node.get_local_transform_mut().set_position(self.offset);
-            self.shot_position = node.get_global_position();
-        }
+        let node = graph.get_mut(self.model);
+        node.get_local_transform_mut().set_position(self.offset);
+        self.shot_position = node.get_global_position();
     }
 
     fn update_laser_sight(&self, graph: &mut Graph, physics: &Physics) {
         let mut laser_dot_position = Vec3::new();
-        if let Some(model) = graph.get(self.model) {
-            let begin = model.get_global_position();
-            let end = begin + model.get_look_vector().scale(100.0);
-            if let Some(ray) = Ray::from_two_points(&begin, &end) {
-                let mut result = Vec::new();
-                if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
-                    let offset = result[0].normal.normalized().unwrap().scale(0.2);
-                    laser_dot_position = result[0].position + offset;
-                }
+        let model = graph.get(self.model);
+        let begin = model.get_global_position();
+        let end = begin + model.get_look_vector().scale(100.0);
+        if let Some(ray) = Ray::from_two_points(&begin, &end) {
+            let mut result = Vec::new();
+            if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
+                let offset = result[0].normal.normalized().unwrap().scale(0.2);
+                laser_dot_position = result[0].position + offset;
             }
         }
 
-        if let Some(laser_dot) = graph.get_mut(self.laser_dot) {
-            laser_dot.get_local_transform_mut().set_position(laser_dot_position);
-        }
+        graph.get_mut(self.laser_dot).get_local_transform_mut().set_position(laser_dot_position);
     }
 
     fn play_shot_sound(&self, resource_manager: &mut ResourceManager, sound_context: Arc<Mutex<Context>>) {
@@ -176,9 +181,7 @@ impl Weapon {
         let mut shot_sound = Source::new_spatial(shot_buffer).unwrap();
         shot_sound.set_play_once(true);
         shot_sound.play();
-        if let SourceKind::Spatial(spatial) = shot_sound.get_kind_mut() {
-            spatial.set_position(&self.shot_position)
-        }
+        shot_sound.as_spatial_mut().set_position(&self.shot_position);
         sound_context.add_source(shot_sound);
     }
 
@@ -196,18 +199,21 @@ impl Weapon {
 
             let (dir, pos) = {
                 let SceneInterface { graph, .. } = scene.interface();
-
-                if let Some(model) = graph.get(self.model) {
-                    (model.get_look_vector(), model.get_global_position())
-                } else {
-                    return;
-                }
+                let model = graph.get(self.model);
+                (model.get_look_vector(), model.get_global_position())
             };
 
-            projectiles.add(Projectile::new(
-                ProjectileKind::Bullet,
-                resource_manager,
-                scene, dir, pos));
+            match self.kind {
+                WeaponKind::Unknown => (),
+                WeaponKind::M4 => {}
+                WeaponKind::Ak47 => {}
+                WeaponKind::PlasmaRifle => {
+                    projectiles.add(Projectile::new(
+                        ProjectileKind::Plasma,
+                        resource_manager,
+                        scene, dir, pos));
+                }
+            }
         }
     }
 }

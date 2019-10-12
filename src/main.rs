@@ -246,10 +246,9 @@ impl Game {
                elapsed
         ).unwrap();
 
-        if let Some(ui_node) = ui.get_node_mut(self.debug_text) {
-            if let UINodeKind::Text(text) = ui_node.get_kind_mut() {
-                text.set_text(self.debug_string.as_str());
-            }
+        let ui_node = ui.get_node_mut(self.debug_text);
+        if let UINodeKind::Text(text) = ui_node.get_kind_mut() {
+            text.set_text(self.debug_string.as_str());
         }
     }
 

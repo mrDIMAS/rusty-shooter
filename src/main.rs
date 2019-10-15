@@ -5,12 +5,14 @@ extern crate rg3d;
 extern crate rand;
 extern crate rg3d_physics;
 
+mod actor;
 mod level;
 mod player;
 mod weapon;
 mod bot;
 mod projectile;
 mod menu;
+mod effects;
 
 use std::{
     fs::File,
@@ -30,6 +32,7 @@ use rg3d::{
     gui::{
         node::{UINode, UINodeKind},
         text::TextBuilder,
+        event::{UIEvent, UIEventKind},
     },
     scene::particle_system::CustomEmitterFactory,
     WindowEvent,
@@ -38,7 +41,10 @@ use rg3d::{
     Event,
     EventsLoop,
 };
-use crate::level::{Level, CylinderEmitter};
+use crate::{
+    level::{Level, CylinderEmitter},
+    menu::Menu,
+};
 use rg3d_core::{
     pool::Handle,
     visitor::{
@@ -51,8 +57,6 @@ use rg3d_sound::{
     buffer::BufferKind,
     source::{Source, SourceKind},
 };
-use crate::menu::Menu;
-use rg3d::gui::event::{UIEvent, UIEventKind};
 
 
 pub struct Game {
@@ -273,9 +277,7 @@ impl Game {
 
         if !event_processed {
             if let Some(ref mut level) = self.level {
-                if let Some(player) = level.get_player_mut() {
-                    player.process_event(event);
-                }
+                level.process_input_event(event);
             }
         }
     }

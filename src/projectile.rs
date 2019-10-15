@@ -2,48 +2,46 @@ use rg3d::{
     engine::resource_manager::ResourceManager,
     resource::texture::TextureKind,
     scene::{
-        particle_system::{
-            ParticleSystemBuilder,
-            EmitterBuilder,
-            EmitterKind,
-            SphereEmitter,
-        },
         sprite::SpriteBuilder,
         Scene,
         SceneInterfaceMut,
         node::{
             NodeKind,
             Node,
-            NodeBuilder,
         },
-        transform::TransformBuilder,
         graph::Graph,
     },
 };
-use crate::GameTime;
+use crate::{
+    GameTime,
+    effects,
+    actor::ActorContainer
+};
 use std::path::Path;
 use rand::Rng;
 use rg3d_physics::{
-    rigid_body::RigidBody,
     convex_shape::{ConvexShape, SphereShape},
+    RayCastOptions,
+    rigid_body::RigidBody
 };
 use rg3d_core::{
-    color_gradient::{GradientPoint, ColorGradient},
     visitor::{Visit, VisitResult, Visitor},
     pool::{Handle, Pool, PoolIterator},
     color::Color,
     math::vec3::Vec3,
-    numeric_range::NumericRange,
+    math::ray::Ray
 };
 
 pub enum ProjectileKind {
     Plasma,
+    Bullet,
 }
 
 impl ProjectileKind {
     pub fn new(id: u32) -> Result<Self, String> {
         match id {
             0 => Ok(ProjectileKind::Plasma),
+            1 => Ok(ProjectileKind::Bullet),
             _ => Err(format!("Invalid projectile kind id {}", id))
         }
     }
@@ -51,6 +49,7 @@ impl ProjectileKind {
     pub fn id(&self) -> u32 {
         match self {
             ProjectileKind::Plasma => 0,
+            ProjectileKind::Bullet => 1,
         }
     }
 }
@@ -60,9 +59,12 @@ pub struct Projectile {
     model: Handle<Node>,
     body: Handle<RigidBody>,
     dir: Vec3,
+    initial_pos: Vec3,
     speed: f32,
     lifetime: f32,
     rotation_angle: f32,
+    ray_based: bool,
+    damage: f32
 }
 
 impl Default for Projectile {
@@ -75,6 +77,9 @@ impl Default for Projectile {
             speed: 0.0,
             lifetime: 0.0,
             rotation_angle: 0.0,
+            ray_based: false,
+            damage: 0.0,
+            initial_pos: Vec3::zero(),
         }
     }
 }
@@ -87,30 +92,32 @@ impl Projectile {
                position: Vec3) -> Self {
         let SceneInterfaceMut { graph, node_rigid_body_map, physics, .. } = scene.interface_mut();
 
-        let (model, body, lifetime, speed) = {
+        let (model, body, lifetime, speed, ray_based, damage) = {
             match &kind {
                 ProjectileKind::Plasma => {
                     let size = rand::thread_rng().gen_range(0.06, 0.09);
 
-                    let model = Node::new(NodeKind::Sprite(SpriteBuilder::new()
+                    let model = graph.add_node(Node::new(NodeKind::Sprite(SpriteBuilder::new()
                         .with_size(size)
                         .with_color(Color::opaque(0, 162, 232))
                         .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/light_01.png"), TextureKind::R8))
-                        .build()));
+                        .build())));
 
                     let mut body = RigidBody::new(ConvexShape::Sphere(SphereShape::new(size)));
                     body.set_gravity(Vec3::zero());
                     body.set_position(position);
 
-                    (model, body, 6.0, 0.2)
+                    (model, physics.add_body(body), 6.0, 0.2, false, 30.0)
+                }
+                ProjectileKind::Bullet => {
+                    (Handle::NONE, Handle::NONE, 0.0, 0.0, true, 20.0)
                 }
             }
         };
 
-        let model = graph.add_node(model);
-        let body = physics.add_body(body);
-
-        node_rigid_body_map.insert(model, body);
+        if model.is_some() && body.is_some() {
+            node_rigid_body_map.insert(model, body);
+        }
 
         Self {
             lifetime,
@@ -120,6 +127,9 @@ impl Projectile {
             dir: dir.normalized().unwrap_or(Vec3::up()),
             kind,
             model,
+            ray_based,
+            damage,
+            initial_pos: position
         }
     }
 
@@ -127,23 +137,42 @@ impl Projectile {
         self.lifetime <= 0.0
     }
 
-    pub fn update(&mut self, scene: &mut Scene, time: &GameTime) {
-        self.lifetime -= time.delta;
-
-        if self.lifetime <= 0.0 {
-            return;
-        }
-
+    pub fn update(&mut self, scene: &mut Scene, resource_manager: &mut ResourceManager, actors: &mut ActorContainer, time: &GameTime) {
         let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
 
-        let model = graph.get_mut(self.model);
-        if let NodeKind::Sprite(sprite) = model.get_kind_mut() {
-            sprite.set_rotation(self.rotation_angle);
+        if self.ray_based {
+            let end = self.initial_pos + self.dir.scale(100.0);
+            if let Some(ray) = Ray::from_two_points(&self.initial_pos, &end) {
+                let mut result = Vec::new();
+                if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
+                    effects::create_bullet_impact(graph, resource_manager, result[0].position);
+
+                   // for actor in actors.iter_mut() {
+                    //    if actor.
+                    //}
+                }
+            }
+        } else {
+            self.lifetime -= time.delta;
+
+            if physics.borrow_body(self.body).get_contacts().len() > 0 {
+                self.lifetime = 0.0;
+            }
+
+            if self.lifetime <= 0.0 {
+                effects::create_bullet_impact(graph, resource_manager, self.get_position(graph));
+                return;
+            }
+
+            let model = graph.get_mut(self.model);
+            if let NodeKind::Sprite(sprite) = model.get_kind_mut() {
+                sprite.set_rotation(self.rotation_angle);
+            }
+
+            physics.borrow_body_mut(self.body).move_by(self.dir.scale(self.speed * time.delta));
+
+            self.rotation_angle += 1.5;
         }
-
-        physics.borrow_body_mut(self.body).move_by(self.dir.scale(self.speed * time.delta));
-
-        self.rotation_angle += 1.5;
     }
 
     pub fn get_position(&self, graph: &Graph) -> Vec3 {
@@ -151,10 +180,12 @@ impl Projectile {
     }
 
     pub fn remove_self(&mut self, scene: &mut Scene) {
-        let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
+        if !self.ray_based {
+            let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
 
-        physics.remove_body(self.body);
-        graph.remove_node(self.model);
+            physics.remove_body(self.body);
+            graph.remove_node(self.model);
+        }
     }
 }
 
@@ -174,6 +205,8 @@ impl Visit for Projectile {
         self.model.visit("Model", visitor)?;
         self.body.visit("Body", visitor)?;
         self.rotation_angle.visit("RotationAngle", visitor)?;
+        self.ray_based.visit("RayBased", visitor)?;
+        self.damage.visit("Damage", visitor)?;
 
         visitor.leave_region()
     }
@@ -198,49 +231,16 @@ impl ProjectileContainer {
         self.pool.iter()
     }
 
-    fn create_impact_particle_system(scene: &mut Scene, resource_manager: &mut ResourceManager, pos: Vec3) {
-        let SceneInterfaceMut { graph, .. } = scene.interface_mut();
-        NodeBuilder::new(NodeKind::ParticleSystem(
-            ParticleSystemBuilder::new()
-                .with_acceleration(Vec3::make(0.0, 0.0, 0.0))
-                .with_color_over_lifetime_gradient({
-                    let mut gradient = ColorGradient::new();
-                    gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(150, 150, 150, 0)));
-                    gradient.add_point(GradientPoint::new(0.05, Color::from_rgba(150, 150, 150, 220)));
-                    gradient.add_point(GradientPoint::new(0.85, Color::from_rgba(255, 255, 255, 180)));
-                    gradient.add_point(GradientPoint::new(1.00, Color::from_rgba(255, 255, 255, 0)));
-                    gradient
-                })
-                .with_emitters(vec![
-                    EmitterBuilder::new(EmitterKind::Sphere(SphereEmitter::new(0.01)))
-                        .with_max_particles(100)
-                        .with_spawn_rate(50)
-                        .with_x_velocity_range(NumericRange::new(-0.01, 0.01))
-                        .with_y_velocity_range(NumericRange::new(0.02, 0.03))
-                        .with_z_velocity_range(NumericRange::new(-0.01, 0.01))
-                        .build()
-                ])
-                .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8))
-                .build()))
-            .with_lifetime(5.0)
-            .with_local_transform(TransformBuilder::new()
-                .with_local_position(pos)
-                .build())
-            .build(graph);
-    }
-
-    pub fn update(&mut self, scene: &mut Scene, resource_manager: &mut ResourceManager, time: &GameTime) {
+    pub fn update(&mut self,
+                  scene: &mut Scene,
+                  resource_manager: &mut ResourceManager,
+                  actors: &mut ActorContainer,
+                  time: &GameTime
+    ) {
         for projectile in self.pool.iter_mut() {
             let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
-            let position = projectile.get_position(graph);
-            let collided = physics.borrow_body(projectile.body).get_contacts().len() > 0;
-            projectile.update(scene, time);
-            if collided {
-                projectile.lifetime = 0.0;
-            }
+            projectile.update(scene, resource_manager, actors, time);
             if projectile.is_dead() {
-                Self::create_impact_particle_system(scene, resource_manager, position);
-
                 projectile.remove_self(scene);
             }
         }

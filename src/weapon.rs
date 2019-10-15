@@ -1,28 +1,38 @@
-use std::path::Path;
-
+use std::{
+    path::Path,
+    sync::{Mutex, Arc},
+};
 use crate::{
     GameTime,
-    projectile::{Projectile, ProjectileKind, ProjectileContainer},
+    projectile::{
+        Projectile,
+        ProjectileKind,
+        ProjectileContainer,
+    },
+    actor::{
+        Actor,
+        ActorContainer,
+    },
 };
 use rg3d_core::{
     color::Color,
     pool::Handle,
-    visitor::{Visit, VisitResult, Visitor, VisitError},
+    visitor::{Visit, VisitResult, Visitor},
     math::{vec3::Vec3, ray::Ray},
 };
 use rg3d_physics::{RayCastOptions, Physics};
 use rg3d_sound::{
-    source::{Source, SourceKind},
+    source::Source,
     buffer::BufferKind,
     context::Context,
 };
-use std::sync::{Mutex, Arc};
 use rg3d::{
     engine::resource_manager::ResourceManager,
-    resource::model::Model,
+    resource::{
+        model::Model,
+    },
     scene::{
         SceneInterfaceMut,
-        SceneInterface,
         node::{
             NodeKind,
             Node,
@@ -30,38 +40,63 @@ use rg3d::{
         },
         Scene,
         graph::Graph,
-        light::LightKind,
-        light::{LightBuilder, PointLight},
+        light::{
+            LightKind,
+            LightBuilder,
+            PointLight,
+        },
     },
 };
 
 pub enum WeaponKind {
-    Unknown,
     M4,
     Ak47,
     PlasmaRifle,
+}
+
+impl WeaponKind {
+    pub fn id(&self) -> u32 {
+        match self {
+            WeaponKind::M4 => 0,
+            WeaponKind::Ak47 => 1,
+            WeaponKind::PlasmaRifle => 2
+        }
+    }
+
+    pub fn new(id: u32) -> Result<Self, String> {
+        match id {
+            0 => Ok(WeaponKind::M4),
+            1 => Ok(WeaponKind::Ak47),
+            2 => Ok(WeaponKind::PlasmaRifle),
+            _ => return Err(format!("unknown weapon kind {}", id))
+        }
+    }
 }
 
 pub struct Weapon {
     kind: WeaponKind,
     model: Handle<Node>,
     laser_dot: Handle<Node>,
+    shot_point: Handle<Node>,
     offset: Vec3,
     dest_offset: Vec3,
     last_shot_time: f64,
     shot_position: Vec3,
+    owner: Handle<Actor>,
 }
 
 impl Default for Weapon {
     fn default() -> Self {
         Self {
-            kind: WeaponKind::Unknown,
+            kind: WeaponKind::M4,
             laser_dot: Handle::NONE,
             model: Handle::NONE,
             offset: Vec3::new(),
+            shot_point: Handle::NONE,
             dest_offset: Vec3::new(),
             last_shot_time: 0.0,
             shot_position: Vec3::zero(),
+            owner: Handle::NONE,
         }
     }
 }
@@ -70,26 +105,10 @@ impl Visit for Weapon {
     fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
         visitor.enter_region(name)?;
 
-        let mut kind_id: u8 = if visitor.is_reading() {
-            0
-        } else {
-            match self.kind {
-                WeaponKind::Unknown => return Err(VisitError::User(String::from("unknown weapon kind on save???"))),
-                WeaponKind::M4 => 0,
-                WeaponKind::Ak47 => 1,
-                WeaponKind::PlasmaRifle => 2
-            }
-        };
-
+        let mut kind_id = self.kind.id();
         kind_id.visit("KindId", visitor)?;
-
         if visitor.is_reading() {
-            self.kind = match kind_id {
-                0 => WeaponKind::M4,
-                1 => WeaponKind::Ak47,
-                2 => WeaponKind::PlasmaRifle,
-                _ => return Err(VisitError::User(format!("unknown weapon kind {}", kind_id)))
-            }
+            self.kind = WeaponKind::new(kind_id)?
         }
 
         self.model.visit("Model", visitor)?;
@@ -97,6 +116,7 @@ impl Visit for Weapon {
         self.offset.visit("Offset", visitor)?;
         self.dest_offset.visit("DestOffset", visitor)?;
         self.last_shot_time.visit("LastShotTime", visitor)?;
+        self.owner.visit("Owner", visitor)?;
 
         visitor.leave_region()
     }
@@ -105,7 +125,6 @@ impl Visit for Weapon {
 impl Weapon {
     pub fn new(kind: WeaponKind, resource_manager: &mut ResourceManager, scene: &mut Scene) -> Weapon {
         let model_path = match kind {
-            WeaponKind::Unknown => panic!("must not be here"),
             WeaponKind::Ak47 => Path::new("data/models/ak47.fbx"),
             WeaponKind::M4 => Path::new("data/models/m4.fbx"),
             WeaponKind::PlasmaRifle => Path::new("data/models/plasma_rifle.fbx"),
@@ -124,6 +143,12 @@ impl Weapon {
                 .build()))
             .build(graph);
 
+        let shot_point = graph.find_by_name(weapon_model, "Weapon:ShotPoint");
+
+        if shot_point.is_none() {
+            println!("Shot point not found!");
+        }
+
         Weapon {
             kind,
             shot_position: Vec3::zero(),
@@ -132,6 +157,8 @@ impl Weapon {
             offset: Vec3::new(),
             dest_offset: Vec3::new(),
             last_shot_time: 0.0,
+            shot_point,
+            owner: Handle::NONE,
         }
     }
 
@@ -156,6 +183,15 @@ impl Weapon {
         let node = graph.get_mut(self.model);
         node.get_local_transform_mut().set_position(self.offset);
         self.shot_position = node.get_global_position();
+    }
+
+    fn get_shot_position(&self, graph: &Graph) -> Vec3 {
+        if self.shot_point.is_some() {
+            graph.get(self.shot_point).get_global_position()
+        } else {
+            // Fallback
+            graph.get(self.model).get_global_position()
+        }
     }
 
     fn update_laser_sight(&self, graph: &mut Graph, physics: &Physics) {
@@ -198,20 +234,18 @@ impl Weapon {
             self.play_shot_sound(resource_manager, sound_context);
 
             let (dir, pos) = {
-                let SceneInterface { graph, .. } = scene.interface();
-                let model = graph.get(self.model);
-                (model.get_look_vector(), model.get_global_position())
+                let graph = scene.interface().graph;
+                (graph.get(self.model).get_look_vector(), self.get_shot_position(graph))
             };
 
             match self.kind {
-                WeaponKind::Unknown => (),
-                WeaponKind::M4 => {}
-                WeaponKind::Ak47 => {}
+                WeaponKind::M4 | WeaponKind::Ak47 => {
+                    projectiles.add(Projectile::new(ProjectileKind::Bullet,
+                                                    resource_manager, scene, dir, pos));
+                }
                 WeaponKind::PlasmaRifle => {
-                    projectiles.add(Projectile::new(
-                        ProjectileKind::Plasma,
-                        resource_manager,
-                        scene, dir, pos));
+                    projectiles.add(Projectile::new(ProjectileKind::Plasma,
+                                                    resource_manager, scene, dir, pos));
                 }
             }
         }

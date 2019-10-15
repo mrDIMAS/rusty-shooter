@@ -1,21 +1,24 @@
 use rg3d::{
-    engine::Engine,
-    scene::{
-        node::{Node, NodeKind},
-        Scene, camera::Camera,
-    },
     WindowEvent,
     MouseButton,
     MouseScrollDelta,
     ElementState,
     VirtualKeyCode,
-    engine::{EngineInterfaceMut, EngineInterface},
-    scene::{SceneInterfaceMut, SceneInterface},
-    scene::graph::Graph,
+    engine::{
+        resource_manager::ResourceManager
+    },
+    scene::{
+        SceneInterfaceMut,
+        node::{Node, NodeKind},
+        Scene,
+        camera::Camera,
+        graph::Graph,
+    },
 };
 use crate::{
     weapon::Weapon,
     GameTime,
+    projectile::ProjectileContainer,
 };
 use rg3d_core::{
     visitor::{Visit, Visitor, VisitResult},
@@ -32,8 +35,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 use rand::Rng;
-use rg3d_physics::{convex_shape::{SphereShape, ConvexShape}, rigid_body::RigidBody, Physics};
-use crate::projectile::ProjectileContainer;
+use rg3d_physics::{
+    convex_shape::ConvexShape,
+    rigid_body::RigidBody,
+    Physics,
+    convex_shape::{CapsuleShape, Axis},
+};
+use crate::actor::ActorTrait;
 
 pub struct Controller {
     move_forward: bool,
@@ -64,10 +72,11 @@ impl Default for Controller {
 }
 
 pub struct Player {
-    camera: Handle<Node>,
-    camera_pivot: Handle<Node>,
     pivot: Handle<Node>,
     body: Handle<RigidBody>,
+    health: f32,
+    camera: Handle<Node>,
+    camera_pivot: Handle<Node>,
     weapon_pivot: Handle<Node>,
     controller: Controller,
     yaw: f32,
@@ -88,6 +97,32 @@ pub struct Player {
     head_position: Vec3,
     look_direction: Vec3,
     up_direction: Vec3,
+}
+
+impl ActorTrait for Player {
+    fn get_body(&self) -> Handle<RigidBody> { self.body }
+    fn get_health(&self) -> f32 { self.health }
+    fn set_health(&mut self, health: f32) { self.health = health; }
+    fn remove_self(&self, scene: &mut Scene) {}
+
+    fn update(&mut self, sound_context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager, scene: &mut Scene, time: &GameTime, projectiles: &mut ProjectileContainer) {
+        self.update_movement(scene, time);
+
+        if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
+            current_weapon.update(scene);
+
+            if self.controller.shoot {
+                current_weapon.shoot(resource_manager, scene, sound_context.clone(), time, projectiles);
+            }
+        }
+
+        if self.path_len > 2.0 {
+            self.emit_footstep_sound(sound_context.clone());
+            self.path_len = 0.0;
+        }
+
+        self.update_listener(sound_context);
+    }
 }
 
 impl Default for Player {
@@ -117,6 +152,7 @@ impl Default for Player {
             head_position: Vec3::zero(),
             look_direction: Vec3::zero(),
             up_direction: Vec3::zero(),
+            health: 0.0,
         }
     }
 }
@@ -143,14 +179,14 @@ impl Visit for Player {
         self.camera_dest_offset.visit("CameraDestOffset", visitor)?;
         self.current_weapon.visit("CurrentWeapon", visitor)?;
         self.footsteps.visit("Footsteps", visitor)?;
+        self.health.visit("Health", visitor)?;
 
         visitor.leave_region()
     }
 }
 
 impl Player {
-    pub fn new(engine: &mut Engine, scene: &mut Scene) -> Player {
-        let EngineInterfaceMut { sound_context, resource_manager, .. } = engine.interface_mut();
+    pub fn new(sound_context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager, scene: &mut Scene) -> Player {
         let SceneInterfaceMut { graph, physics, node_rigid_body_map, .. } = scene.interface_mut();
 
         let camera_handle = graph.add_node(Node::new(NodeKind::Camera(Camera::default())));
@@ -163,8 +199,8 @@ impl Player {
         let mut pivot = Node::new(NodeKind::Base);
         pivot.get_local_transform_mut().set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
 
-        let stand_body_radius = 0.5;
-        let body = RigidBody::new(ConvexShape::Sphere(SphereShape::new(stand_body_radius)));
+        let stand_body_radius = 0.35;
+        let body = RigidBody::new(ConvexShape::Capsule(CapsuleShape::new(stand_body_radius, 1.0, Axis::Y)));
         let body_handle = physics.add_body(body);
         let pivot_handle = graph.add_node(pivot);
         node_rigid_body_map.insert(pivot_handle, body_handle);
@@ -208,6 +244,7 @@ impl Player {
             head_position: Vec3::zero(),
             look_direction: Vec3::zero(),
             up_direction: Vec3::zero(),
+            health: 100.0,
             footsteps: {
                 let mut sound_context = sound_context.lock().unwrap();
                 footsteps.iter().map(|buf| {
@@ -329,8 +366,7 @@ impl Player {
         graph.get_mut(self.camera_pivot).get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::right(), self.pitch.to_radians()));
     }
 
-    fn emit_footstep_sound(&self, engine: &mut Engine) {
-        let EngineInterface { sound_context, .. } = engine.interface();
+    fn emit_footstep_sound(&self, sound_context: Arc<Mutex<Context>>) {
         let mut sound_context = sound_context.lock().unwrap();
         let handle = self.footsteps[rand::thread_rng().gen_range(0, self.footsteps.len())];
         let source = sound_context.get_source_mut(handle);
@@ -340,8 +376,11 @@ impl Player {
         source.play();
     }
 
-    pub fn get_position(&self, scene: &Scene) -> Vec3 {
-        let SceneInterface { physics, .. } = scene.interface();
+    pub fn set_position(&mut self, physics: &mut Physics, position: Vec3) {
+        physics.borrow_body_mut(self.body).set_position(position);
+    }
+
+    pub fn get_position(&self, physics: &Physics) -> Vec3 {
         physics.borrow_body(self.body).get_position()
     }
 
@@ -352,29 +391,9 @@ impl Player {
         listener.set_orientation(&self.look_direction, &self.up_direction).unwrap();
     }
 
-    pub fn update(&mut self, engine: &mut Engine, scene_handle: Handle<Scene>, time: &GameTime, projectiles: &mut ProjectileContainer) {
-        let EngineInterfaceMut { scenes, sound_context, resource_manager, .. } = engine.interface_mut();
 
-        let scene = scenes.get_mut(scene_handle);
-        self.update_movement(scene, time);
 
-        if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
-            current_weapon.update(scene);
-
-            if self.controller.shoot {
-                current_weapon.shoot(resource_manager, scene, sound_context.clone(), time, projectiles);
-            }
-        }
-
-        if self.path_len > 2.0 {
-            self.emit_footstep_sound(engine);
-            self.path_len = 0.0;
-        }
-
-        self.update_listener(sound_context);
-    }
-
-    pub fn process_event(&mut self, event: &WindowEvent) -> bool {
+    pub fn process_input_event(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::CursorMoved { position, .. } => {
                 let mouse_velocity = Vec2 {

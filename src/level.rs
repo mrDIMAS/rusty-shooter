@@ -1,17 +1,16 @@
-use rg3d::{
-    scene::{
-        node::*,
-        *,
-        particle_system::{
-            ParticleSystem, Emitter,
-            EmitterKind, CustomEmitter, Particle,
-            Emit,
-        },
+use rg3d::{scene::{
+    node::*,
+    *,
+    particle_system::{
+        ParticleSystem, Emitter,
+        EmitterKind, CustomEmitter, Particle,
+        Emit,
     },
-    engine::*,
-    resource::model::Model,
-    resource::texture::TextureKind,
-};
+    particle_system::{ParticleSystemBuilder, EmitterBuilder},
+}, engine::*, resource::{
+    model::Model,
+    texture::TextureKind,
+}, WindowEvent};
 use std::{
     path::Path
 };
@@ -23,7 +22,7 @@ use rand::Rng;
 use rg3d_core::{
     color::Color,
     color_gradient::{ColorGradient, GradientPoint},
-    pool::{Pool, Handle},
+    pool::{Handle},
     visitor::{
         Visit,
         VisitResult,
@@ -41,22 +40,26 @@ use crate::{
     },
     projectile::ProjectileContainer,
 };
-use rg3d::scene::particle_system::{ParticleSystemBuilder, EmitterBuilder};
+use crate::actor::{ActorContainer, Actor};
+use rg3d::engine::resource_manager::ResourceManager;
+use rg3d_sound::context::Context;
+use std::sync::{Arc, Mutex};
+use crate::actor::ActorTrait;
 
 pub struct Level {
     scene: Handle<Scene>,
-    player: Option<Player>,
-    bots: Pool<Bot>,
+    player: Handle<Actor>,
     projectiles: ProjectileContainer,
+    actors: ActorContainer,
 }
 
 impl Default for Level {
     fn default() -> Self {
         Self {
             projectiles: ProjectileContainer::new(),
+            actors: ActorContainer::new(),
             scene: Handle::NONE,
-            player: None,
-            bots: Pool::new(),
+            player: Handle::NONE,
         }
     }
 }
@@ -67,7 +70,7 @@ impl Visit for Level {
 
         self.scene.visit("Scene", visitor)?;
         self.player.visit("Player", visitor)?;
-        self.bots.visit("Bots", visitor)?;
+        self.actors.visit("Actors", visitor)?;
         self.projectiles.visit("Projectiles", visitor)?;
 
         visitor.leave_region()
@@ -193,16 +196,8 @@ impl Level {
         scene
     }
 
-    fn create_bots(engine: &mut Engine, scene: &mut Scene) -> Pool<Bot> {
-        let mut bots = Pool::new();
-        bots.spawn(Bot::new(BotKind::Mutant, engine, scene, Vec3::make(0.0, 0.0, -1.0)).unwrap());
-        bots.spawn(Bot::new(BotKind::Mutant, engine, scene, Vec3::make(1.0, 0.0, 0.0)).unwrap());
-        bots
-    }
-
-    fn create_player(engine: &mut Engine, scene: &mut Scene) -> Player {
-        let mut player = Player::new(engine, scene);
-        let EngineInterfaceMut { resource_manager, .. } = engine.interface_mut();
+    fn create_player(sound_context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager, scene: &mut Scene) -> Player {
+        let mut player = Player::new(sound_context, resource_manager, scene);
         let plasma_rifle = Weapon::new(WeaponKind::PlasmaRifle, resource_manager, scene);
         let ak47 = Weapon::new(WeaponKind::Ak47, resource_manager, scene);
         let m4 = Weapon::new(WeaponKind::M4, resource_manager, scene);
@@ -215,14 +210,16 @@ impl Level {
 
     pub fn new(engine: &mut Engine) -> Level {
         let mut scene = Self::load_level(engine);
-        let bots = Self::create_bots(engine, &mut scene);
-        let player = Some(Self::create_player(engine, &mut scene));
-        let EngineInterfaceMut { scenes, .. } = engine.interface_mut();
+        let EngineInterfaceMut { scenes, sound_context, resource_manager, .. } = engine.interface_mut();
+        let mut actors = ActorContainer::new();
+        let player = actors.add(Actor::Player(Self::create_player(sound_context, resource_manager, &mut scene)));
+        actors.add(Actor::Bot(Bot::new(BotKind::Mutant, resource_manager, &mut scene, Vec3::make(0.0, 0.0, -1.0)).unwrap()));
+        actors.add(Actor::Bot(Bot::new(BotKind::Mutant, resource_manager, &mut scene, Vec3::make(1.0, 0.0, 0.0)).unwrap()));
         let scene = scenes.add(scene);
         Level {
             projectiles: ProjectileContainer::new(),
+            actors,
             player,
-            bots,
             scene,
         }
     }
@@ -232,27 +229,32 @@ impl Level {
         scenes.remove(self.scene);
     }
 
-    pub fn get_player(&self) -> Option<&Player> {
-        self.player.as_ref()
+    pub fn get_player(&self) -> Handle<Actor> {
+        self.player
     }
 
-    pub fn get_player_mut(&mut self) -> Option<&mut Player> {
-        self.player.as_mut()
+    pub fn process_input_event(&mut self, event: &WindowEvent) -> bool {
+        if let Actor::Player(player) = self.actors.get_mut(self.player) {
+            player.process_input_event(event)
+        } else {
+            false
+        }
     }
 
     pub fn update(&mut self, engine: &mut Engine, time: &GameTime) {
-        if let Some(ref mut player) = self.player {
-            player.update(engine, self.scene, time, &mut self.projectiles);
+        let EngineInterfaceMut { scenes, sound_context, resource_manager, .. } = engine.interface_mut();
+        let scene = scenes.get_mut(self.scene);
 
-            let EngineInterfaceMut { scenes, resource_manager, .. } = engine.interface_mut();
-            let scene = scenes.get_mut(self.scene);
-            let player_position = player.get_position(scene);
+        let player_position = self.actors.get(self.player).get_position(scene.interface().physics);
 
-            for bot in self.bots.iter_mut() {
-                bot.update(scene, player_position, time)
+        for actor in self.actors.iter_mut() {
+            if let Actor::Bot(bot) = actor {
+                bot.set_target(player_position);
             }
-
-            self.projectiles.update(scene, resource_manager, time);
         }
+
+        self.actors.update(sound_context, resource_manager, scene, time, &mut self.projectiles);
+
+        self.projectiles.update(scene, resource_manager, &mut self.actors, time);
     }
 }

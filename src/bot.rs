@@ -4,18 +4,26 @@ use rg3d_core::{
     math::{vec3::Vec3, quat::Quat},
 };
 use std::path::Path;
-use rg3d_physics::{rigid_body::RigidBody, convex_shape::{ConvexShape, CapsuleShape, Axis}, Physics};
+use rg3d_physics::{
+    rigid_body::RigidBody,
+    convex_shape::{ConvexShape, CapsuleShape, Axis},
+    Physics,
+};
 use crate::GameTime;
 use rg3d::{
-    engine::EngineInterfaceMut,
     scene::{
         node::{NodeKind, Node},
         animation::Animation,
-        Scene, SceneInterfaceMut,
+        Scene,
+        SceneInterfaceMut,
     },
-    engine::Engine,
     resource::model::Model,
+    engine::resource_manager::ResourceManager,
 };
+use crate::actor::ActorTrait;
+use std::sync::{Arc, Mutex};
+use rg3d_sound::context::Context;
+use crate::projectile::ProjectileContainer;
 
 pub enum BotKind {
     Mutant,
@@ -41,11 +49,13 @@ impl BotKind {
 
 pub struct Bot {
     pivot: Handle<Node>,
-    kind: BotKind,
     model: Handle<Node>,
     body: Handle<RigidBody>,
+    health: f32,
+    kind: BotKind,
     idle_animation: Handle<Animation>,
     walk_animation: Handle<Animation>,
+    target: Vec3,
 }
 
 impl Default for Bot {
@@ -57,14 +67,76 @@ impl Default for Bot {
             body: Handle::NONE,
             idle_animation: Handle::NONE,
             walk_animation: Handle::NONE,
+            target: Vec3::zero(),
+            health: 0.0,
+        }
+    }
+}
+
+impl ActorTrait for Bot {
+    fn get_body(&self) -> Handle<RigidBody> {
+        self.body
+    }
+
+    fn get_health(&self) -> f32 {
+        self.health
+    }
+
+    fn set_health(&mut self, health: f32) {
+        self.health = health;
+    }
+
+    fn remove_self(&self, scene: &mut Scene) {}
+
+    fn update(&mut self,
+              sound_context: Arc<Mutex<Context>>,
+              resource_manager: &mut ResourceManager,
+              scene: &mut Scene,
+              time: &GameTime,
+              projectiles: &mut ProjectileContainer,
+    ) {
+        let SceneInterfaceMut { graph, physics, animations, .. } = scene.interface_mut();
+
+        let threshold = 2.0;
+        let body = physics.borrow_body_mut(self.body);
+        let dir = self.target - body.get_position();
+        let distance = dir.len();
+
+        if let Some(dir) = dir.normalized() {
+            if distance > threshold {
+                body.move_by(dir.scale(0.35 * time.delta));
+            }
+
+            let pivot = graph.get_mut(self.pivot);
+            let transform = pivot.get_local_transform_mut();
+            let angle = dir.x.atan2(dir.z);
+            transform.set_rotation(Quat::from_axis_angle(Vec3::up(), angle))
+        }
+
+        let fade_speed = 1.5;
+
+        if distance > threshold {
+            let walk_animation = animations.get_mut(self.walk_animation);
+            walk_animation.fade_in(fade_speed);
+            walk_animation.set_enabled(true);
+
+            let idle_animation = animations.get_mut(self.idle_animation);
+            idle_animation.fade_out(fade_speed);
+            idle_animation.set_enabled(true);
+        } else {
+            let walk_animation = animations.get_mut(self.walk_animation);
+            walk_animation.fade_out(fade_speed);
+            walk_animation.set_enabled(true);
+
+            let idle_animation = animations.get_mut(self.idle_animation);
+            idle_animation.fade_in(fade_speed);
+            idle_animation.set_enabled(true);
         }
     }
 }
 
 impl Bot {
-    pub fn new(kind: BotKind, engine: &mut Engine, scene: &mut Scene, position: Vec3) -> Result<Self, ()> {
-        let EngineInterfaceMut { resource_manager, .. } = engine.interface_mut();
-
+    pub fn new(kind: BotKind, resource_manager: &mut ResourceManager, scene: &mut Scene, position: Vec3) -> Result<Self, ()> {
         let path = match kind {
             BotKind::Mutant => Path::new("data/models/mutant.fbx"),
             BotKind::Ripper => Path::new("data/models/ripper.fbx"),
@@ -115,58 +187,13 @@ impl Bot {
             body,
             idle_animation,
             walk_animation,
+            health: 100.0,
+            target: Vec3::zero(),
         })
     }
 
-    pub fn set_position(&mut self, physics: &mut Physics, position: Vec3) {
-        physics.borrow_body_mut(self.body).set_position(position);
-    }
-
-    pub fn update(&mut self, scene: &mut Scene, player_position: Vec3, time: &GameTime) {
-        let SceneInterfaceMut { graph, physics, animations, .. } = scene.interface_mut();
-
-        let threshold = 2.0;
-        let body = physics.borrow_body_mut(self.body);
-        let dir = player_position - body.get_position();
-        let distance = dir.len();
-
-        if let Some(dir) = dir.normalized() {
-            if distance > threshold {
-                body.move_by(dir.scale(0.35 * time.delta));
-            }
-
-            let pivot = graph.get_mut(self.pivot);
-            let transform = pivot.get_local_transform_mut();
-            let angle = dir.x.atan2(dir.z);
-            transform.set_rotation(Quat::from_axis_angle(Vec3::up(), angle))
-        }
-
-
-        let fade_speed = 1.5;
-
-        if distance > threshold {
-            {
-                let walk_animation = animations.get_mut(self.walk_animation);
-                walk_animation.fade_in(fade_speed);
-                walk_animation.set_enabled(true);
-            }
-            {
-                let idle_animation = animations.get_mut(self.idle_animation);
-                idle_animation.fade_out(fade_speed);
-                idle_animation.set_enabled(true);
-            }
-        } else {
-            {
-                let walk_animation = animations.get_mut(self.walk_animation);
-                walk_animation.fade_out(fade_speed);
-                walk_animation.set_enabled(true);
-            }
-            {
-                let idle_animation = animations.get_mut(self.idle_animation);
-                idle_animation.fade_in(fade_speed);
-                idle_animation.set_enabled(true);
-            }
-        }
+    pub fn set_target(&mut self, target: Vec3) {
+        self.target = target;
     }
 }
 
@@ -185,6 +212,7 @@ impl Visit for Bot {
         self.body.visit("Body", visitor)?;
         self.idle_animation.visit("IdleAnimation", visitor)?;
         self.walk_animation.visit("WalkAnimation", visitor)?;
+        self.health.visit("Health", visitor)?;
 
         visitor.leave_region()
     }

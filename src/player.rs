@@ -9,7 +9,7 @@ use rg3d::{
     },
     scene::{
         SceneInterfaceMut,
-        node::{Node, NodeKind},
+        node::{Node, NodeTrait},
         Scene,
         camera::Camera,
         graph::Graph,
@@ -42,6 +42,7 @@ use rg3d_physics::{
     convex_shape::{CapsuleShape, Axis},
 };
 use crate::actor::ActorTrait;
+use rg3d::scene::node::Node::Pivot;
 
 pub struct Controller {
     move_forward: bool,
@@ -189,14 +190,14 @@ impl Player {
     pub fn new(sound_context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager, scene: &mut Scene) -> Player {
         let SceneInterfaceMut { graph, physics, node_rigid_body_map, .. } = scene.interface_mut();
 
-        let camera_handle = graph.add_node(Node::new(NodeKind::Camera(Camera::default())));
+        let camera_handle = graph.add_node(Node::Camera(Default::default()));
 
-        let mut camera_pivot = Node::new(NodeKind::Base);
+        let mut camera_pivot = Node::Pivot(Default::default());
         camera_pivot.get_local_transform_mut().set_position(Vec3 { x: 0.0, y: 1.0, z: 0.0 });
         let camera_pivot_handle = graph.add_node(camera_pivot);
         graph.link_nodes(camera_handle, camera_pivot_handle);
 
-        let mut pivot = Node::new(NodeKind::Base);
+        let mut pivot = Node::Pivot(Default::default());
         pivot.get_local_transform_mut().set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
 
         let stand_body_radius = 0.35;
@@ -206,7 +207,7 @@ impl Player {
         node_rigid_body_map.insert(pivot_handle, body_handle);
         graph.link_nodes(camera_pivot_handle, pivot_handle);
 
-        let mut weapon_pivot = Node::new(NodeKind::Base);
+        let mut weapon_pivot = Node::Pivot(Default::default());
         weapon_pivot.get_local_transform_mut().set_position(Vec3::make(-0.065, -0.052, 0.02));
         let weapon_pivot_handle = graph.add_node(weapon_pivot);
         graph.link_nodes(weapon_pivot_handle, camera_handle);

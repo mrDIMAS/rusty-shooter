@@ -22,7 +22,7 @@ use rand::Rng;
 use rg3d_core::{
     color::Color,
     color_gradient::{ColorGradient, GradientPoint},
-    pool::{Handle},
+    pool::Handle,
     visitor::{
         Visit,
         VisitResult,
@@ -139,10 +139,9 @@ impl Level {
             // Create collision geometry
             let polygon_handle = graph.find_by_name(map_root_handle, "Polygon");
             if polygon_handle.is_some() {
-                let polygon = graph.get(polygon_handle);
-                let global_transform = polygon.get_global_transform();
                 let mut static_geometry = StaticGeometry::new();
-                if let NodeKind::Mesh(mesh) = polygon.get_kind() {
+                if let Node::Mesh(mesh) = graph.get(polygon_handle) {
+                    let global_transform = mesh.get_global_transform();
                     for surface in mesh.get_surfaces() {
                         let data_rc = surface.get_data();
                         let shared_data = data_rc.lock().unwrap();
@@ -175,7 +174,7 @@ impl Level {
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
 
-        NodeBuilder::new(NodeKind::ParticleSystem(
+        graph.add_node(Node::ParticleSystem(
             ParticleSystemBuilder::new()
                 .with_acceleration(Vec3::make(0.0, -0.1, 0.0))
                 .with_color_over_lifetime_gradient({
@@ -190,8 +189,7 @@ impl Level {
                     EmitterBuilder::new(EmitterKind::Custom(Box::new(CylinderEmitter::new()))).build()
                 ])
                 .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8))
-                .build()))
-            .build(graph);
+                .build()));
 
         scene
     }

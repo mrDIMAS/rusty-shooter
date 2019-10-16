@@ -34,9 +34,8 @@ use rg3d::{
     scene::{
         SceneInterfaceMut,
         node::{
-            NodeKind,
+            NodeTrait,
             Node,
-            NodeBuilder,
         },
         Scene,
         graph::Graph,
@@ -137,11 +136,10 @@ impl Weapon {
         }
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
-        let laser_dot = NodeBuilder::new(NodeKind::Light(
+        let laser_dot = graph.add_node(Node::Light(
             LightBuilder::new(LightKind::Point(PointLight::new(0.5)))
                 .with_color(Color::opaque(255, 0, 0))
-                .build()))
-            .build(graph);
+                .build()));
 
         let shot_point = graph.find_by_name(weapon_model, "Weapon:ShotPoint");
 

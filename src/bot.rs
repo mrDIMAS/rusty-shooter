@@ -12,7 +12,7 @@ use rg3d_physics::{
 use crate::GameTime;
 use rg3d::{
     scene::{
-        node::{NodeKind, Node},
+        node::{NodeTrait, Node},
         animation::Animation,
         Scene,
         SceneInterfaceMut,
@@ -148,7 +148,7 @@ impl Bot {
         let model = Model::instantiate_geometry(resource.clone(), scene);
         let (pivot, body) = {
             let SceneInterfaceMut { graph, physics, node_rigid_body_map, .. } = scene.interface_mut();
-            let pivot = graph.add_node(Node::new(NodeKind::Base));
+            let pivot = graph.add_node(Node::Pivot(Default::default()));
             graph.link_nodes(model, pivot);
             graph.get_mut(model).get_local_transform_mut().set_position(Vec3::make(0.0, -body_height * 0.5, 0.0));
 

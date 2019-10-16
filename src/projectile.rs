@@ -6,7 +6,7 @@ use rg3d::{
         Scene,
         SceneInterfaceMut,
         node::{
-            NodeKind,
+            NodeTrait,
             Node,
         },
         graph::Graph,
@@ -15,21 +15,21 @@ use rg3d::{
 use crate::{
     GameTime,
     effects,
-    actor::ActorContainer
+    actor::ActorContainer,
 };
 use std::path::Path;
 use rand::Rng;
 use rg3d_physics::{
     convex_shape::{ConvexShape, SphereShape},
     RayCastOptions,
-    rigid_body::RigidBody
+    rigid_body::RigidBody,
 };
 use rg3d_core::{
     visitor::{Visit, VisitResult, Visitor},
     pool::{Handle, Pool, PoolIterator},
     color::Color,
     math::vec3::Vec3,
-    math::ray::Ray
+    math::ray::Ray,
 };
 
 pub enum ProjectileKind {
@@ -64,7 +64,7 @@ pub struct Projectile {
     lifetime: f32,
     rotation_angle: f32,
     ray_based: bool,
-    damage: f32
+    damage: f32,
 }
 
 impl Default for Projectile {
@@ -97,11 +97,11 @@ impl Projectile {
                 ProjectileKind::Plasma => {
                     let size = rand::thread_rng().gen_range(0.06, 0.09);
 
-                    let model = graph.add_node(Node::new(NodeKind::Sprite(SpriteBuilder::new()
+                    let model = graph.add_node(Node::Sprite(SpriteBuilder::new()
                         .with_size(size)
                         .with_color(Color::opaque(0, 162, 232))
                         .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/light_01.png"), TextureKind::R8))
-                        .build())));
+                        .build()));
 
                     let mut body = RigidBody::new(ConvexShape::Sphere(SphereShape::new(size)));
                     body.set_gravity(Vec3::zero());
@@ -129,7 +129,7 @@ impl Projectile {
             model,
             ray_based,
             damage,
-            initial_pos: position
+            initial_pos: position,
         }
     }
 
@@ -147,7 +147,7 @@ impl Projectile {
                 if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
                     effects::create_bullet_impact(graph, resource_manager, result[0].position);
 
-                   // for actor in actors.iter_mut() {
+                    // for actor in actors.iter_mut() {
                     //    if actor.
                     //}
                 }
@@ -164,8 +164,7 @@ impl Projectile {
                 return;
             }
 
-            let model = graph.get_mut(self.model);
-            if let NodeKind::Sprite(sprite) = model.get_kind_mut() {
+            if let Node::Sprite(sprite) = graph.get_mut(self.model) {
                 sprite.set_rotation(self.rotation_angle);
             }
 
@@ -235,7 +234,7 @@ impl ProjectileContainer {
                   scene: &mut Scene,
                   resource_manager: &mut ResourceManager,
                   actors: &mut ActorContainer,
-                  time: &GameTime
+                  time: &GameTime,
     ) {
         for projectile in self.pool.iter_mut() {
             let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();

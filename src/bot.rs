@@ -3,13 +3,14 @@ use rg3d_core::{
     visitor::{Visit, VisitResult, Visitor},
     math::{vec3::Vec3, quat::Quat},
 };
-use std::path::Path;
+use std::{
+    path::Path,
+    sync::{Arc, Mutex}
+};
 use rg3d_physics::{
     rigid_body::RigidBody,
     convex_shape::{ConvexShape, CapsuleShape, Axis},
-    Physics,
 };
-use crate::GameTime;
 use rg3d::{
     scene::{
         node::{NodeTrait, Node},
@@ -20,10 +21,12 @@ use rg3d::{
     resource::model::Model,
     engine::resource_manager::ResourceManager,
 };
-use crate::actor::ActorTrait;
-use std::sync::{Arc, Mutex};
+use crate::{
+    actor::ActorTrait,
+    GameTime,
+    projectile::ProjectileContainer
+};
 use rg3d_sound::context::Context;
-use crate::projectile::ProjectileContainer;
 
 pub enum BotKind {
     Mutant,
@@ -67,7 +70,7 @@ impl Default for Bot {
             body: Handle::NONE,
             idle_animation: Handle::NONE,
             walk_animation: Handle::NONE,
-            target: Vec3::zero(),
+            target: Vec3::ZERO,
             health: 0.0,
         }
     }
@@ -110,7 +113,7 @@ impl ActorTrait for Bot {
             let pivot = graph.get_mut(self.pivot);
             let transform = pivot.get_local_transform_mut();
             let angle = dir.x.atan2(dir.z);
-            transform.set_rotation(Quat::from_axis_angle(Vec3::up(), angle))
+            transform.set_rotation(Quat::from_axis_angle(Vec3::UP, angle))
         }
 
         let fade_speed = 1.5;
@@ -150,11 +153,11 @@ impl Bot {
             let SceneInterfaceMut { graph, physics, node_rigid_body_map, .. } = scene.interface_mut();
             let pivot = graph.add_node(Node::Pivot(Default::default()));
             graph.link_nodes(model, pivot);
-            graph.get_mut(model).get_local_transform_mut().set_position(Vec3::make(0.0, -body_height * 0.5, 0.0));
+            graph.get_mut(model).get_local_transform_mut().set_position(Vec3::new(0.0, -body_height * 0.5, 0.0));
 
             match kind {
                 BotKind::Mutant => {
-                    graph.get_mut(model).get_local_transform_mut().set_scale(Vec3::make(0.025, 0.025, 0.025));
+                    graph.get_mut(model).get_local_transform_mut().set_scale(Vec3::new(0.025, 0.025, 0.025));
                 }
                 _ => {}
             }
@@ -188,7 +191,7 @@ impl Bot {
             idle_animation,
             walk_animation,
             health: 100.0,
-            target: Vec3::zero(),
+            target: Vec3::ZERO,
         })
     }
 

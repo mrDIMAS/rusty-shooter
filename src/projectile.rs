@@ -79,7 +79,7 @@ impl Default for Projectile {
             rotation_angle: 0.0,
             ray_based: false,
             damage: 0.0,
-            initial_pos: Vec3::zero(),
+            initial_pos: Vec3::ZERO,
         }
     }
 }
@@ -104,7 +104,7 @@ impl Projectile {
                         .build()));
 
                     let mut body = RigidBody::new(ConvexShape::Sphere(SphereShape::new(size)));
-                    body.set_gravity(Vec3::zero());
+                    body.set_gravity(Vec3::ZERO);
                     body.set_position(position);
 
                     (model, physics.add_body(body), 6.0, 0.2, false, 30.0)
@@ -124,7 +124,7 @@ impl Projectile {
             body,
             speed,
             rotation_angle: 0.0,
-            dir: dir.normalized().unwrap_or(Vec3::up()),
+            dir: dir.normalized().unwrap_or(Vec3::UP),
             kind,
             model,
             ray_based,

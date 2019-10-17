@@ -11,7 +11,6 @@ use crate::{
     },
     actor::{
         Actor,
-        ActorContainer,
     },
 };
 use rg3d_core::{
@@ -90,11 +89,11 @@ impl Default for Weapon {
             kind: WeaponKind::M4,
             laser_dot: Handle::NONE,
             model: Handle::NONE,
-            offset: Vec3::new(),
+            offset: Vec3::ZERO,
             shot_point: Handle::NONE,
-            dest_offset: Vec3::new(),
+            dest_offset: Vec3::ZERO,
             last_shot_time: 0.0,
-            shot_position: Vec3::zero(),
+            shot_position: Vec3::ZERO,
             owner: Handle::NONE,
         }
     }
@@ -149,11 +148,11 @@ impl Weapon {
 
         Weapon {
             kind,
-            shot_position: Vec3::zero(),
+            shot_position: Vec3::ZERO,
             laser_dot,
             model: weapon_model,
-            offset: Vec3::new(),
-            dest_offset: Vec3::new(),
+            offset: Vec3::ZERO,
+            dest_offset: Vec3::ZERO,
             last_shot_time: 0.0,
             shot_point,
             owner: Handle::NONE,
@@ -193,7 +192,7 @@ impl Weapon {
     }
 
     fn update_laser_sight(&self, graph: &mut Graph, physics: &Physics) {
-        let mut laser_dot_position = Vec3::new();
+        let mut laser_dot_position = Vec3::ZERO;
         let model = graph.get(self.model);
         let begin = model.get_global_position();
         let end = begin + model.get_look_vector().scale(100.0);
@@ -226,7 +225,7 @@ impl Weapon {
                  time: &GameTime,
                  projectiles: &mut ProjectileContainer) {
         if time.elapsed - self.last_shot_time >= 0.1 {
-            self.offset = Vec3::make(0.0, 0.0, -0.05);
+            self.offset = Vec3::new(0.0, 0.0, -0.05);
             self.last_shot_time = time.elapsed;
 
             self.play_shot_sound(resource_manager, sound_context);

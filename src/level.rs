@@ -122,7 +122,7 @@ impl Emit for CylinderEmitter {
         let r = s.sqrt() * self.radius;
         let x = r * theta.cos();
         let y = r * theta.sin();
-        particle.position = Vec3::make(x, y, z);
+        particle.position = Vec3::new(x, y, z);
     }
 }
 
@@ -176,7 +176,7 @@ impl Level {
 
         graph.add_node(Node::ParticleSystem(
             ParticleSystemBuilder::new()
-                .with_acceleration(Vec3::make(0.0, -0.1, 0.0))
+                .with_acceleration(Vec3::new(0.0, -0.1, 0.0))
                 .with_color_over_lifetime_gradient({
                     let mut gradient = ColorGradient::new();
                     gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(150, 150, 150, 0)));
@@ -211,8 +211,8 @@ impl Level {
         let EngineInterfaceMut { scenes, sound_context, resource_manager, .. } = engine.interface_mut();
         let mut actors = ActorContainer::new();
         let player = actors.add(Actor::Player(Self::create_player(sound_context, resource_manager, &mut scene)));
-        actors.add(Actor::Bot(Bot::new(BotKind::Mutant, resource_manager, &mut scene, Vec3::make(0.0, 0.0, -1.0)).unwrap()));
-        actors.add(Actor::Bot(Bot::new(BotKind::Mutant, resource_manager, &mut scene, Vec3::make(1.0, 0.0, 0.0)).unwrap()));
+        actors.add(Actor::Bot(Bot::new(BotKind::Mutant, resource_manager, &mut scene, Vec3::new(0.0, 0.0, -1.0)).unwrap()));
+        actors.add(Actor::Bot(Bot::new(BotKind::Mutant, resource_manager, &mut scene, Vec3::new(1.0, 0.0, 0.0)).unwrap()));
         let scene = scenes.add(scene);
         Level {
             projectiles: ProjectileContainer::new(),

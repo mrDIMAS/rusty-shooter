@@ -11,7 +11,6 @@ use rg3d::{
         SceneInterfaceMut,
         node::{Node, NodeTrait},
         Scene,
-        camera::Camera,
         graph::Graph,
     },
 };
@@ -42,7 +41,6 @@ use rg3d_physics::{
     convex_shape::{CapsuleShape, Axis},
 };
 use crate::actor::ActorTrait;
-use rg3d::scene::node::Node::Pivot;
 
 pub struct Controller {
     move_forward: bool,
@@ -66,7 +64,7 @@ impl Default for Controller {
             crouch: false,
             jump: false,
             run: false,
-            last_mouse_pos: Vec2::zero(),
+            last_mouse_pos: Vec2::ZERO,
             shoot: false,
         }
     }
@@ -130,30 +128,30 @@ impl Default for Player {
     fn default() -> Self {
         Self {
             camera: Default::default(),
-            camera_pivot: Default::default(),
             pivot: Default::default(),
-            body: Default::default(),
-            weapon_pivot: Default::default(),
-            controller: Default::default(),
-            yaw: 0.0,
-            dest_yaw: 0.0,
-            pitch: 0.0,
+            camera_pivot: Default::default(),
+            controller: Controller::default(),
+            stand_body_radius: 0.5,
             dest_pitch: 0.0,
-            run_speed_multiplier: 0.0,
-            stand_body_radius: 0.0,
-            crouch_body_radius: 0.0,
-            move_speed: 0.0,
-            weapons: vec![],
-            camera_offset: Default::default(),
-            camera_dest_offset: Default::default(),
+            dest_yaw: 0.0,
+            move_speed: 0.058,
+            body: Default::default(),
+            run_speed_multiplier: 1.75,
+            crouch_body_radius: 0.35,
+            yaw: 0.0,
+            pitch: 0.0,
+            weapons: Vec::new(),
+            camera_dest_offset: Vec3::ZERO,
+            camera_offset: Vec3::ZERO,
+            weapon_pivot: Default::default(),
             current_weapon: 0,
             footsteps: Vec::new(),
             path_len: 0.0,
-            feet_position: Vec3::zero(),
-            head_position: Vec3::zero(),
-            look_direction: Vec3::zero(),
-            up_direction: Vec3::zero(),
-            health: 0.0,
+            feet_position: Vec3::ZERO,
+            head_position: Vec3::ZERO,
+            look_direction: Vec3::ZERO,
+            up_direction: Vec3::ZERO,
+            health: 100.0,
         }
     }
 }
@@ -208,7 +206,7 @@ impl Player {
         graph.link_nodes(camera_pivot_handle, pivot_handle);
 
         let mut weapon_pivot = Node::Pivot(Default::default());
-        weapon_pivot.get_local_transform_mut().set_position(Vec3::make(-0.065, -0.052, 0.02));
+        weapon_pivot.get_local_transform_mut().set_position(Vec3::new(-0.065, -0.052, 0.02));
         let weapon_pivot_handle = graph.add_node(weapon_pivot);
         graph.link_nodes(weapon_pivot_handle, camera_handle);
 
@@ -225,27 +223,9 @@ impl Player {
             camera: camera_handle,
             pivot: pivot_handle,
             camera_pivot: camera_pivot_handle,
-            controller: Controller::default(),
             stand_body_radius,
-            dest_pitch: 0.0,
-            dest_yaw: 0.0,
-            move_speed: 0.058,
             body: body_handle,
-            run_speed_multiplier: 1.75,
-            crouch_body_radius: 0.35,
-            yaw: 0.0,
-            pitch: 0.0,
-            weapons: Vec::new(),
-            camera_dest_offset: Vec3::new(),
-            camera_offset: Vec3::new(),
             weapon_pivot: weapon_pivot_handle,
-            current_weapon: 0,
-            path_len: 0.0,
-            feet_position: Vec3::zero(),
-            head_position: Vec3::zero(),
-            look_direction: Vec3::zero(),
-            up_direction: Vec3::zero(),
-            health: 100.0,
             footsteps: {
                 let mut sound_context = sound_context.lock().unwrap();
                 footsteps.iter().map(|buf| {
@@ -253,6 +233,7 @@ impl Player {
                     sound_context.add_source(source)
                 }).collect()
             },
+            .. Default::default()
         }
     }
 
@@ -295,7 +276,7 @@ impl Player {
 
         let mut is_moving = false;
         let body = physics.borrow_body_mut(self.body);
-        let mut velocity = Vec3::new();
+        let mut velocity = Vec3::ZERO;
         if self.controller.move_forward {
             velocity += look;
         }
@@ -363,8 +344,8 @@ impl Player {
         self.yaw += (self.dest_yaw - self.yaw) * 0.2;
         self.pitch += (self.dest_pitch - self.pitch) * 0.2;
 
-        graph.get_mut(self.pivot).get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::up(), self.yaw.to_radians()));
-        graph.get_mut(self.camera_pivot).get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::right(), self.pitch.to_radians()));
+        graph.get_mut(self.pivot).get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::UP, self.yaw.to_radians()));
+        graph.get_mut(self.camera_pivot).get_local_transform_mut().set_rotation(Quat::from_axis_angle(Vec3::RIGHT, self.pitch.to_radians()));
     }
 
     fn emit_footstep_sound(&self, sound_context: Arc<Mutex<Context>>) {

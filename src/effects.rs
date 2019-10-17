@@ -9,7 +9,7 @@ use rg3d::{
     engine::resource_manager::ResourceManager,
     scene::{
         particle_system::{ParticleSystemBuilder, EmitterKind, EmitterBuilder, SphereEmitter},
-        node::{NodeTrait, Node},
+        node::Node,
         transform::TransformBuilder,
         graph::Graph,
     },
@@ -22,7 +22,7 @@ pub fn create_bullet_impact(graph: &mut Graph, resource_manager: &mut ResourceMa
         .with_local_transform(TransformBuilder::new()
             .with_local_position(pos)
             .build())
-        .with_acceleration(Vec3::make(0.0, 0.0, 0.0))
+        .with_acceleration(Vec3::new(0.0, 0.0, 0.0))
         .with_color_over_lifetime_gradient({
             let mut gradient = ColorGradient::new();
             gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(150, 150, 150, 0)));

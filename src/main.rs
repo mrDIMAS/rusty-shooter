@@ -30,7 +30,7 @@ use rg3d::{
         EngineInterfaceMut,
     },
     gui::{
-        node::{UINode, UINodeKind},
+        node::{UINode},
         text::TextBuilder,
         event::{UIEvent, UIEventKind},
     },
@@ -57,6 +57,7 @@ use rg3d_sound::{
     buffer::BufferKind,
     source::{Source, SourceKind},
 };
+use rg3d::gui::widget::WidgetBuilder;
 
 
 pub struct Game {
@@ -73,6 +74,13 @@ pub struct Game {
 pub struct GameTime {
     elapsed: f64,
     delta: f32,
+}
+
+pub enum CollisionGroups {
+    Generic = 1 << 0,
+    Projectile = 1 << 1,
+    Actor = 1 << 2,
+    All = std::i64::MAX as isize,
 }
 
 impl Game {
@@ -126,9 +134,9 @@ impl Game {
     pub fn create_ui(&mut self) {
         let EngineInterfaceMut { ui, .. } = self.engine.interface_mut();
 
-        self.debug_text = TextBuilder::new()
+        self.debug_text = TextBuilder::new(WidgetBuilder::new()
             .with_width(400.0)
-            .with_height(200.0)
+            .with_height(200.0))
             .build(ui);
     }
 
@@ -250,10 +258,7 @@ impl Game {
                elapsed
         ).unwrap();
 
-        let ui_node = ui.get_node_mut(self.debug_text);
-        if let UINodeKind::Text(text) = ui_node.get_kind_mut() {
-            text.set_text(self.debug_string.as_str());
-        }
+        ui.get_node_mut(self.debug_text).as_text_mut().set_text(self.debug_string.as_str());
     }
 
     pub fn limit_fps(&mut self, value: f64) {

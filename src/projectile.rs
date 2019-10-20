@@ -12,24 +12,18 @@ use rg3d::{
         graph::Graph,
     },
 };
-use crate::{
-    GameTime,
-    effects,
-    actor::ActorContainer,
-};
+use crate::{GameTime, effects, actor::ActorContainer, CollisionGroups};
 use std::path::Path;
 use rand::Rng;
 use rg3d_physics::{
     convex_shape::{ConvexShape, SphereShape},
-    RayCastOptions,
-    rigid_body::RigidBody,
+    RayCastOptions, rigid_body::{RigidBody, CollisionFlags},
 };
 use rg3d_core::{
     visitor::{Visit, VisitResult, Visitor},
     pool::{Handle, Pool, PoolIterator},
     color::Color,
-    math::vec3::Vec3,
-    math::ray::Ray,
+    math::{vec3::Vec3, ray::Ray},
 };
 
 pub enum ProjectileKind {
@@ -106,6 +100,10 @@ impl Projectile {
                     let mut body = RigidBody::new(ConvexShape::Sphere(SphereShape::new(size)));
                     body.set_gravity(Vec3::ZERO);
                     body.set_position(position);
+                    body.collision_group = CollisionGroups::Projectile as u64;
+                    // Projectile-Projectile collisions is disabled.
+                    body.collision_mask = CollisionGroups::All as u64 & !(CollisionGroups::Projectile as u64);
+                    body.collision_flags = CollisionFlags::DISABLE_COLLISION_RESPONSE;
 
                     (model, physics.add_body(body), 6.0, 0.2, false, 30.0)
                 }
@@ -145,8 +143,9 @@ impl Projectile {
             if let Some(ray) = Ray::from_two_points(&self.initial_pos, &end) {
                 let mut result = Vec::new();
                 if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
-                    effects::create_bullet_impact(graph, resource_manager, result[0].position);
-
+                    for hit in result.iter() {
+                        effects::create_bullet_impact(graph, resource_manager, hit.position);
+                    }
                     // for actor in actors.iter_mut() {
                     //    if actor.
                     //}
@@ -155,6 +154,7 @@ impl Projectile {
         } else {
             self.lifetime -= time.delta;
 
+            // Projectile will die on contact with any body except if contacted with other projectile.
             if physics.borrow_body(self.body).get_contacts().len() > 0 {
                 self.lifetime = 0.0;
             }

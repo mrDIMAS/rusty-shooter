@@ -45,6 +45,7 @@ use rg3d::engine::resource_manager::ResourceManager;
 use rg3d_sound::context::Context;
 use std::sync::{Arc, Mutex};
 use crate::actor::ActorTrait;
+use rg3d::scene::base::{AsBase, BaseBuilder};
 
 pub struct Level {
     scene: Handle<Scene>,
@@ -141,7 +142,7 @@ impl Level {
             if polygon_handle.is_some() {
                 let mut static_geometry = StaticGeometry::new();
                 if let Node::Mesh(mesh) = graph.get(polygon_handle) {
-                    let global_transform = mesh.get_global_transform();
+                    let global_transform = mesh.base().get_global_transform();
                     for surface in mesh.get_surfaces() {
                         let data_rc = surface.get_data();
                         let shared_data = data_rc.lock().unwrap();
@@ -175,7 +176,7 @@ impl Level {
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
 
         graph.add_node(Node::ParticleSystem(
-            ParticleSystemBuilder::new()
+            ParticleSystemBuilder::new(BaseBuilder::new())
                 .with_acceleration(Vec3::new(0.0, -0.1, 0.0))
                 .with_color_over_lifetime_gradient({
                     let mut gradient = ColorGradient::new();

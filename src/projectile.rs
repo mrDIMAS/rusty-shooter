@@ -6,7 +6,7 @@ use rg3d::{
         Scene,
         SceneInterfaceMut,
         node::{
-            NodeTrait,
+
             Node,
         },
         graph::Graph,
@@ -25,6 +25,7 @@ use rg3d_core::{
     color::Color,
     math::{vec3::Vec3, ray::Ray},
 };
+use rg3d::scene::base::{BaseBuilder, AsBase};
 
 pub enum ProjectileKind {
     Plasma,
@@ -91,7 +92,7 @@ impl Projectile {
                 ProjectileKind::Plasma => {
                     let size = rand::thread_rng().gen_range(0.06, 0.09);
 
-                    let model = graph.add_node(Node::Sprite(SpriteBuilder::new()
+                    let model = graph.add_node(Node::Sprite(SpriteBuilder::new(BaseBuilder::new())
                         .with_size(size)
                         .with_color(Color::opaque(0, 162, 232))
                         .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/light_01.png"), TextureKind::R8))
@@ -175,7 +176,7 @@ impl Projectile {
     }
 
     pub fn get_position(&self, graph: &Graph) -> Vec3 {
-        graph.get(self.model).get_global_position()
+        graph.get(self.model).base().get_global_position()
     }
 
     pub fn remove_self(&mut self, scene: &mut Scene) {

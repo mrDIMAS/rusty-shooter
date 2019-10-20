@@ -33,7 +33,7 @@ use rg3d::{
     scene::{
         SceneInterfaceMut,
         node::{
-            NodeTrait,
+
             Node,
         },
         Scene,
@@ -45,6 +45,7 @@ use rg3d::{
         },
     },
 };
+use rg3d::scene::base::{BaseBuilder, AsBase};
 
 pub enum WeaponKind {
     M4,
@@ -136,7 +137,7 @@ impl Weapon {
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
         let laser_dot = graph.add_node(Node::Light(
-            LightBuilder::new(LightKind::Point(PointLight::new(0.5)))
+            LightBuilder::new(LightKind::Point(PointLight::new(0.5)), BaseBuilder::new())
                 .with_color(Color::opaque(255, 0, 0))
                 .build()));
 
@@ -160,8 +161,8 @@ impl Weapon {
     }
 
     pub fn set_visibility(&self, visibility: bool, graph: &mut Graph) {
-        graph.get_mut(self.model).set_visibility(visibility);
-        graph.get_mut(self.laser_dot).set_visibility(visibility);
+        graph.get_mut(self.model).base_mut().set_visibility(visibility);
+        graph.get_mut(self.laser_dot).base_mut().set_visibility(visibility);
     }
 
     pub fn get_model(&self) -> Handle<Node> {
@@ -178,24 +179,24 @@ impl Weapon {
         self.update_laser_sight(graph, physics);
 
         let node = graph.get_mut(self.model);
-        node.get_local_transform_mut().set_position(self.offset);
-        self.shot_position = node.get_global_position();
+        node.base_mut().get_local_transform_mut().set_position(self.offset);
+        self.shot_position = node.base().get_global_position();
     }
 
     fn get_shot_position(&self, graph: &Graph) -> Vec3 {
         if self.shot_point.is_some() {
-            graph.get(self.shot_point).get_global_position()
+            graph.get(self.shot_point).base().get_global_position()
         } else {
             // Fallback
-            graph.get(self.model).get_global_position()
+            graph.get(self.model).base().get_global_position()
         }
     }
 
     fn update_laser_sight(&self, graph: &mut Graph, physics: &Physics) {
         let mut laser_dot_position = Vec3::ZERO;
         let model = graph.get(self.model);
-        let begin = model.get_global_position();
-        let end = begin + model.get_look_vector().scale(100.0);
+        let begin = model.base().get_global_position();
+        let end = begin + model.base().get_look_vector().scale(100.0);
         if let Some(ray) = Ray::from_two_points(&begin, &end) {
             let mut result = Vec::new();
             if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
@@ -204,7 +205,7 @@ impl Weapon {
             }
         }
 
-        graph.get_mut(self.laser_dot).get_local_transform_mut().set_position(laser_dot_position);
+        graph.get_mut(self.laser_dot).base_mut().get_local_transform_mut().set_position(laser_dot_position);
     }
 
     fn play_shot_sound(&self, resource_manager: &mut ResourceManager, sound_context: Arc<Mutex<Context>>) {
@@ -232,7 +233,7 @@ impl Weapon {
 
             let (dir, pos) = {
                 let graph = scene.interface().graph;
-                (graph.get(self.model).get_look_vector(), self.get_shot_position(graph))
+                (graph.get(self.model).base().get_look_vector(), self.get_shot_position(graph))
             };
 
             match self.kind {

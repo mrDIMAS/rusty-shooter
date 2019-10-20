@@ -13,7 +13,7 @@ use rg3d_physics::{
 };
 use rg3d::{
     scene::{
-        node::{NodeTrait, Node},
+        node::{Node},
         animation::Animation,
         Scene,
         SceneInterfaceMut,
@@ -27,6 +27,7 @@ use crate::{
     projectile::ProjectileContainer
 };
 use rg3d_sound::context::Context;
+use rg3d::scene::base::AsBase;
 
 pub enum BotKind {
     Mutant,
@@ -111,7 +112,7 @@ impl ActorTrait for Bot {
             }
 
             let pivot = graph.get_mut(self.pivot);
-            let transform = pivot.get_local_transform_mut();
+            let transform = pivot.base_mut().get_local_transform_mut();
             let angle = dir.x.atan2(dir.z);
             transform.set_rotation(Quat::from_axis_angle(Vec3::UP, angle))
         }
@@ -151,13 +152,13 @@ impl Bot {
         let model = Model::instantiate_geometry(resource.clone(), scene);
         let (pivot, body) = {
             let SceneInterfaceMut { graph, physics, node_rigid_body_map, .. } = scene.interface_mut();
-            let pivot = graph.add_node(Node::Pivot(Default::default()));
+            let pivot = graph.add_node(Node::Base(Default::default()));
             graph.link_nodes(model, pivot);
-            graph.get_mut(model).get_local_transform_mut().set_position(Vec3::new(0.0, -body_height * 0.5, 0.0));
+            graph.get_mut(model).base_mut().get_local_transform_mut().set_position(Vec3::new(0.0, -body_height * 0.5, 0.0));
 
             match kind {
                 BotKind::Mutant => {
-                    graph.get_mut(model).get_local_transform_mut().set_scale(Vec3::new(0.025, 0.025, 0.025));
+                    graph.get_mut(model).base_mut().get_local_transform_mut().set_scale(Vec3::new(0.025, 0.025, 0.025));
                 }
                 _ => {}
             }

@@ -15,13 +15,14 @@ use rg3d::{
     },
     resource::texture::TextureKind,
 };
+use rg3d::scene::base::BaseBuilder;
 
 pub fn create_bullet_impact(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {
-    graph.add_node(Node::ParticleSystem(ParticleSystemBuilder::new()
+    graph.add_node(Node::ParticleSystem(ParticleSystemBuilder::new(BaseBuilder::new()
         .with_lifetime(5.0)
         .with_local_transform(TransformBuilder::new()
             .with_local_position(pos)
-            .build())
+            .build()))
         .with_acceleration(Vec3::new(0.0, 0.0, 0.0))
         .with_color_over_lifetime_gradient({
             let mut gradient = ColorGradient::new();

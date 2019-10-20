@@ -9,7 +9,7 @@ use rg3d::{
     },
     scene::{
         SceneInterfaceMut,
-        node::{Node, NodeTrait},
+        node::{Node},
         Scene,
         graph::Graph,
     },
@@ -41,6 +41,7 @@ use rg3d_physics::{
     Physics,
     convex_shape::{CapsuleShape, Axis},
 };
+use rg3d::scene::base::AsBase;
 
 pub struct Controller {
     move_forward: bool,
@@ -209,13 +210,13 @@ impl Player {
 
         let camera_handle = graph.add_node(Node::Camera(Default::default()));
 
-        let mut camera_pivot = Node::Pivot(Default::default());
-        camera_pivot.get_local_transform_mut().set_position(Vec3 { x: 0.0, y: 1.0, z: 0.0 });
+        let mut camera_pivot = Node::Base(Default::default());
+        camera_pivot.base_mut().get_local_transform_mut().set_position(Vec3 { x: 0.0, y: 1.0, z: 0.0 });
         let camera_pivot_handle = graph.add_node(camera_pivot);
         graph.link_nodes(camera_handle, camera_pivot_handle);
 
-        let mut pivot = Node::Pivot(Default::default());
-        pivot.get_local_transform_mut().set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
+        let mut pivot = Node::Base(Default::default());
+        pivot.base_mut().get_local_transform_mut().set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
 
         let capsule_shape = CapsuleShape::new(0.35, Self::default().stand_body_height, Axis::Y);
         let body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
@@ -224,12 +225,12 @@ impl Player {
         node_rigid_body_map.insert(pivot_handle, body_handle);
         graph.link_nodes(camera_pivot_handle, pivot_handle);
 
-        let mut weapon_base_pivot = Node::Pivot(Default::default());
-        weapon_base_pivot.get_local_transform_mut().set_position(Vec3::new(-0.065, -0.052, 0.02));
+        let mut weapon_base_pivot = Node::Base(Default::default());
+        weapon_base_pivot.base_mut().get_local_transform_mut().set_position(Vec3::new(-0.065, -0.052, 0.02));
         let weapon_base_pivot_handle = graph.add_node(weapon_base_pivot);
         graph.link_nodes(weapon_base_pivot_handle, camera_handle);
 
-        let weapon_pivot = Node::Pivot(Default::default());
+        let weapon_pivot = Node::Base(Default::default());
         let weapon_pivot_handle = graph.add_node(weapon_pivot);
         graph.link_nodes(weapon_pivot_handle, weapon_base_pivot_handle);
 
@@ -310,7 +311,7 @@ impl Player {
     fn update_movement(&mut self, scene: &mut Scene, time: &GameTime) {
         let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
 
-        let pivot = graph.get(self.pivot);
+        let pivot = graph.get(self.pivot).base();
         let look = pivot.get_look_vector();
         let side = pivot.get_side_vector();
 
@@ -353,7 +354,7 @@ impl Player {
 
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
 
-        let weapon_pivot = graph.get_mut(self.weapon_pivot);
+        let weapon_pivot = graph.get_mut(self.weapon_pivot).base_mut();
         weapon_pivot.get_local_transform_mut().set_position(self.weapon_offset);
 
         if self.controller.jump {
@@ -370,7 +371,7 @@ impl Player {
 
         self.camera_offset.follow(&self.camera_dest_offset, 0.1);
 
-        let camera_node = graph.get_mut(self.camera);
+        let camera_node = graph.get_mut(self.camera).base_mut();
         camera_node.get_local_transform_mut().set_position(self.camera_offset);
 
         self.head_position = camera_node.get_global_position();
@@ -384,10 +385,10 @@ impl Player {
         self.yaw += (self.dest_yaw - self.yaw) * 0.2;
         self.pitch += (self.dest_pitch - self.pitch) * 0.2;
 
-        let pivot_transform = graph.get_mut(self.pivot).get_local_transform_mut();
+        let pivot_transform = graph.get_mut(self.pivot).base_mut().get_local_transform_mut();
         pivot_transform.set_rotation(Quat::from_axis_angle(Vec3::UP, self.yaw.to_radians()));
 
-        let camera_pivot_transform = graph.get_mut(self.camera_pivot).get_local_transform_mut();
+        let camera_pivot_transform = graph.get_mut(self.camera_pivot).base_mut().get_local_transform_mut();
         camera_pivot_transform.set_rotation(Quat::from_axis_angle(Vec3::RIGHT, self.pitch.to_radians()));
     }
 

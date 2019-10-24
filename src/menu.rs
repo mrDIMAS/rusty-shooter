@@ -1,6 +1,10 @@
+use rg3d_core::pool::Handle;
 use rg3d::{
     engine::{Engine, EngineInterfaceMut},
+    WindowEvent,
+    engine::EngineInterface,
     gui::{
+        list_box::ListBoxBuilder,
         node::UINode,
         grid::{GridBuilder, Row, Column},
         Thickness,
@@ -11,13 +15,11 @@ use rg3d::{
         button::ButtonBuilder,
         Visibility,
         event::{UIEvent, UIEventKind},
-    },
-    WindowEvent,
-    engine::EngineInterface,
+        widget::{WidgetBuilder, AsWidget},
+        HorizontalAlignment
+    }
 };
-use rg3d_core::pool::Handle;
-use rg3d::gui::widget::{WidgetBuilder, AsWidget};
-use rg3d::gui::list_box::ListBoxBuilder;
+use rg3d::gui::text_box::TextBoxBuilder;
 
 pub struct Menu {
     root: Handle<UINode>,
@@ -97,17 +99,49 @@ impl Menu {
                     .with_items({
                         let mut items = Vec::new();
                         for i in 0..30 {
-                            items.push( TextBuilder::new(WidgetBuilder::new()
-                                .with_height(25.0)
-                                .with_width(100.0))
-                                .with_text(format!("Item {}", i).as_str())
-                                .build(ui))
+                            let item = GridBuilder::new(WidgetBuilder::new()
+                                .with_child(TextBuilder::new(WidgetBuilder::new()
+                                    .on_column(0)
+                                    .with_height(25.0)
+                                    .with_width(100.0))
+                                    .with_text(format!("Item {}", i).as_str())
+                                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                                    .with_horizontal_text_alignment(HorizontalAlignment::Center)
+                                    .build(ui))
+                                .with_child(ButtonBuilder::new(WidgetBuilder::new()
+                                    .with_event_handler(Box::new(move |ui, handle, evt| {
+                                        if evt.source() == handle {
+                                            println!("Clicked {}", i);
+                                        }
+                                    }))
+                                    .with_margin(Thickness::uniform(1.0))
+                                    .on_column(1))
+                                    .with_text("Click Me")
+                                    .build(ui)))
+                                .add_row(Row::stretch())
+                                .add_column(Column::auto())
+                                .add_column(Column::stretch())
+                                .build(ui);
+                            items.push(item)
                         }
                         items
                     })
+                    .build(ui))
+                .with_child(TextBuilder::new(WidgetBuilder::new()
+                    .on_row(3)
+                    .on_column(0)
+                    .with_margin(margin))
+                    .with_text("Text Box")
+                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                    .build(ui))
+                .with_child(TextBoxBuilder::new(WidgetBuilder::new()
+                    .on_row(3)
+                    .on_column(1))
+                    .with_text("The quick brown fox jumps over a lazy dog".to_owned())
                     .build(ui)))
                 .add_row(Row::strict(34.0))
                 .add_row(Row::strict(34.0))
+                .add_row(Row::strict(200.0))
                 .add_row(Row::strict(200.0))
                 .add_column(Column::strict(150.0))
                 .add_column(Column::stretch())

@@ -2,7 +2,6 @@ use rg3d_core::pool::Handle;
 use rg3d::{
     engine::{Engine, EngineInterfaceMut},
     WindowEvent,
-    engine::EngineInterface,
     gui::{
         list_box::ListBoxBuilder,
         node::UINode,
@@ -20,6 +19,7 @@ use rg3d::{
     }
 };
 use rg3d::gui::text_box::TextBoxBuilder;
+use rg3d::gui::UserInterface;
 
 pub struct Menu {
     root: Handle<UINode>,
@@ -109,7 +109,7 @@ impl Menu {
                                     .with_horizontal_text_alignment(HorizontalAlignment::Center)
                                     .build(ui))
                                 .with_child(ButtonBuilder::new(WidgetBuilder::new()
-                                    .with_event_handler(Box::new(move |ui, handle, evt| {
+                                    .with_event_handler(Box::new(move |_ui, handle, evt| {
                                         if evt.source() == handle {
                                             println!("Clicked {}", i);
                                         }
@@ -204,13 +204,8 @@ impl Menu {
                             .with_text("Quit")
                             .build(ui);
                         btn_quit_game
-                    })
-                    .with_child(ScrollBarBuilder::new(WidgetBuilder::new()
-                        .on_row(5)
-                        .with_margin(Thickness::uniform(4.0)))
-                        .build(ui)))
+                    }))
                     .add_column(Column::stretch())
-                    .add_row(Row::strict(50.0))
                     .add_row(Row::strict(50.0))
                     .add_row(Row::strict(50.0))
                     .add_row(Row::strict(50.0))
@@ -238,27 +233,22 @@ impl Menu {
         }
     }
 
-    pub fn set_visible(&mut self, engine: &mut Engine, visible: bool) {
-        let EngineInterfaceMut { ui, .. } = engine.interface_mut();
+    pub fn set_visible(&mut self, ui: &mut UserInterface, visible: bool) {
         ui.get_node_mut(self.root).widget_mut().set_visibility(
             if visible { Visibility::Visible } else { Visibility::Collapsed })
     }
 
-    pub fn is_visible(&self, engine: &Engine) -> bool {
-        let EngineInterface { ui, .. } = engine.interface();
+    pub fn is_visible(&self, ui: &UserInterface) -> bool {
         ui.get_node(self.root).widget().get_visibility() == Visibility::Visible
     }
 
     pub fn process_input_event(&mut self, engine: &mut Engine, event: &WindowEvent) {
-        match event {
-            WindowEvent::Resized(new_size) => {
-                let EngineInterfaceMut { ui, renderer, .. } = engine.interface_mut();
-                renderer.set_frame_size((*new_size).into()).unwrap();
-                let root = ui.get_node_mut(self.root).widget_mut();
-                root.set_width(new_size.width as f32);
-                root.set_height(new_size.height as f32);
-            }
-            _ => ()
+        if let WindowEvent::Resized(new_size) = event {
+            let EngineInterfaceMut { ui, renderer, .. } = engine.interface_mut();
+            renderer.set_frame_size((*new_size).into()).unwrap();
+            let root = ui.get_node_mut(self.root).widget_mut();
+            root.set_width(new_size.width as f32);
+            root.set_height(new_size.height as f32);
         }
     }
 

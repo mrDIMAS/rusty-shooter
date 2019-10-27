@@ -1,22 +1,30 @@
-use rg3d::{scene::{
-    node::*,
-    *,
-    particle_system::{
-        ParticleSystem, Emitter,
-        EmitterKind, CustomEmitter, Particle,
-        Emit,
+use rg3d::{
+    resource::{
+        model::Model,
+        texture::TextureKind,
     },
-    particle_system::{ParticleSystemBuilder, EmitterBuilder},
-}, engine::*, resource::{
-    model::Model,
-    texture::TextureKind,
-}, WindowEvent};
+    WindowEvent,
+    scene::{
+        Scene,
+        SceneInterfaceMut,
+        base::{AsBase, BaseBuilder},
+        particle_system::{
+            ParticleSystem, Emitter,
+            EmitterKind, CustomEmitter, Particle,
+            Emit,
+        },
+        particle_system::{ParticleSystemBuilder, EmitterBuilder},
+        node::Node,
+    },
+    engine::{
+        EngineInterfaceMut,
+        Engine,
+    },
+    utils,
+    scene::SceneInterface,
+};
 use std::{
     path::Path
-};
-use rg3d_physics::static_geometry::{
-    StaticGeometry,
-    StaticTriangle,
 };
 use rand::Rng;
 use rg3d_core::{
@@ -31,7 +39,12 @@ use rg3d_core::{
     math::vec3::*,
 };
 use crate::{
-    weapon::{Weapon, WeaponKind},
+    actor::{ActorContainer, Actor},
+    weapon::{
+        Weapon,
+        WeaponKind,
+        WeaponContainer,
+    },
     player::Player,
     GameTime,
     bot::{
@@ -39,19 +52,20 @@ use crate::{
         BotKind,
     },
     projectile::ProjectileContainer,
+    LevelUpdateContext,
+    character::AsCharacter,
+    jump_pad::{JumpPadContainer, JumpPad},
 };
-use crate::actor::{ActorContainer, Actor};
-use rg3d::engine::resource_manager::ResourceManager;
-use rg3d_sound::context::Context;
-use std::sync::{Arc, Mutex};
-use crate::actor::ActorTrait;
-use rg3d::scene::base::{AsBase, BaseBuilder};
+use crate::item::{ItemContainer, Item, ItemKind};
 
 pub struct Level {
     scene: Handle<Scene>,
     player: Handle<Actor>,
     projectiles: ProjectileContainer,
     actors: ActorContainer,
+    weapons: WeaponContainer,
+    jump_pads: JumpPadContainer,
+    items: ItemContainer,
 }
 
 impl Default for Level {
@@ -61,8 +75,19 @@ impl Default for Level {
             actors: ActorContainer::new(),
             scene: Handle::NONE,
             player: Handle::NONE,
+            weapons: WeaponContainer::new(),
+            jump_pads: JumpPadContainer::new(),
+            items: ItemContainer::new(),
         }
     }
+}
+
+pub trait LevelEntity {
+    fn update(&mut self, context: &mut LevelUpdateContext);
+}
+
+pub trait CleanUp {
+    fn clean_up(&mut self, scene: &mut Scene);
 }
 
 impl Visit for Level {
@@ -73,6 +98,8 @@ impl Visit for Level {
         self.player.visit("Player", visitor)?;
         self.actors.visit("Actors", visitor)?;
         self.projectiles.visit("Projectiles", visitor)?;
+        self.weapons.visit("Weapons", visitor)?;
+        self.jump_pads.visit("JumpPads", visitor)?;
 
         visitor.leave_region()
     }
@@ -140,34 +167,7 @@ impl Level {
             // Create collision geometry
             let polygon_handle = graph.find_by_name(map_root_handle, "Polygon");
             if polygon_handle.is_some() {
-                let mut static_geometry = StaticGeometry::new();
-                if let Node::Mesh(mesh) = graph.get(polygon_handle) {
-                    let global_transform = mesh.base().get_global_transform();
-                    for surface in mesh.get_surfaces() {
-                        let data_rc = surface.get_data();
-                        let shared_data = data_rc.lock().unwrap();
-
-                        let vertices = shared_data.get_vertices();
-                        let indices = shared_data.get_indices();
-
-                        let last = indices.len() - indices.len() % 3;
-                        let mut i: usize = 0;
-                        while i < last {
-                            let a = global_transform.transform_vector(vertices[indices[i] as usize].position);
-                            let b = global_transform.transform_vector(vertices[indices[i + 1] as usize].position);
-                            let c = global_transform.transform_vector(vertices[indices[i + 2] as usize].position);
-
-                            if let Some(triangle) = StaticTriangle::from_points(&a, &b, &c) {
-                                static_geometry.add_triangle(triangle);
-                            } else {
-                                println!("degenerated triangle!");
-                            }
-
-                            i += 3;
-                        }
-                    }
-                }
-                physics.add_static_geometry(static_geometry);
+                physics.add_static_geometry(utils::mesh_to_static_geometry(graph.get(polygon_handle).as_mesh()));
             } else {
                 println!("Unable to find Polygon node to build collision shape for level!");
             }
@@ -195,32 +195,78 @@ impl Level {
         scene
     }
 
-    fn create_player(sound_context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager, scene: &mut Scene) -> Player {
-        let mut player = Player::new(sound_context, resource_manager, scene);
-        let plasma_rifle = Weapon::new(WeaponKind::PlasmaRifle, resource_manager, scene);
-        let ak47 = Weapon::new(WeaponKind::Ak47, resource_manager, scene);
-        let m4 = Weapon::new(WeaponKind::M4, resource_manager, scene);
-        let SceneInterfaceMut { graph, .. } = scene.interface_mut();
-        player.add_weapon(graph, m4);
-        player.add_weapon(graph, ak47);
-        player.add_weapon(graph, plasma_rifle);
-        player
+    pub fn give_weapon(&mut self, engine: &mut Engine, weapon_handle: Handle<Weapon>, actor_handle: Handle<Actor>) {
+        let graph = engine.interface_mut().scenes.get_mut(self.scene).interface_mut().graph;
+        let weapon = self.weapons.get_mut(weapon_handle);
+        let actor = self.actors.get_mut(actor_handle);
+        weapon.set_owner(actor_handle);
+        actor.character_mut().add_weapon(weapon_handle);
+        graph.link_nodes(weapon.get_model(), actor.character().get_weapon_pivot());
     }
 
     pub fn new(engine: &mut Engine) -> Level {
         let mut scene = Self::load_level(engine);
         let EngineInterfaceMut { scenes, sound_context, resource_manager, .. } = engine.interface_mut();
         let mut actors = ActorContainer::new();
-        let player = actors.add(Actor::Player(Self::create_player(sound_context, resource_manager, &mut scene)));
-        actors.add(Actor::Bot(Bot::new(BotKind::Mutant, resource_manager, &mut scene, Vec3::new(0.0, 0.0, -1.0)).unwrap()));
-        actors.add(Actor::Bot(Bot::new(BotKind::Mutant, resource_manager, &mut scene, Vec3::new(1.0, 0.0, 0.0)).unwrap()));
+        let mut weapons = WeaponContainer::new();
+        let plasma_rifle = weapons.add(Weapon::new(WeaponKind::PlasmaRifle, resource_manager, &mut scene));
+        let ak47 = weapons.add(Weapon::new(WeaponKind::Ak47, resource_manager, &mut scene));
+        let m4 = weapons.add(Weapon::new(WeaponKind::M4, resource_manager, &mut scene));
+        let player = Player::new(sound_context, resource_manager, &mut scene);
+        let player = actors.add(Actor::Player(player));
         let scene = scenes.add(scene);
-        Level {
-            projectiles: ProjectileContainer::new(),
+        let mut level = Level {
+            weapons,
             actors,
             player,
             scene,
+            .. Default::default()
+        };
+        level.give_weapon(engine, m4, player);
+        level.give_weapon(engine, ak47, player);
+        level.give_weapon(engine, plasma_rifle, player);
+        level.add_bot(engine, Vec3::new(0.0, 0.0, -1.0));
+        level.add_bot(engine, Vec3::new(0.0, 0.0, 1.0));
+        level.analyze(engine);
+        level
+    }
+
+    pub fn analyze(&mut self, engine: &mut Engine) {
+        let mut items = Vec::new();
+        let EngineInterfaceMut { scenes, resource_manager, ..} = engine.interface_mut();
+        let scene = scenes.get_mut(self.scene);
+        let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
+        for node in graph.linear_iter() {
+            let position = node.base().get_global_position();
+            let name = node.base().get_name();
+            if name.starts_with("JumpPad") {
+                let begin = graph.find_by_name_from_root(format!("{}_Begin", name).as_str());
+                let end = graph.find_by_name_from_root(format!("{}_End", name).as_str());
+                if begin.is_some() && end.is_some() {
+                    let begin = graph.get(begin).base().get_global_position();
+                    let end = graph.get(end).base().get_global_position();
+                    let (force, len) = (end - begin).normalized_ex();
+                    let force = force.unwrap_or(Vec3::UP).scale(len / 20.0);
+                    let shape = utils::mesh_to_static_geometry(node.as_mesh());
+                    let shape = physics.add_static_geometry(shape);
+                    self.jump_pads.add(JumpPad::new(shape, force));
+                };
+            } else if name.starts_with("Medkit") {
+                items.push((ItemKind::Medkit, position));
+            }
         }
+        for (kind, position) in items {
+            self.items.add(Item::new(ItemKind::Medkit, position, scene, resource_manager));
+        }
+    }
+
+    pub fn add_bot(&mut self, engine: &mut Engine, position: Vec3) {
+        let EngineInterfaceMut { scenes, resource_manager, .. } = engine.interface_mut();
+        let scene = scenes.get_mut(self.scene);
+        let bot = Actor::Bot(Bot::new(BotKind::Mutant, resource_manager, scene, position).unwrap());
+        let bot = self.actors.add(bot);
+        let weapon = self.weapons.add(Weapon::new(WeaponKind::Ak47, resource_manager, scene));
+        self.give_weapon(engine, weapon, bot);
     }
 
     pub fn destroy(&mut self, engine: &mut Engine) {
@@ -240,11 +286,23 @@ impl Level {
         }
     }
 
-    pub fn update(&mut self, engine: &mut Engine, time: &GameTime) {
+    pub fn get_actors(&self) -> &ActorContainer {
+        &self.actors
+    }
+
+    pub fn get_actors_mut(&mut self) -> &mut ActorContainer {
+        &mut self.actors
+    }
+
+    pub fn get_weapons(&self) -> &WeaponContainer {
+        &self.weapons
+    }
+
+    pub fn update(&mut self, engine: &mut Engine, time: GameTime) {
         let EngineInterfaceMut { scenes, sound_context, resource_manager, .. } = engine.interface_mut();
         let scene = scenes.get_mut(self.scene);
 
-        let player_position = self.actors.get(self.player).get_position(scene.interface().physics);
+        let player_position = self.actors.get(self.player).character().get_position(scene.interface().physics);
 
         for actor in self.actors.iter_mut() {
             if let Actor::Bot(bot) = actor {
@@ -252,8 +310,20 @@ impl Level {
             }
         }
 
-        self.actors.update(sound_context, resource_manager, scene, time, &mut self.projectiles);
+        self.weapons.update(scene);
+        self.projectiles.update(scene, resource_manager, &mut self.actors, &self.weapons, time);
+        self.items.update(scene, time);
 
-        self.projectiles.update(scene, resource_manager, &mut self.actors, time);
+        let mut context = LevelUpdateContext {
+            time,
+            scene,
+            sound_context,
+            resource_manager,
+            weapons: &mut self.weapons,
+            jump_pads: &mut self.jump_pads,
+            projectiles: &mut self.projectiles,
+        };
+
+        self.actors.update(&mut context);
     }
 }

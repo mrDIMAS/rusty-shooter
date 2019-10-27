@@ -5,19 +5,27 @@ use rg3d::{
         sprite::SpriteBuilder,
         Scene,
         SceneInterfaceMut,
-        node::{
-
-            Node,
-        },
+        node::Node,
         graph::Graph,
+        base::{BaseBuilder, AsBase},
     },
 };
-use crate::{GameTime, effects, actor::ActorContainer, CollisionGroups};
+use crate::{
+    GameTime,
+    effects,
+    actor::ActorContainer,
+    CollisionGroups,
+    character::AsCharacter,
+    weapon::Weapon,
+    level::CleanUp,
+    HandleFromSelf,
+};
 use std::path::Path;
 use rand::Rng;
 use rg3d_physics::{
     convex_shape::{ConvexShape, SphereShape},
     RayCastOptions, rigid_body::{RigidBody, CollisionFlags},
+    HitKind,
 };
 use rg3d_core::{
     visitor::{Visit, VisitResult, Visitor},
@@ -25,7 +33,8 @@ use rg3d_core::{
     color::Color,
     math::{vec3::Vec3, ray::Ray},
 };
-use rg3d::scene::base::{BaseBuilder, AsBase};
+use crate::weapon::WeaponContainer;
+use rg3d::scene::light::{LightBuilder, LightKind, PointLight};
 
 pub enum ProjectileKind {
     Plasma,
@@ -50,6 +59,7 @@ impl ProjectileKind {
 }
 
 pub struct Projectile {
+    self_handle: Handle<Projectile>,
     kind: ProjectileKind,
     model: Handle<Node>,
     body: Handle<RigidBody>,
@@ -60,11 +70,20 @@ pub struct Projectile {
     rotation_angle: f32,
     ray_based: bool,
     damage: f32,
+    owner: Handle<Weapon>,
+    initial_velocity: Vec3,
+}
+
+impl HandleFromSelf<Projectile> for Projectile {
+    fn self_handle(&self) -> Handle<Projectile> {
+        self.self_handle
+    }
 }
 
 impl Default for Projectile {
     fn default() -> Self {
         Self {
+            self_handle: Default::default(),
             kind: ProjectileKind::Plasma,
             model: Default::default(),
             dir: Default::default(),
@@ -75,6 +94,8 @@ impl Default for Projectile {
             ray_based: false,
             damage: 0.0,
             initial_pos: Vec3::ZERO,
+            owner: Default::default(),
+            initial_velocity: Default::default(),
         }
     }
 }
@@ -84,19 +105,29 @@ impl Projectile {
                resource_manager: &mut ResourceManager,
                scene: &mut Scene,
                dir: Vec3,
-               position: Vec3) -> Self {
+               position: Vec3,
+               owner: Handle<Weapon>,
+               initial_velocity: Vec3) -> Self {
         let SceneInterfaceMut { graph, node_rigid_body_map, physics, .. } = scene.interface_mut();
 
         let (model, body, lifetime, speed, ray_based, damage) = {
             match &kind {
                 ProjectileKind::Plasma => {
-                    let size = rand::thread_rng().gen_range(0.06, 0.09);
+                    let size = rand::thread_rng().gen_range(0.09, 0.12);
 
+                    let color = Color::opaque(0, 162, 232);
                     let model = graph.add_node(Node::Sprite(SpriteBuilder::new(BaseBuilder::new())
                         .with_size(size)
-                        .with_color(Color::opaque(0, 162, 232))
+                        .with_color(color)
                         .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/light_01.png"), TextureKind::R8))
                         .build()));
+
+                    let light = graph.add_node(Node::Light(LightBuilder::new(
+                        LightKind::Point(PointLight::new(1.5)), BaseBuilder::new())
+                        .with_color(color)
+                        .build()));
+
+                    graph.link_nodes(light, model);
 
                     let mut body = RigidBody::new(ConvexShape::Sphere(SphereShape::new(size)));
                     body.set_gravity(Vec3::ZERO);
@@ -106,7 +137,7 @@ impl Projectile {
                     body.collision_mask = CollisionGroups::All as u64 & !(CollisionGroups::Projectile as u64);
                     body.collision_flags = CollisionFlags::DISABLE_COLLISION_RESPONSE;
 
-                    (model, physics.add_body(body), 6.0, 0.2, false, 30.0)
+                    (model, physics.add_body(body), 6.0, 0.15, false, 30.0)
                 }
                 ProjectileKind::Bullet => {
                     (Handle::NONE, Handle::NONE, 0.0, 0.0, true, 20.0)
@@ -121,6 +152,7 @@ impl Projectile {
         Self {
             lifetime,
             body,
+            initial_velocity,
             speed,
             rotation_angle: 0.0,
             dir: dir.normalized().unwrap_or(Vec3::UP),
@@ -129,6 +161,8 @@ impl Projectile {
             ray_based,
             damage,
             initial_pos: position,
+            owner,
+            ..Default::default()
         }
     }
 
@@ -136,7 +170,12 @@ impl Projectile {
         self.lifetime <= 0.0
     }
 
-    pub fn update(&mut self, scene: &mut Scene, resource_manager: &mut ResourceManager, actors: &mut ActorContainer, time: &GameTime) {
+    pub fn update(&mut self,
+                  scene: &mut Scene,
+                  resource_manager: &mut ResourceManager,
+                  actors: &mut ActorContainer,
+                  weapons: &WeaponContainer,
+                  time: GameTime) {
         let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
 
         if self.ray_based {
@@ -146,18 +185,47 @@ impl Projectile {
                 if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
                     for hit in result.iter() {
                         effects::create_bullet_impact(graph, resource_manager, hit.position);
+
+                        if let HitKind::Body(body) = hit.kind {
+                            for actor in actors.iter_mut() {
+                                if actor.character().get_body() == body {
+                                    let weapon = weapons.get(self.owner);
+                                    // Prevent self-damage - this could happen if ray will intersect
+                                    // rigid body of owner.
+                                    if weapon.get_owner() != actor.self_handle() {
+                                        actor.character_mut().damage(self.damage);
+                                    }
+                                }
+                            }
+                        }
                     }
-                    // for actor in actors.iter_mut() {
-                    //    if actor.
-                    //}
                 }
             }
         } else {
             self.lifetime -= time.delta;
 
-            // Projectile will die on contact with any body except if contacted with other projectile.
-            if physics.borrow_body(self.body).get_contacts().len() > 0 {
-                self.lifetime = 0.0;
+            for contact in physics.borrow_body(self.body).get_contacts() {
+                let mut owner_contact = false;
+
+                // Check if we got contact with any actor and damage it then.
+                for actor in actors.iter_mut() {
+                    if contact.body == actor.character().get_body() {
+                        // Prevent self-damage.
+                        let weapon = weapons.get(self.owner);
+                        if weapon.get_owner() != actor.self_handle() {
+                            actor.character_mut().damage(self.damage);
+                        } else {
+                            // In case if we detected contact between owner of this projectile
+                            // raise this flag so projectile still will be alive. This prevents
+                            // cases when player fires a rocket and it touches player and blows up.
+                            owner_contact = true;
+                        }
+                    }
+                }
+
+                if !owner_contact {
+                    self.lifetime = 0.0;
+                }
             }
 
             if self.lifetime <= 0.0 {
@@ -169,7 +237,8 @@ impl Projectile {
                 sprite.set_rotation(self.rotation_angle);
             }
 
-            physics.borrow_body_mut(self.body).move_by(self.dir.scale(self.speed * time.delta));
+            let total_velocity = self.initial_velocity + self.dir.scale(self.speed);
+            physics.borrow_body_mut(self.body).offset_by(total_velocity);
 
             self.rotation_angle += 1.5;
         }
@@ -178,8 +247,10 @@ impl Projectile {
     pub fn get_position(&self, graph: &Graph) -> Vec3 {
         graph.get(self.model).base().get_global_position()
     }
+}
 
-    pub fn remove_self(&mut self, scene: &mut Scene) {
+impl CleanUp for Projectile {
+    fn clean_up(&mut self, scene: &mut Scene) {
         if !self.ray_based {
             let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
 
@@ -199,6 +270,7 @@ impl Visit for Projectile {
             self.kind = ProjectileKind::new(kind)?;
         }
 
+        self.self_handle.visit("SelfHandle", visitor)?;
         self.lifetime.visit("Lifetime", visitor)?;
         self.dir.visit("Direction", visitor)?;
         self.speed.visit("Speed", visitor)?;
@@ -207,6 +279,7 @@ impl Visit for Projectile {
         self.rotation_angle.visit("RotationAngle", visitor)?;
         self.ray_based.visit("RayBased", visitor)?;
         self.damage.visit("Damage", visitor)?;
+        self.initial_velocity.visit("InitialVelocity", visitor)?;
 
         visitor.leave_region()
     }
@@ -224,7 +297,9 @@ impl ProjectileContainer {
     }
 
     pub fn add(&mut self, projectile: Projectile) -> Handle<Projectile> {
-        self.pool.spawn(projectile)
+        let handle = self.pool.spawn(projectile);
+        self.pool.borrow_mut(handle).self_handle = handle;
+        handle
     }
 
     pub fn iter(&self) -> PoolIterator<Projectile> {
@@ -235,13 +310,12 @@ impl ProjectileContainer {
                   scene: &mut Scene,
                   resource_manager: &mut ResourceManager,
                   actors: &mut ActorContainer,
-                  time: &GameTime,
-    ) {
+                  weapons: &WeaponContainer,
+                  time: GameTime) {
         for projectile in self.pool.iter_mut() {
-            let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
-            projectile.update(scene, resource_manager, actors, time);
+            projectile.update(scene, resource_manager, actors, weapons, time);
             if projectile.is_dead() {
-                projectile.remove_self(scene);
+                projectile.clean_up(scene);
             }
         }
 

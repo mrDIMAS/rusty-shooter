@@ -9,16 +9,10 @@ use rg3d::{
     },
     scene::{
         SceneInterfaceMut,
-        node::{Node},
+        node::Node,
         Scene,
-        graph::Graph,
     },
-};
-use crate::{
-    weapon::Weapon,
-    GameTime,
-    projectile::ProjectileContainer,
-    actor::ActorTrait
+    scene::base::AsBase,
 };
 use rg3d_core::{
     visitor::{Visit, Visitor, VisitResult},
@@ -41,7 +35,17 @@ use rg3d_physics::{
     Physics,
     convex_shape::{CapsuleShape, Axis},
 };
-use rg3d::scene::base::AsBase;
+use crate::{
+    character::{
+        AsCharacter,
+        Character
+    },
+    LevelUpdateContext,
+    level::{
+        LevelEntity,
+        CleanUp
+    }
+};
 
 pub struct Controller {
     move_forward: bool,
@@ -72,12 +76,9 @@ impl Default for Controller {
 }
 
 pub struct Player {
-    pivot: Handle<Node>,
-    body: Handle<RigidBody>,
-    health: f32,
+    character: Character,
     camera: Handle<Node>,
     camera_pivot: Handle<Node>,
-    weapon_pivot: Handle<Node>,
     controller: Controller,
     yaw: f32,
     dest_yaw: f32,
@@ -87,10 +88,8 @@ pub struct Player {
     stand_body_height: f32,
     crouch_body_height: f32,
     move_speed: f32,
-    weapons: Vec<Weapon>,
     camera_offset: Vec3,
     camera_dest_offset: Vec3,
-    current_weapon: u32,
     footsteps: Vec<Handle<Source>>,
     path_len: f32,
     feet_position: Vec3,
@@ -104,62 +103,59 @@ pub struct Player {
     stand_up_speed: f32,
 }
 
-impl ActorTrait for Player {
-    fn get_body(&self) -> Handle<RigidBody> {
-        self.body
+impl AsCharacter for Player {
+    fn character(&self) -> &Character {
+        &self.character
     }
 
-    fn get_health(&self) -> f32 {
-        self.health
+    fn character_mut(&mut self) -> &mut Character {
+        &mut self.character
     }
+}
 
-    fn set_health(&mut self, health: f32) {
-        self.health = health;
-    }
+impl LevelEntity for Player {
+    fn update(&mut self, context: &mut LevelUpdateContext) {
+        self.update_movement(context);
 
-    fn remove_self(&self, scene: &mut Scene) {}
+        if let Some(current_weapon) = self.character.weapons.get(self.character.current_weapon as usize) {
+            let current_weapon = context.weapons.get_mut(*current_weapon);
 
-    fn update(&mut self, sound_context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager, scene: &mut Scene, time: &GameTime, projectiles: &mut ProjectileContainer) {
-        self.update_movement(scene, time);
-
-        if let Some(current_weapon) = self.weapons.get_mut(self.current_weapon as usize) {
-            current_weapon.update(scene);
+            let velocity = context.scene.interface_mut().physics.borrow_body(self.character.body).get_velocity();
 
             if self.controller.shoot {
-                current_weapon.shoot(resource_manager, scene, sound_context.clone(), time, projectiles);
+                if let Some(projectile) = current_weapon.try_shoot(context.scene, context.resource_manager,
+                                                                   context.sound_context.clone(), context.time, velocity) {
+                    context.projectiles.add(projectile);
+                }
             }
         }
 
         if self.path_len > 2.0 {
-            self.emit_footstep_sound(sound_context.clone());
+            self.emit_footstep_sound(context.sound_context.clone());
             self.path_len = 0.0;
         }
 
-        self.update_listener(sound_context);
+        self.update_listener(context.sound_context.clone());
     }
 }
 
 impl Default for Player {
     fn default() -> Self {
         Self {
+            character: Default::default(),
             camera: Default::default(),
-            pivot: Default::default(),
             camera_pivot: Default::default(),
             controller: Controller::default(),
-            stand_body_height: 1.0,
+            stand_body_height: 0.85,
             dest_pitch: 0.0,
             dest_yaw: 0.0,
             move_speed: 0.058,
-            body: Default::default(),
             run_speed_multiplier: 1.75,
             crouch_body_height: 0.15,
             yaw: 0.0,
             pitch: 0.0,
-            weapons: Vec::new(),
             camera_dest_offset: Vec3::ZERO,
             camera_offset: Vec3::ZERO,
-            weapon_pivot: Default::default(),
-            current_weapon: 0,
             footsteps: Vec::new(),
             path_len: 0.0,
             feet_position: Vec3::ZERO,
@@ -167,7 +163,6 @@ impl Default for Player {
             look_direction: Vec3::ZERO,
             up_direction: Vec3::ZERO,
             weapon_offset: Default::default(),
-            health: 100.0,
             weapon_dest_offset: Default::default(),
             weapon_shake_factor: 0.0,
             crouch_speed: 0.15,
@@ -180,11 +175,9 @@ impl Visit for Player {
     fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
         visitor.enter_region(name)?;
 
+        self.character.visit("Character", visitor)?;
         self.camera.visit("Camera", visitor)?;
         self.camera_pivot.visit("CameraPivot", visitor)?;
-        self.pivot.visit("Pivot", visitor)?;
-        self.body.visit("Body", visitor)?;
-        self.weapon_pivot.visit("WeaponPivot", visitor)?;
         self.yaw.visit("Yaw", visitor)?;
         self.dest_yaw.visit("DestYaw", visitor)?;
         self.pitch.visit("Pitch", visitor)?;
@@ -193,14 +186,17 @@ impl Visit for Player {
         self.stand_body_height.visit("StandBodyRadius", visitor)?;
         self.crouch_body_height.visit("CrouchBodyRadius", visitor)?;
         self.move_speed.visit("MoveSpeed", visitor)?;
-        self.weapons.visit("Weapons", visitor)?;
         self.camera_offset.visit("CameraOffset", visitor)?;
         self.camera_dest_offset.visit("CameraDestOffset", visitor)?;
-        self.current_weapon.visit("CurrentWeapon", visitor)?;
         self.footsteps.visit("Footsteps", visitor)?;
-        self.health.visit("Health", visitor)?;
 
         visitor.leave_region()
+    }
+}
+
+impl CleanUp for Player {
+    fn clean_up(&mut self, scene: &mut Scene) {
+        self.character.clean_up(scene)
     }
 }
 
@@ -244,11 +240,14 @@ impl Player {
         };
 
         Player {
+            character: Character {
+                pivot: pivot_handle,
+                body: body_handle,
+                weapon_pivot: weapon_pivot_handle,
+                ..Default::default()
+            },
             camera: camera_handle,
-            pivot: pivot_handle,
             camera_pivot: camera_pivot_handle,
-            body: body_handle,
-            weapon_pivot: weapon_pivot_handle,
             footsteps: {
                 let mut sound_context = sound_context.lock().unwrap();
                 footsteps.iter().map(|buf| {
@@ -260,25 +259,8 @@ impl Player {
         }
     }
 
-    pub fn add_weapon(&mut self, graph: &mut Graph, weapon: Weapon) {
-        graph.link_nodes(weapon.get_model(), self.weapon_pivot);
-        self.weapons.push(weapon);
-    }
-
-    pub fn next_weapon(&mut self) {
-        if !self.weapons.is_empty() && (self.current_weapon as usize) < self.weapons.len() - 1 {
-            self.current_weapon += 1;
-        }
-    }
-
-    pub fn prev_weapon(&mut self) {
-        if self.current_weapon > 0 {
-            self.current_weapon -= 1;
-        }
-    }
-
     pub fn has_ground_contact(&self, physics: &Physics) -> bool {
-        let body = physics.borrow_body(self.body);
+        let body = physics.borrow_body(self.character.body);
         for contact in body.get_contacts() {
             if contact.normal.y >= 0.7 {
                 return true;
@@ -308,10 +290,10 @@ impl Player {
         capsule.set_height(new_height);
     }
 
-    fn update_movement(&mut self, scene: &mut Scene, time: &GameTime) {
-        let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
+    fn update_movement(&mut self, context: &mut LevelUpdateContext) {
+        let SceneInterfaceMut { graph, physics, .. } = context.scene.interface_mut();
 
-        let pivot = graph.get(self.pivot).base();
+        let pivot = graph.get(self.character.pivot).base();
         let look = pivot.get_look_vector();
         let side = pivot.get_side_vector();
 
@@ -333,7 +315,7 @@ impl Player {
 
         let speed_mult = if self.controller.run { self.run_speed_multiplier } else { 1.0 };
 
-        let body = physics.borrow_body_mut(self.body);
+        let body = physics.borrow_body_mut(self.character.body);
         if let Some(normalized_velocity) = velocity.normalized() {
             body.set_x_velocity(normalized_velocity.x * self.move_speed * speed_mult);
             body.set_z_velocity(normalized_velocity.z * self.move_speed * speed_mult);
@@ -343,7 +325,7 @@ impl Player {
             self.weapon_shake_factor += 0.23;
 
             if has_ground_contact {
-                let k = (time.elapsed * 15.0) as f32;
+                let k = (context.time.elapsed * 15.0) as f32;
                 self.camera_dest_offset.x = 0.05 * (k * 0.5).cos();
                 self.camera_dest_offset.y = 0.1 * k.sin();
                 self.path_len += 0.1;
@@ -354,7 +336,7 @@ impl Player {
 
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
 
-        let weapon_pivot = graph.get_mut(self.weapon_pivot).base_mut();
+        let weapon_pivot = graph.get_mut(self.character.weapon_pivot).base_mut();
         weapon_pivot.get_local_transform_mut().set_position(self.weapon_offset);
 
         if self.controller.jump {
@@ -378,14 +360,15 @@ impl Player {
         self.look_direction = camera_node.get_look_vector();
         self.up_direction = camera_node.get_up_vector();
 
-        for (i, weapon) in self.weapons.iter().enumerate() {
-            weapon.set_visibility(i == self.current_weapon as usize, graph);
+        for (i, weapon) in self.character.weapons.iter().enumerate() {
+            let weapon = context.weapons.get_mut(*weapon);
+            weapon.set_visibility(i == self.character.current_weapon as usize, graph);
         }
 
         self.yaw += (self.dest_yaw - self.yaw) * 0.2;
         self.pitch += (self.dest_pitch - self.pitch) * 0.2;
 
-        let pivot_transform = graph.get_mut(self.pivot).base_mut().get_local_transform_mut();
+        let pivot_transform = graph.get_mut(self.character.pivot).base_mut().get_local_transform_mut();
         pivot_transform.set_rotation(Quat::from_axis_angle(Vec3::UP, self.yaw.to_radians()));
 
         let camera_pivot_transform = graph.get_mut(self.camera_pivot).base_mut().get_local_transform_mut();
@@ -403,11 +386,11 @@ impl Player {
     }
 
     pub fn set_position(&mut self, physics: &mut Physics, position: Vec3) {
-        physics.borrow_body_mut(self.body).set_position(position);
+        physics.borrow_body_mut(self.character.body).set_position(position);
     }
 
     pub fn get_position(&self, physics: &Physics) -> Vec3 {
-        physics.borrow_body(self.body).get_position()
+        physics.borrow_body(self.character.body).get_position()
     }
 
     fn update_listener(&mut self, sound_context: Arc<Mutex<Context>>) {
@@ -458,9 +441,9 @@ impl Player {
             WindowEvent::MouseWheel { delta, .. } => {
                 if let MouseScrollDelta::LineDelta(_, y) = delta {
                     if *y < 0.0 {
-                        self.prev_weapon();
+                        self.character_mut().prev_weapon();
                     } else if *y > 0.0 {
-                        self.next_weapon();
+                        self.character_mut().next_weapon();
                     }
                 }
             }

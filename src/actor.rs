@@ -1,8 +1,16 @@
 use crate::{
     bot::Bot,
     player::Player,
-    GameTime,
-    projectile::ProjectileContainer,
+    character::{
+        AsCharacter,
+        Character,
+    },
+    LevelUpdateContext,
+    level::{
+        LevelEntity,
+        CleanUp,
+    },
+    HandleFromSelf,
 };
 use rg3d_core::{
     pool::{
@@ -16,19 +24,6 @@ use rg3d_core::{
         Visitor,
         VisitResult,
     },
-    math::vec3::Vec3,
-};
-use rg3d::{
-    scene::Scene,
-    engine::{
-        resource_manager::ResourceManager,
-    },
-};
-use std::sync::{Mutex, Arc};
-use rg3d_sound::context::Context;
-use rg3d_physics::{
-    Physics,
-    rigid_body::RigidBody
 };
 
 pub enum Actor {
@@ -39,39 +34,6 @@ pub enum Actor {
 impl Default for Actor {
     fn default() -> Self {
         Actor::Bot(Default::default())
-    }
-}
-
-pub trait ActorTrait {
-    fn get_body(&self) -> Handle<RigidBody>;
-
-    fn get_health(&self) -> f32;
-
-    fn set_health(&mut self, health: f32);
-
-    fn remove_self(&self, scene: &mut Scene);
-
-    fn update(&mut self,
-              sound_context: Arc<Mutex<Context>>,
-              resource_manager: &mut ResourceManager,
-              scene: &mut Scene,
-              time: &GameTime,
-              projectiles: &mut ProjectileContainer);
-
-    fn set_position(&mut self, physics: &mut Physics, position: Vec3) {
-        physics.borrow_body_mut(self.get_body()).set_position(position)
-    }
-
-    fn get_position(&self, physics: &Physics) -> Vec3 {
-        physics.borrow_body(self.get_body()).get_position()
-    }
-
-    fn damage(&mut self, amount: f32) {
-        self.set_health(self.get_health() - amount);
-    }
-
-    fn is_dead(&self) -> bool {
-        self.get_health() <= 0.0
     }
 }
 
@@ -92,7 +54,6 @@ impl Actor {
     }
 }
 
-/// Helper macros to reduce code bloat.
 macro_rules! dispatch {
     ($self:ident, $func:ident, $($args:expr),*) => {
         match $self {
@@ -102,31 +63,19 @@ macro_rules! dispatch {
     };
 }
 
-/// Dispatcher for enum variants.
-impl ActorTrait for Actor {
-    fn get_body(&self) -> Handle<RigidBody> {
-        dispatch!(self, get_body,)
+impl AsCharacter for Actor {
+    fn character(&self) -> &Character {
+        dispatch!(self, character,)
     }
 
-    fn get_health(&self) -> f32 {
-        dispatch!(self, get_health,)
+    fn character_mut(&mut self) -> &mut Character {
+        dispatch!(self, character_mut,)
     }
+}
 
-    fn set_health(&mut self, health: f32) {
-        dispatch!(self, set_health, health)
-    }
-
-    fn remove_self(&self, scene: &mut Scene) {
-        dispatch!(self, remove_self, scene)
-    }
-
-    fn update(&mut self,
-                  sound_context: Arc<Mutex<Context>>,
-                  resource_manager: &mut ResourceManager,
-                  scene: &mut Scene,
-                  time: &GameTime,
-                  projectiles: &mut ProjectileContainer) {
-        dispatch!(self, update, sound_context, resource_manager, scene, time, projectiles)
+impl LevelEntity for Actor {
+    fn update(&mut self, context: &mut LevelUpdateContext) {
+        dispatch!(self, update, context)
     }
 }
 
@@ -153,6 +102,12 @@ pub struct ActorContainer {
     pool: Pool<Actor>
 }
 
+impl HandleFromSelf<Actor> for Actor {
+    fn self_handle(&self) -> Handle<Actor> {
+        self.character().self_handle()
+    }
+}
+
 impl ActorContainer {
     pub fn new() -> Self {
         Self {
@@ -161,7 +116,9 @@ impl ActorContainer {
     }
 
     pub fn add(&mut self, actor: Actor) -> Handle<Actor> {
-        self.pool.spawn(actor)
+        let handle = self.pool.spawn(actor);
+        self.pool.borrow_mut(handle).character_mut().self_handle = handle;
+        handle
     }
 
     pub fn get(&self, actor: Handle<Actor>) -> &Actor {
@@ -172,21 +129,37 @@ impl ActorContainer {
         self.pool.borrow_mut(actor)
     }
 
-    pub fn update(&mut self,
-                  sound_context: Arc<Mutex<Context>>,
-                  resource_manager: &mut ResourceManager,
-                  scene: &mut Scene,
-                  time: &GameTime,
-                  projectiles: &mut ProjectileContainer) {
+    pub fn update(&mut self, context: &mut LevelUpdateContext) {
         for actor in self.pool.iter_mut() {
-            actor.update(sound_context.clone(), resource_manager, scene, time, projectiles);
+            actor.update(context);
 
-            if actor.is_dead() {
-                actor.remove_self(scene);
+            for jump_pad in context.jump_pads.iter() {
+                let physics = context.scene.interface_mut().physics;
+                let body = physics.borrow_body_mut(actor.character().get_body());
+                let mut push = false;
+                for contact in body.get_contacts() {
+                    if contact.static_geom == jump_pad.get_shape() {
+                        push = true;
+                        break;
+                    }
+                }
+                if push {
+                    body.set_velocity(jump_pad.get_force())
+                }
+            }
+
+            if actor.character().is_dead() {
+                // Detach weapons first so their nodes won't be removed along with pivot.
+                for weapon in actor.character().get_weapons() {
+                    let weapon = context.weapons.get(*weapon);
+                    context.scene.interface_mut().graph.unlink_nodes(weapon.get_model());
+                }
+
+                actor.character_mut().clean_up(context.scene);
             }
         }
 
-        self.pool.retain(|actor| !actor.is_dead());
+        self.pool.retain(|actor| !actor.character().is_dead());
     }
 
     pub fn iter(&self) -> PoolIterator<Actor> {

@@ -13,6 +13,10 @@ mod bot;
 mod projectile;
 mod menu;
 mod effects;
+mod character;
+mod hud;
+mod jump_pad;
+mod item;
 
 use std::{
     fs::File,
@@ -23,27 +27,7 @@ use std::{
     thread,
     time::Duration,
     collections::VecDeque,
-};
-use rg3d::{
-    engine::{
-        Engine,
-        EngineInterfaceMut,
-    },
-    gui::{
-        node::{UINode},
-        text::TextBuilder,
-        event::{UIEvent, UIEventKind},
-    },
-    scene::particle_system::CustomEmitterFactory,
-    WindowEvent,
-    ElementState,
-    VirtualKeyCode,
-    Event,
-    EventsLoop,
-};
-use crate::{
-    level::{Level, CylinderEmitter},
-    menu::Menu,
+    sync::{Arc, Mutex},
 };
 use rg3d_core::{
     pool::Handle,
@@ -52,16 +36,49 @@ use rg3d_core::{
         VisitResult,
         Visit,
     },
+    color::Color
 };
 use rg3d_sound::{
     buffer::BufferKind,
     source::{Source, SourceKind},
+    context::Context,
 };
-use rg3d::gui::widget::WidgetBuilder;
-
+use rg3d::{
+    gui::widget::WidgetBuilder,
+    gui::{
+        node::UINode,
+        text::TextBuilder,
+        event::{UIEvent, UIEventKind},
+    },
+    scene::{
+        particle_system::CustomEmitterFactory,
+        Scene
+    },
+    WindowEvent,
+    ElementState,
+    VirtualKeyCode,
+    Event,
+    EventsLoop,
+    engine::{
+        resource_manager::ResourceManager,
+        Engine,
+        EngineInterfaceMut,
+        EngineInterface
+    },
+};
+use crate::{
+    character::AsCharacter,
+    projectile::ProjectileContainer,
+    level::{Level, CylinderEmitter},
+    menu::Menu,
+    hud::Hud,
+    weapon::WeaponContainer
+};
+use crate::jump_pad::JumpPadContainer;
 
 pub struct Game {
     menu: Menu,
+    hud: Hud,
     events_loop: EventsLoop,
     engine: Engine,
     level: Option<Level>,
@@ -71,9 +88,24 @@ pub struct Game {
     last_tick_time: time::Instant,
 }
 
+pub trait HandleFromSelf<T> {
+    fn self_handle(&self) -> Handle<T>;
+}
+
+#[derive(Copy, Clone)]
 pub struct GameTime {
     elapsed: f64,
     delta: f32,
+}
+
+pub struct LevelUpdateContext<'a> {
+    time: GameTime,
+    scene: &'a mut Scene,
+    sound_context: Arc<Mutex<Context>>,
+    projectiles: &'a mut ProjectileContainer,
+    resource_manager: &'a mut ResourceManager,
+    weapons: &'a mut WeaponContainer,
+    jump_pads: &'a mut JumpPadContainer
 }
 
 pub enum CollisionGroups {
@@ -109,7 +141,8 @@ impl Game {
             }))
         }
 
-        let EngineInterfaceMut { sound_context, resource_manager, .. } = engine.interface_mut();
+        let EngineInterfaceMut { sound_context, ui, resource_manager, renderer, .. } = engine.interface_mut();
+        renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
         let buffer = resource_manager.request_sound_buffer(Path::new("data/sounds/Sonic_Mayhem_Collapse.wav"), BufferKind::Stream).unwrap();
         let mut source = Source::new(SourceKind::Flat, buffer).unwrap();
@@ -118,6 +151,7 @@ impl Game {
         sound_context.lock().unwrap().add_source(source);
 
         let mut game = Game {
+            hud: Hud::new(ui, resource_manager),
             running: true,
             events_loop,
             menu: Menu::new(&mut engine),
@@ -127,11 +161,11 @@ impl Game {
             debug_string: String::new(),
             last_tick_time: time::Instant::now(),
         };
-        game.create_ui();
+        game.create_debug_ui();
         game
     }
 
-    pub fn create_ui(&mut self) {
+    pub fn create_debug_ui(&mut self) {
         let EngineInterfaceMut { ui, .. } = self.engine.interface_mut();
 
         self.debug_text = TextBuilder::new(WidgetBuilder::new()
@@ -225,16 +259,32 @@ impl Game {
     }
 
     pub fn set_menu_visible(&mut self, visible: bool) {
-        self.menu.set_visible(&mut self.engine, visible)
+        let EngineInterfaceMut { ui, .. } = self.engine.interface_mut();
+        self.menu.set_visible(ui, visible);
+        self.hud.set_visible(ui, !visible);
     }
 
     pub fn is_menu_visible(&self) -> bool {
-        self.menu.is_visible(&self.engine)
+        let EngineInterface { ui, .. } = self.engine.interface();
+        self.menu.is_visible(ui)
     }
 
-    pub fn update(&mut self, time: &GameTime) {
+    pub fn update(&mut self, time: GameTime) {
         if let Some(ref mut level) = self.level {
             level.update(&mut self.engine, time);
+
+            let player = level.get_player();
+            if player.is_some() {
+                // Sync hud with player state.
+                let EngineInterfaceMut { ui, .. } = self.engine.interface_mut();
+                let player = level.get_actors().get(player);
+                self.hud.set_health(ui, player.character().get_health());
+                let current_weapon = player.character().get_current_weapon();
+                if current_weapon.is_some() {
+                    let current_weapon = level.get_weapons().get(current_weapon);
+                    self.hud.set_ammo(ui, current_weapon.get_ammo());
+                }
+            }
         }
         self.engine.update(time.delta);
     }
@@ -307,6 +357,7 @@ impl Game {
             }
 
             self.menu.process_input_event(&mut self.engine, &event);
+            self.hud.process_input_event(&mut self.engine, &event);
         }
     }
 
@@ -339,7 +390,7 @@ impl Game {
                     self.process_ui_event(&mut ui_event);
                 }
 
-                self.update(&game_time);
+                self.update(game_time);
             }
 
             self.update_statistics(game_time.elapsed);

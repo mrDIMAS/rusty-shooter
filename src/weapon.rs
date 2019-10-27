@@ -1,23 +1,13 @@
-use std::{
-    path::Path,
-    sync::{Mutex, Arc},
-};
+use std::path::Path;
 use crate::{
-    GameTime,
     projectile::{
         Projectile,
         ProjectileKind,
-        ProjectileContainer,
     },
-    actor::{
-        Actor,
-    },
-};
-use rg3d_core::{
-    color::Color,
-    pool::Handle,
-    visitor::{Visit, VisitResult, Visitor},
-    math::{vec3::Vec3, ray::Ray},
+    actor::Actor,
+    HandleFromSelf,
+    GameTime,
+    level::CleanUp,
 };
 use rg3d_physics::{RayCastOptions, Physics};
 use rg3d_sound::{
@@ -32,10 +22,7 @@ use rg3d::{
     },
     scene::{
         SceneInterfaceMut,
-        node::{
-
-            Node,
-        },
+        node::Node,
         Scene,
         graph::Graph,
         light::{
@@ -43,9 +30,25 @@ use rg3d::{
             LightBuilder,
             PointLight,
         },
+        base::{BaseBuilder, AsBase},
     },
 };
-use rg3d::scene::base::{BaseBuilder, AsBase};
+use rg3d_core::{
+    pool::{
+        Pool,
+        PoolIterator,
+        PoolIteratorMut,
+        Handle,
+    },
+    color::Color,
+    visitor::{
+        Visit,
+        VisitResult,
+        Visitor,
+    },
+    math::{vec3::Vec3, ray::Ray},
+};
+use std::sync::{Arc, Mutex};
 
 pub enum WeaponKind {
     M4,
@@ -73,6 +76,7 @@ impl WeaponKind {
 }
 
 pub struct Weapon {
+    self_handle: Handle<Weapon>,
     kind: WeaponKind,
     model: Handle<Node>,
     laser_dot: Handle<Node>,
@@ -82,11 +86,19 @@ pub struct Weapon {
     last_shot_time: f64,
     shot_position: Vec3,
     owner: Handle<Actor>,
+    ammo: u32,
+}
+
+impl HandleFromSelf<Weapon> for Weapon {
+    fn self_handle(&self) -> Handle<Weapon> {
+        self.self_handle
+    }
 }
 
 impl Default for Weapon {
     fn default() -> Self {
         Self {
+            self_handle: Default::default(),
             kind: WeaponKind::M4,
             laser_dot: Handle::NONE,
             model: Handle::NONE,
@@ -96,6 +108,7 @@ impl Default for Weapon {
             last_shot_time: 0.0,
             shot_position: Vec3::ZERO,
             owner: Handle::NONE,
+            ammo: 250,
         }
     }
 }
@@ -110,12 +123,14 @@ impl Visit for Weapon {
             self.kind = WeaponKind::new(kind_id)?
         }
 
+        self.self_handle.visit("SelfHandle", visitor)?;
         self.model.visit("Model", visitor)?;
         self.laser_dot.visit("LaserDot", visitor)?;
         self.offset.visit("Offset", visitor)?;
         self.dest_offset.visit("DestOffset", visitor)?;
         self.last_shot_time.visit("LastShotTime", visitor)?;
         self.owner.visit("Owner", visitor)?;
+        self.ammo.visit("Ammo", visitor)?;
 
         visitor.leave_region()
     }
@@ -129,11 +144,7 @@ impl Weapon {
             WeaponKind::PlasmaRifle => Path::new("data/models/plasma_rifle.fbx"),
         };
 
-        let mut weapon_model = Handle::NONE;
-        let model_resource_handle = resource_manager.request_model(model_path);
-        if model_resource_handle.is_some() {
-            weapon_model = Model::instantiate(model_resource_handle.unwrap(), scene).root;
-        }
+        let model = Model::instantiate(resource_manager.request_model(model_path).unwrap(), scene).root;
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
         let laser_dot = graph.add_node(Node::Light(
@@ -141,7 +152,7 @@ impl Weapon {
                 .with_color(Color::opaque(255, 0, 0))
                 .build()));
 
-        let shot_point = graph.find_by_name(weapon_model, "Weapon:ShotPoint");
+        let shot_point = graph.find_by_name(model, "Weapon:ShotPoint");
 
         if shot_point.is_none() {
             println!("Shot point not found!");
@@ -149,14 +160,10 @@ impl Weapon {
 
         Weapon {
             kind,
-            shot_position: Vec3::ZERO,
             laser_dot,
-            model: weapon_model,
-            offset: Vec3::ZERO,
-            dest_offset: Vec3::ZERO,
-            last_shot_time: 0.0,
+            model,
             shot_point,
-            owner: Handle::NONE,
+            ..Default::default()
         }
     }
 
@@ -219,13 +226,27 @@ impl Weapon {
         sound_context.add_source(shot_sound);
     }
 
-    pub fn shoot(&mut self,
-                 resource_manager: &mut ResourceManager,
-                 scene: &mut Scene,
-                 sound_context: Arc<Mutex<Context>>,
-                 time: &GameTime,
-                 projectiles: &mut ProjectileContainer) {
-        if time.elapsed - self.last_shot_time >= 0.1 {
+    pub fn get_ammo(&self) -> u32 {
+        self.ammo
+    }
+
+    pub fn get_owner(&self) -> Handle<Actor> {
+        self.owner
+    }
+
+    pub fn set_owner(&mut self, owner: Handle<Actor>) {
+        self.owner = owner;
+    }
+
+    pub fn try_shoot(&mut self,
+                     scene: &mut Scene,
+                     resource_manager: &mut ResourceManager,
+                     sound_context: Arc<Mutex<Context>>,
+                     time: GameTime,
+                     weapon_velocity: Vec3) -> Option<Projectile> {
+        if self.ammo != 0 && time.elapsed - self.last_shot_time >= 0.1 {
+            self.ammo -= 1;
+
             self.offset = Vec3::new(0.0, 0.0, -0.05);
             self.last_shot_time = time.elapsed;
 
@@ -238,14 +259,74 @@ impl Weapon {
 
             match self.kind {
                 WeaponKind::M4 | WeaponKind::Ak47 => {
-                    projectiles.add(Projectile::new(ProjectileKind::Bullet,
-                                                    resource_manager, scene, dir, pos));
+                    Some(Projectile::new(ProjectileKind::Bullet, resource_manager, scene,
+                                         dir, pos, self.self_handle, weapon_velocity))
                 }
                 WeaponKind::PlasmaRifle => {
-                    projectiles.add(Projectile::new(ProjectileKind::Plasma,
-                                                    resource_manager, scene, dir, pos));
+                    Some(Projectile::new(ProjectileKind::Plasma, resource_manager, scene,
+                                         dir, pos, self.self_handle, weapon_velocity))
                 }
             }
+        } else {
+            None
         }
+    }
+}
+
+impl CleanUp for Weapon {
+    fn clean_up(&mut self, scene: &mut Scene) {
+        let SceneInterfaceMut { graph, .. } = scene.interface_mut();
+        graph.remove_node(self.model);
+        graph.remove_node(self.laser_dot);
+    }
+}
+
+pub struct WeaponContainer {
+    pool: Pool<Weapon>
+}
+
+impl WeaponContainer {
+    pub fn new() -> Self {
+        Self {
+            pool: Pool::new()
+        }
+    }
+
+    pub fn add(&mut self, weapon: Weapon) -> Handle<Weapon> {
+        let handle = self.pool.spawn(weapon);
+        self.pool.borrow_mut(handle).self_handle = handle;
+        handle
+    }
+
+    pub fn iter(&self) -> PoolIterator<Weapon> {
+        self.pool.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> PoolIteratorMut<Weapon> {
+        self.pool.iter_mut()
+    }
+
+    pub fn get(&self, handle: Handle<Weapon>) -> &Weapon {
+        self.pool.borrow(handle)
+    }
+
+    pub fn get_mut(&mut self, handle: Handle<Weapon>) -> &mut Weapon {
+        self.pool.borrow_mut(handle)
+    }
+
+    pub fn update(&mut self, scene: &mut Scene) {
+        for weapon in self.pool.iter_mut() {
+            weapon.update(scene)
+        }
+    }
+}
+
+impl Visit for WeaponContainer {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.pool.visit("Pool", visitor)?;
+
+        visitor.leave_region()
     }
 }

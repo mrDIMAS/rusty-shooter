@@ -1,9 +1,5 @@
 use rg3d::{
-    WindowEvent,
-    MouseButton,
-    MouseScrollDelta,
-    ElementState,
-    VirtualKeyCode,
+    event::{WindowEvent, MouseButton, MouseScrollDelta, ElementState, VirtualKeyCode},
     engine::{
         resource_manager::ResourceManager
     },
@@ -38,13 +34,13 @@ use rg3d_physics::{
 use crate::{
     character::{
         AsCharacter,
-        Character
+        Character,
     },
     LevelUpdateContext,
     level::{
         LevelEntity,
-        CleanUp
-    }
+        CleanUp,
+    },
 };
 
 pub struct Controller {

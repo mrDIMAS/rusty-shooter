@@ -50,6 +50,7 @@ use rg3d_core::{
 };
 use std::sync::{Arc, Mutex};
 
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum WeaponKind {
     M4,
     Ak47,
@@ -197,6 +198,14 @@ impl Weapon {
             // Fallback
             graph.get(self.model).base().get_global_position()
         }
+    }
+
+    pub fn get_kind(&self) -> WeaponKind {
+        self.kind
+    }
+
+    pub fn add_ammo(&mut self, amount: u32) {
+        self.ammo += amount;
     }
 
     fn update_laser_sight(&self, graph: &mut Graph, physics: &Physics) {

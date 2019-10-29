@@ -12,7 +12,6 @@ use rg3d_core::{
         VisitResult
     }
 };
-use rg3d_physics::Physics;
 
 pub struct JumpPad {
     force: Vec3,

@@ -25,6 +25,10 @@ use rg3d_core::{
         VisitResult,
     },
 };
+use rg3d::scene::SceneInterfaceMut;
+use rg3d::scene::base::AsBase;
+use crate::item::ItemKind;
+use crate::weapon::WeaponKind;
 
 pub enum Actor {
     Bot(Bot),
@@ -132,6 +136,34 @@ impl ActorContainer {
     pub fn update(&mut self, context: &mut LevelUpdateContext) {
         for actor in self.pool.iter_mut() {
             actor.update(context);
+
+            for item in context.items.iter_mut() {
+                let SceneInterfaceMut { graph, physics, .. } = context.scene.interface_mut();
+                let pivot = graph.get_mut(item.get_pivot());
+                let body = physics.borrow_body(actor.character().get_body());
+                let distance = (pivot.base().get_global_position() - body.get_position()).len();
+                if distance < 1.25 && !item.is_picked_up() {
+                    match item.get_kind() {
+                        ItemKind::Medkit => actor.character_mut().heal(20.0),
+                        ItemKind::Plasma | ItemKind::Ak47Ammo762 | ItemKind::M4Ammo556 => {
+                            for weapon in actor.character().get_weapons() {
+                                let weapon = context.weapons.get_mut(*weapon);
+                                let (weapon_kind, ammo) = match item.get_kind() {
+                                    ItemKind::Medkit => continue,
+                                    ItemKind::Plasma => (WeaponKind::PlasmaRifle, 20),
+                                    ItemKind::Ak47Ammo762 => (WeaponKind::Ak47, 30),
+                                    ItemKind::M4Ammo556 => (WeaponKind::M4, 25),
+                                };
+                                if weapon.get_kind() == weapon_kind {
+                                    weapon.add_ammo(ammo);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    item.pick_up();
+                }
+            }
 
             for jump_pad in context.jump_pads.iter() {
                 let physics = context.scene.interface_mut().physics;

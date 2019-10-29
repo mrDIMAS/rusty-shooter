@@ -3,7 +3,7 @@ use rg3d::{
         model::Model,
         texture::TextureKind,
     },
-    WindowEvent,
+    event::WindowEvent,
     scene::{
         Scene,
         SceneInterfaceMut,
@@ -21,7 +21,6 @@ use rg3d::{
         Engine,
     },
     utils,
-    scene::SceneInterface,
 };
 use std::{
     path::Path
@@ -220,7 +219,7 @@ impl Level {
             actors,
             player,
             scene,
-            .. Default::default()
+            ..Default::default()
         };
         level.give_weapon(engine, m4, player);
         level.give_weapon(engine, ak47, player);
@@ -233,7 +232,7 @@ impl Level {
 
     pub fn analyze(&mut self, engine: &mut Engine) {
         let mut items = Vec::new();
-        let EngineInterfaceMut { scenes, resource_manager, ..} = engine.interface_mut();
+        let EngineInterfaceMut { scenes, resource_manager, .. } = engine.interface_mut();
         let scene = scenes.get_mut(self.scene);
         let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
         for node in graph.linear_iter() {
@@ -253,10 +252,16 @@ impl Level {
                 };
             } else if name.starts_with("Medkit") {
                 items.push((ItemKind::Medkit, position));
+            } else if name.starts_with("Ammo_Ak47") {
+                items.push((ItemKind::Ak47Ammo762, position));
+            } else if name.starts_with("Ammo_M4") {
+                items.push((ItemKind::M4Ammo556, position));
+            } else if name.starts_with("Ammo_Plasma") {
+                items.push((ItemKind::Plasma, position));
             }
         }
         for (kind, position) in items {
-            self.items.add(Item::new(ItemKind::Medkit, position, scene, resource_manager));
+            self.items.add(Item::new(kind, position, scene, resource_manager));
         }
     }
 
@@ -265,8 +270,8 @@ impl Level {
         let scene = scenes.get_mut(self.scene);
         let bot = Actor::Bot(Bot::new(BotKind::Mutant, resource_manager, scene, position).unwrap());
         let bot = self.actors.add(bot);
-        let weapon = self.weapons.add(Weapon::new(WeaponKind::Ak47, resource_manager, scene));
-        self.give_weapon(engine, weapon, bot);
+        // let weapon = self.weapons.add(Weapon::new(WeaponKind::Ak47, resource_manager, scene));
+        // self.give_weapon(engine, weapon, bot);
     }
 
     pub fn destroy(&mut self, engine: &mut Engine) {
@@ -312,13 +317,14 @@ impl Level {
 
         self.weapons.update(scene);
         self.projectiles.update(scene, resource_manager, &mut self.actors, &self.weapons, time);
-        self.items.update(scene, time);
+        self.items.update(scene,  resource_manager, time);
 
         let mut context = LevelUpdateContext {
             time,
             scene,
             sound_context,
             resource_manager,
+            items: &mut self.items,
             weapons: &mut self.weapons,
             jump_pads: &mut self.jump_pads,
             projectiles: &mut self.projectiles,

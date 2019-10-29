@@ -111,7 +111,15 @@ impl Character {
     }
 
     pub fn damage(&mut self, amount: f32) {
-        self.health -= amount;
+        self.health -= amount.abs();
+    }
+
+    pub fn heal(&mut self, amount: f32) {
+        self.health += amount.abs();
+
+        if self.health > 150.0 {
+            self.health = 150.0;
+        }
     }
 
     pub fn is_dead(&self) -> bool {

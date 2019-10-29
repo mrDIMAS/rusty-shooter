@@ -26,7 +26,6 @@ use std::{
     time,
     thread,
     time::Duration,
-    collections::VecDeque,
     sync::{Arc, Mutex},
 };
 use rg3d_core::{
@@ -36,7 +35,7 @@ use rg3d_core::{
         VisitResult,
         Visit,
     },
-    color::Color
+    color::Color,
 };
 use rg3d_sound::{
     buffer::BufferKind,
@@ -52,34 +51,32 @@ use rg3d::{
     },
     scene::{
         particle_system::CustomEmitterFactory,
-        Scene
+        Scene,
     },
-    WindowEvent,
-    ElementState,
-    VirtualKeyCode,
-    Event,
-    EventsLoop,
+    event::{WindowEvent, ElementState, VirtualKeyCode, Event},
+    event_loop::{EventLoop, ControlFlow},
     engine::{
         resource_manager::ResourceManager,
         Engine,
         EngineInterfaceMut,
-        EngineInterface
+        EngineInterface,
     },
+
 };
 use crate::{
+    jump_pad::JumpPadContainer,
     character::AsCharacter,
     projectile::ProjectileContainer,
     level::{Level, CylinderEmitter},
     menu::Menu,
     hud::Hud,
-    weapon::WeaponContainer
+    weapon::WeaponContainer,
+    item::ItemContainer
 };
-use crate::jump_pad::JumpPadContainer;
 
 pub struct Game {
     menu: Menu,
     hud: Hud,
-    events_loop: EventsLoop,
     engine: Engine,
     level: Option<Level>,
     debug_text: Handle<UINode>,
@@ -104,8 +101,9 @@ pub struct LevelUpdateContext<'a> {
     sound_context: Arc<Mutex<Context>>,
     projectiles: &'a mut ProjectileContainer,
     resource_manager: &'a mut ResourceManager,
+    items: &'a mut ItemContainer,
     weapons: &'a mut WeaponContainer,
-    jump_pads: &'a mut JumpPadContainer
+    jump_pads: &'a mut JumpPadContainer,
 }
 
 pub enum CollisionGroups {
@@ -116,21 +114,22 @@ pub enum CollisionGroups {
 }
 
 impl Game {
-    pub fn new() -> Game {
-        let events_loop = EventsLoop::new();
+    pub fn run() {
+        let events_loop = EventLoop::<()>::new();
 
-        let primary_monitor = events_loop.get_primary_monitor();
-        let mut monitor_dimensions = primary_monitor.get_dimensions();
+        let primary_monitor = events_loop.primary_monitor();
+        let mut monitor_dimensions = primary_monitor.size();
         monitor_dimensions.height *= 0.7;
         monitor_dimensions.width *= 0.7;
-        let window_size = monitor_dimensions.to_logical(primary_monitor.get_hidpi_factor());
+        let client_size = monitor_dimensions.to_logical(primary_monitor.hidpi_factor());
 
-        let window_builder = rg3d::WindowBuilder::new()
+        let window_builder = rg3d::window::WindowBuilder::new()
             .with_title("Rusty Shooter")
-            .with_dimensions(window_size)
+            .with_inner_size(client_size)
             .with_resizable(true);
 
         let mut engine = Engine::new(window_builder, &events_loop).unwrap();
+        let frame_size = engine.interface().renderer.get_frame_size();
 
         if let Ok(mut factory) = CustomEmitterFactory::get() {
             factory.set_callback(Box::new(|kind| {
@@ -151,9 +150,8 @@ impl Game {
         sound_context.lock().unwrap().add_source(source);
 
         let mut game = Game {
-            hud: Hud::new(ui, resource_manager),
+            hud: Hud::new(ui, resource_manager, frame_size),
             running: true,
-            events_loop,
             menu: Menu::new(&mut engine),
             debug_text: Handle::NONE,
             engine,
@@ -161,8 +159,58 @@ impl Game {
             debug_string: String::new(),
             last_tick_time: time::Instant::now(),
         };
+
         game.create_debug_ui();
-        game
+
+        let fixed_fps = 60.0;
+        let fixed_timestep = 1.0 / fixed_fps;
+        let clock = Instant::now();
+        let mut game_time = GameTime {
+            elapsed: 0.0,
+            delta: fixed_timestep,
+        };
+
+        events_loop.run(move |event, _, control_flow| {
+            match event {
+                Event::EventsCleared => {
+                    let mut dt = clock.elapsed().as_secs_f64() - game_time.elapsed;
+                    while dt >= fixed_timestep as f64 {
+                        dt -= fixed_timestep as f64;
+                        game_time.elapsed += fixed_timestep as f64;
+
+                        while let Some(mut ui_event) = game.engine.get_ui_mut().poll_ui_event() {
+                            game.menu.process_ui_event(&mut game.engine, &mut ui_event);
+                            game.process_ui_event(&mut ui_event);
+                        }
+
+                        game.update(game_time);
+                    }
+                    if !game.running {
+                        *control_flow = ControlFlow::Exit;
+                    }
+                    game.engine.get_window().request_redraw();
+                }
+                Event::WindowEvent { event, .. } => {
+                    match event {
+                        WindowEvent::RedrawRequested => {
+                            game.update_statistics(game_time.elapsed);
+                            // Render at max speed
+                            game.engine.render().unwrap();
+                            // Make sure to cap update rate to 60 FPS.
+                            game.limit_fps(fixed_fps as f64);
+                        }
+                        WindowEvent::CloseRequested => {
+                            game.destroy_level();
+                            *control_flow = ControlFlow::Exit
+                        }
+                        _ => {
+                            game.process_input_event(event);
+                        }
+                    }
+                }
+                _ => *control_flow = ControlFlow::Poll,
+            }
+        });
     }
 
     pub fn create_debug_ui(&mut self) {
@@ -270,6 +318,8 @@ impl Game {
     }
 
     pub fn update(&mut self, time: GameTime) {
+        self.engine.update(time.delta);
+
         if let Some(ref mut level) = self.level {
             level.update(&mut self.engine, time);
 
@@ -286,7 +336,6 @@ impl Game {
                 }
             }
         }
-        self.engine.update(time.delta);
     }
 
     pub fn update_statistics(&mut self, elapsed: f64) {
@@ -299,12 +348,10 @@ impl Game {
                "Pure frame time: {:.2} ms\n\
                Capped frame time: {:.2} ms\n\
                FPS: {}\n\
-               Potential FPS: {}\n\
                Up time: {:.2} s",
                statistics.pure_frame_time * 1000.0,
                statistics.capped_frame_time * 1000.0,
                statistics.frames_per_second,
-               statistics.potential_frame_per_second,
                elapsed
         ).unwrap();
 
@@ -337,74 +384,30 @@ impl Game {
         }
     }
 
-    pub fn process_input_event(&mut self, event: Event) {
-        if let Event::WindowEvent { event, .. } = event {
-            self.process_dispatched_event(&event);
+    pub fn process_input_event(&mut self, event: WindowEvent) {
+        self.process_dispatched_event(&event);
 
-            // Some events processed in any case.
-            match event {
-                WindowEvent::CloseRequested => self.running = false,
-                WindowEvent::KeyboardInput { input, .. } => {
-                    if let ElementState::Pressed = input.state {
-                        if let Some(key) = input.virtual_keycode {
-                            if key == VirtualKeyCode::Escape {
-                                self.set_menu_visible(!self.is_menu_visible());
-                            }
+        // Some events processed in any case.
+        match event {
+            WindowEvent::CloseRequested => self.running = false,
+            WindowEvent::KeyboardInput { input, .. } => {
+                if let ElementState::Pressed = input.state {
+                    if let Some(key) = input.virtual_keycode {
+                        if key == VirtualKeyCode::Escape {
+                            self.set_menu_visible(!self.is_menu_visible());
                         }
                     }
                 }
-                _ => ()
             }
-
-            self.menu.process_input_event(&mut self.engine, &event);
-            self.hud.process_input_event(&mut self.engine, &event);
+            _ => ()
         }
+
+        self.menu.process_input_event(&mut self.engine, &event);
+        self.hud.process_input_event(&mut self.engine, &event);
     }
-
-    pub fn run(&mut self) {
-        let fixed_fps = 60.0;
-        let fixed_timestep = 1.0 / fixed_fps;
-        let clock = Instant::now();
-        let mut game_time = GameTime {
-            elapsed: 0.0,
-            delta: fixed_timestep,
-        };
-
-        let mut events = VecDeque::new();
-        while self.running {
-            let mut dt = clock.elapsed().as_secs_f64() - game_time.elapsed;
-            while dt >= fixed_timestep as f64 {
-                dt -= fixed_timestep as f64;
-                game_time.elapsed += fixed_timestep as f64;
-
-                self.events_loop.poll_events(|event| {
-                    events.push_back(event);
-                });
-
-                while let Some(event) = events.pop_front() {
-                    self.process_input_event(event);
-                }
-
-                while let Some(mut ui_event) = self.engine.get_ui_mut().poll_ui_event() {
-                    self.menu.process_ui_event(&mut self.engine, &mut ui_event);
-                    self.process_ui_event(&mut ui_event);
-                }
-
-                self.update(game_time);
-            }
-
-            self.update_statistics(game_time.elapsed);
-
-            // Render at max speed
-            self.engine.render().unwrap();
-
-            // Make sure to cap update rate to 60 FPS.
-            self.limit_fps(fixed_fps as f64);
-        }
-        self.destroy_level();
-    }
+    
 }
 
 fn main() {
-    Game::new().run();
+    Game::run();
 }

@@ -14,7 +14,7 @@ use rg3d::{
         texture::TextureKind,
         ttf::Font
     },
-    WindowEvent,
+    event::WindowEvent,
     gui::{
         HorizontalAlignment,
         node::UINode,
@@ -42,7 +42,7 @@ pub struct Hud {
 }
 
 impl Hud {
-    pub fn new(ui: &mut UserInterface, resource_manager: &mut ResourceManager) -> Self {
+    pub fn new(ui: &mut UserInterface, resource_manager: &mut ResourceManager, frame_size: (u32, u32)) -> Self {
         let font = Font::from_file(
             Path::new("data/ui/SquaresBold.ttf"),
             35.0,
@@ -54,6 +54,8 @@ impl Hud {
         let ammo;
 
         let root = GridBuilder::new(WidgetBuilder::new()
+            .with_width(frame_size.0 as f32)
+            .with_height(frame_size.1 as f32)
             .with_visibility(Visibility::Collapsed)
             .with_child(StackPanelBuilder::new(WidgetBuilder::new()
                 .with_margin(Thickness::bottom(10.0))

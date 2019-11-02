@@ -143,7 +143,7 @@ impl Game {
         let EngineInterfaceMut { sound_context, ui, resource_manager, renderer, .. } = engine.interface_mut();
         renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
-        let buffer = resource_manager.request_sound_buffer(Path::new("data/sounds/Sonic_Mayhem_Collapse.wav"), BufferKind::Stream).unwrap();
+        let buffer = resource_manager.request_sound_buffer(Path::new("data/sounds/Antonio_Bizarro_Berzerker.wav"), BufferKind::Stream).unwrap();
         let mut source = Source::new(SourceKind::Flat, buffer).unwrap();
         source.play();
         source.set_gain(0.25);

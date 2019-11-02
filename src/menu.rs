@@ -21,12 +21,14 @@ use rg3d::{
     event::WindowEvent,
     resource::ttf::Font,
     monitor::VideoMode,
+    window::Fullscreen,
 };
 use std::{
     path::Path,
     rc::Rc,
     cell::RefCell,
 };
+use rg3d::gui::check_box::CheckBoxBuilder;
 
 pub struct Menu {
     root: Handle<UINode>,
@@ -37,11 +39,19 @@ pub struct Menu {
     pub btn_quit_game: Handle<UINode>,
     pub sb_sound_volume: Handle<UINode>,
     pub sb_music_volume: Handle<UINode>,
+    pub lb_video_modes: Handle<UINode>,
+    cb_fullscreen: Handle<UINode>,
+    video_modes: Vec<VideoMode>,
 }
 
 impl Menu {
     pub fn new(engine: &mut Engine) -> Self {
-        let video_modes: Vec<VideoMode> = engine.get_window().primary_monitor().video_modes().collect();
+        let video_modes: Vec<VideoMode> = engine.get_window()
+            .primary_monitor()
+            .video_modes()
+            .filter(|vm| vm.size().width > 800.0 &&
+                vm.size().height > 600.0 && vm.bit_depth() == 32)
+            .collect();
 
         let EngineInterfaceMut { ui, renderer, .. } = engine.interface_mut();
 
@@ -57,6 +67,8 @@ impl Menu {
 
         let sb_sound_volume;
         let sb_music_volume;
+        let lb_video_modes;
+        let cb_fullscreen;
         let options_window: Handle<UINode> = WindowBuilder::new(WidgetBuilder::new()
             .with_width(400.0))
             .with_title(WindowTitle::Text("Options"))
@@ -108,27 +120,30 @@ impl Menu {
                     .with_text("Resolution")
                     .with_vertical_text_alignment(VerticalAlignment::Center)
                     .build(ui))
-                .with_child(ListBoxBuilder::new(WidgetBuilder::new()
-                    .on_column(1)
-                    .on_row(2))
-                    .with_items({
-                        let mut items = Vec::new();
-                        for video_mode in video_modes {
-                            let size = video_mode.size();
-                            let rate = video_mode.refresh_rate();
-                            let item = TextBuilder::new(WidgetBuilder::new()
-                                .on_column(0)
-                                .with_height(25.0)
-                                .with_width(200.0))
-                                .with_text(format!("{}x{}@{}Hz", size.width, size.height, rate).as_str())
-                                .with_vertical_text_alignment(VerticalAlignment::Center)
-                                .with_horizontal_text_alignment(HorizontalAlignment::Center)
-                                .build(ui);
-                            items.push(item)
-                        }
-                        items
-                    })
-                    .build(ui))
+                .with_child({
+                    lb_video_modes = ListBoxBuilder::new(WidgetBuilder::new()
+                        .on_column(1)
+                        .on_row(2))
+                        .with_items({
+                            let mut items = Vec::new();
+                            for video_mode in video_modes.iter() {
+                                let size = video_mode.size();
+                                let rate = video_mode.refresh_rate();
+                                let item = TextBuilder::new(WidgetBuilder::new()
+                                    .on_column(0)
+                                    .with_height(25.0)
+                                    .with_width(200.0))
+                                    .with_text(format!("{}x{}@{}Hz", size.width, size.height, rate).as_str())
+                                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                                    .with_horizontal_text_alignment(HorizontalAlignment::Center)
+                                    .build(ui);
+                                items.push(item)
+                            }
+                            items
+                        })
+                        .build(ui);
+                    lb_video_modes
+                })
                 .with_child(TextBuilder::new(WidgetBuilder::new()
                     .on_row(3)
                     .on_column(0)
@@ -140,11 +155,44 @@ impl Menu {
                     .on_row(3)
                     .on_column(1))
                     .with_text("Unnamed Player".to_owned())
+                    .build(ui))
+                .with_child(TextBuilder::new(WidgetBuilder::new()
+                    .on_row(4)
+                    .on_column(0)
+                    .with_margin(margin))
+                    .with_text("Fullscreen")
+                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                    .build(ui))
+                .with_child({
+                    cb_fullscreen = CheckBoxBuilder::new(WidgetBuilder::new()
+                        .with_width(24.0)
+                        .with_height(24.0)
+                        .on_row(4)
+                        .on_column(1)
+                        .with_horizontal_alignment(HorizontalAlignment::Left))
+                        .build(ui);
+                    cb_fullscreen
+                })
+                .with_child(ButtonBuilder::new(WidgetBuilder::new()
+                    .with_event_handler(Box::new(|ui, handle, evt| {
+                        if evt.source() == handle {
+                            match evt.kind {
+                                UIEventKind::Click => {}
+                                _ => ()
+                            }
+                        }
+                    }))
+                    .with_margin(Thickness::top(4.0))
+                    .on_column(1)
+                    .on_row(5))
+                    .with_text("Apply")
                     .build(ui)))
                 .add_row(Row::strict(34.0))
                 .add_row(Row::strict(34.0))
                 .add_row(Row::strict(200.0))
-                .add_row(Row::strict(40.0))
+                .add_row(Row::strict(34.0))
+                .add_row(Row::strict(34.0))
+                .add_row(Row::strict(34.0))
                 .add_column(Column::strict(150.0))
                 .add_column(Column::stretch())
                 .build(ui))
@@ -244,6 +292,9 @@ impl Menu {
             btn_quit_game,
             sb_sound_volume,
             sb_music_volume,
+            lb_video_modes,
+            cb_fullscreen,
+            video_modes
         }
     }
 
@@ -277,6 +328,14 @@ impl Menu {
             UIEventKind::NumericValueChanged { new_value, .. } => {
                 if event.source() == self.sb_sound_volume {
                     sound_context.lock().unwrap().set_master_gain(new_value)
+                }
+            }
+            UIEventKind::SelectionChanged(new_value) => {
+                if event.source() == self.lb_video_modes {
+                    if let Some(index) = new_value {
+                        let video_mode = self.video_modes[index].clone();
+                        engine.get_window().set_fullscreen(Some(Fullscreen::Exclusive(video_mode)))
+                    }
                 }
             }
             _ => ()

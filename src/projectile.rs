@@ -8,7 +8,8 @@ use rg3d::{
         node::Node,
         graph::Graph,
         base::{BaseBuilder, AsBase},
-    },
+        light::{LightBuilder, LightKind, PointLight}
+    }
 };
 use crate::{
     GameTime,
@@ -16,7 +17,10 @@ use crate::{
     actor::ActorContainer,
     CollisionGroups,
     character::AsCharacter,
-    weapon::Weapon,
+    weapon::{
+        Weapon,
+        WeaponContainer
+    },
     level::CleanUp,
     HandleFromSelf,
 };
@@ -33,8 +37,6 @@ use rg3d_core::{
     color::Color,
     math::{vec3::Vec3, ray::Ray},
 };
-use crate::weapon::WeaponContainer;
-use rg3d::scene::light::{LightBuilder, LightKind, PointLight};
 
 pub enum ProjectileKind {
     Plasma,
@@ -240,7 +242,7 @@ impl Projectile {
             let total_velocity = self.initial_velocity + self.dir.scale(self.speed);
             physics.borrow_body_mut(self.body).offset_by(total_velocity);
 
-            self.rotation_angle += 1.5;
+            self.rotation_angle += 1.5; 
         }
     }
 

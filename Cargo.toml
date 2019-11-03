@@ -9,8 +9,8 @@ license = "MIT"
 lto = false
 
 [dependencies]
-rg3d-core = { path = "../rg3d-core" }
-rg3d-sound = { path = "../rg3d-sound" }
-rg3d-physics = { path = "../rg3d-physics" }
-rg3d = { path = "../rg3d" }
+rg3d-core = { path = "../rg3d-core", version = "0.1.9" }
+rg3d-sound = { path = "../rg3d-sound", version = "0.2.0" }
+rg3d-physics = { path = "../rg3d-physics", version = "0.1.7" }
+rg3d = { path = "../rg3d", version = "0.3.1" }
 rand = "0.7.0"

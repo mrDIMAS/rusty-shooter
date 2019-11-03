@@ -133,7 +133,7 @@ impl LevelEntity for Bot {
 impl Bot {
     pub fn new(kind: BotKind, resource_manager: &mut ResourceManager, scene: &mut Scene, position: Vec3) -> Result<Self, ()> {
         let path = match kind {
-            BotKind::Mutant => Path::new("data/models/mutant.fbx"),
+            BotKind::Mutant => Path::new("data/models/mutant.FBX"),
             BotKind::Ripper => Path::new("data/models/ripper.fbx"),
         };
 

@@ -140,9 +140,9 @@ impl Visit for Weapon {
 impl Weapon {
     pub fn new(kind: WeaponKind, resource_manager: &mut ResourceManager, scene: &mut Scene) -> Weapon {
         let model_path = match kind {
-            WeaponKind::Ak47 => Path::new("data/models/ak47.fbx"),
-            WeaponKind::M4 => Path::new("data/models/m4.fbx"),
-            WeaponKind::PlasmaRifle => Path::new("data/models/plasma_rifle.fbx"),
+            WeaponKind::Ak47 => Path::new("data/models/ak47.FBX"),
+            WeaponKind::M4 => Path::new("data/models/m4.FBX"),
+            WeaponKind::PlasmaRifle => Path::new("data/models/plasma_rifle.FBX"),
         };
 
         let model = Model::instantiate(resource_manager.request_model(model_path).unwrap(), scene).root;

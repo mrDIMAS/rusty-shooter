@@ -92,9 +92,9 @@ impl Item {
     ) -> Self {
         let (path, scale) = match kind {
             ItemKind::Medkit => (Path::new("data/models/medkit.fbx"), 1.0),
-            ItemKind::Plasma => (Path::new("data/models/yellow_box.fbx"), 0.25),
-            ItemKind::M4Ammo556 => (Path::new("data/models/box_small.fbx"), 0.30),
-            ItemKind::Ak47Ammo762 => (Path::new("data/models/box_medium.fbx"), 0.30),
+            ItemKind::Plasma => (Path::new("data/models/yellow_box.FBX"), 0.25),
+            ItemKind::M4Ammo556 => (Path::new("data/models/box_small.FBX"), 0.30),
+            ItemKind::Ak47Ammo762 => (Path::new("data/models/box_medium.FBX"), 0.30),
         };
 
         let model = Model::instantiate_geometry(resource_manager.request_model(path).unwrap(), scene) ;

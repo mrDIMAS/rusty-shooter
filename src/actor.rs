@@ -11,6 +11,8 @@ use crate::{
         CleanUp,
     },
     HandleFromSelf,
+    item::ItemKind,
+    weapon::WeaponKind,
 };
 use rg3d_core::{
     pool::{
@@ -25,10 +27,10 @@ use rg3d_core::{
         VisitResult,
     },
 };
-use rg3d::scene::SceneInterfaceMut;
-use rg3d::scene::base::AsBase;
-use crate::item::ItemKind;
-use crate::weapon::WeaponKind;
+use rg3d::scene::{
+    SceneInterfaceMut,
+    base::AsBase,
+};
 
 pub enum Actor {
     Bot(Bot),

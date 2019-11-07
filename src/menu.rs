@@ -22,13 +22,13 @@ use rg3d::{
     resource::ttf::Font,
     monitor::VideoMode,
     window::Fullscreen,
+    gui::check_box::CheckBoxBuilder,
 };
 use std::{
     path::Path,
     rc::Rc,
     cell::RefCell,
 };
-use rg3d::gui::check_box::CheckBoxBuilder;
 
 pub struct Menu {
     root: Handle<UINode>,
@@ -41,6 +41,12 @@ pub struct Menu {
     pub sb_music_volume: Handle<UINode>,
     pub lb_video_modes: Handle<UINode>,
     cb_fullscreen: Handle<UINode>,
+    cb_spot_shadows: Handle<UINode>,
+    cb_soft_spot_shadows: Handle<UINode>,
+    cb_point_shadows: Handle<UINode>,
+    cb_soft_point_shadows: Handle<UINode>,
+    sb_point_shadow_distance: Handle<UINode>,
+    sb_spot_shadow_distance: Handle<UINode>,
     video_modes: Vec<VideoMode>,
 }
 
@@ -65,12 +71,21 @@ impl Menu {
             Font::default_char_set()).unwrap();
         let font = Rc::new(RefCell::new(font));
 
+        let settings = renderer.get_quality_settings();
+
         let sb_sound_volume;
         let sb_music_volume;
         let lb_video_modes;
         let cb_fullscreen;
+        let cb_spot_shadows;
+        let cb_soft_spot_shadows;
+        let cb_point_shadows;
+        let cb_soft_point_shadows;
+        let sb_point_shadow_distance;
+        let sb_spot_shadow_distance;
         let options_window: Handle<UINode> = WindowBuilder::new(WidgetBuilder::new()
-            .with_width(400.0))
+            .with_width(500.0)
+            .with_height(600.0))
             .with_title(WindowTitle::Text("Options"))
             .open(false)
             .with_content(GridBuilder::new(WidgetBuilder::new()
@@ -173,27 +188,146 @@ impl Menu {
                         .build(ui);
                     cb_fullscreen
                 })
-                .with_child(ButtonBuilder::new(WidgetBuilder::new()
-                    .with_event_handler(Box::new(|ui, handle, evt| {
-                        if evt.source() == handle {
-                            match evt.kind {
-                                UIEventKind::Click => {}
-                                _ => ()
-                            }
-                        }
-                    }))
-                    .with_margin(Thickness::top(4.0))
-                    .on_column(1)
-                    .on_row(5))
-                    .with_text("Apply")
-                    .build(ui)))
+
+                // Spot Shadows Enabled
+
+                .with_child(TextBuilder::new(WidgetBuilder::new()
+                    .on_row(5)
+                    .on_column(0)
+                    .with_margin(margin))
+                    .with_text("Spot Shadows")
+                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                    .build(ui))
+                .with_child({
+                    cb_spot_shadows = CheckBoxBuilder::new(WidgetBuilder::new()
+                        .with_width(24.0)
+                        .with_height(24.0)
+                        .on_row(5)
+                        .on_column(1)
+                        .with_horizontal_alignment(HorizontalAlignment::Left))
+                        .checked(Some(settings.spot_shadows_enabled))
+                        .build(ui);
+                    cb_spot_shadows
+                })
+
+                // Soft Spot Shadows
+
+                .with_child(TextBuilder::new(WidgetBuilder::new()
+                    .on_row(6)
+                    .on_column(0)
+                    .with_margin(margin))
+                    .with_text("Soft Spot Shadows")
+                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                    .build(ui))
+                .with_child({
+                    cb_soft_spot_shadows = CheckBoxBuilder::new(WidgetBuilder::new()
+                        .with_width(24.0)
+                        .with_height(24.0)
+                        .on_row(6)
+                        .on_column(1)
+                        .with_horizontal_alignment(HorizontalAlignment::Left))
+                        .checked(Some(settings.spot_soft_shadows))
+                        .build(ui);
+                    cb_soft_spot_shadows
+                })
+
+                // Spot Shadows Distance
+
+                .with_child(TextBuilder::new(WidgetBuilder::new()
+                    .on_row(7)
+                    .on_column(0)
+                    .with_margin(margin))
+                    .with_text("Spot Shadows Distance")
+                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                    .build(ui))
+                .with_child({
+                    sb_spot_shadow_distance = ScrollBarBuilder::new(WidgetBuilder::new()
+                        .on_row(7)
+                        .on_column(1)
+                        .with_margin(margin))
+                        .with_min(1.0)
+                        .with_max(15.0)
+                        .with_value(settings.spot_shadows_distance)
+                        .with_step(0.25)
+                        .build(ui);
+                    sb_spot_shadow_distance
+                })
+
+                // Point Shadows Enabled
+
+                .with_child(TextBuilder::new(WidgetBuilder::new()
+                    .on_row(8)
+                    .on_column(0)
+                    .with_margin(margin))
+                    .with_text("Point Shadows")
+                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                    .build(ui))
+                .with_child({
+                    cb_point_shadows = CheckBoxBuilder::new(WidgetBuilder::new()
+                        .with_width(24.0)
+                        .with_height(24.0)
+                        .on_row(8)
+                        .on_column(1)
+                        .with_horizontal_alignment(HorizontalAlignment::Left))
+                        .checked(Some(settings.point_shadows_enabled))
+                        .build(ui);
+                    cb_point_shadows
+                })
+
+                // Soft Point Shadows
+
+                .with_child(TextBuilder::new(WidgetBuilder::new()
+                    .on_row(9)
+                    .on_column(0)
+                    .with_margin(margin))
+                    .with_text("Soft Point Shadows")
+                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                    .build(ui))
+                .with_child({
+                    cb_soft_point_shadows = CheckBoxBuilder::new(WidgetBuilder::new()
+                        .with_width(24.0)
+                        .with_height(24.0)
+                        .on_row(9)
+                        .on_column(1)
+                        .with_horizontal_alignment(HorizontalAlignment::Left))
+                        .checked(Some(settings.point_soft_shadows))
+                        .build(ui);
+                    cb_soft_point_shadows
+                })
+
+                // Point Shadows Distance
+
+                .with_child(TextBuilder::new(WidgetBuilder::new()
+                    .on_row(10)
+                    .on_column(0)
+                    .with_margin(margin))
+                    .with_text("Point Shadows Distance")
+                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                    .build(ui))
+                .with_child({
+                    sb_point_shadow_distance = ScrollBarBuilder::new(WidgetBuilder::new()
+                        .on_row(10)
+                        .on_column(1)
+                        .with_margin(margin))
+                        .with_min(1.0)
+                        .with_max(15.0)
+                        .with_value(settings.point_shadows_distance)
+                        .with_step(0.25)
+                        .build(ui);
+                    sb_point_shadow_distance
+                }))
                 .add_row(Row::strict(34.0))
                 .add_row(Row::strict(34.0))
                 .add_row(Row::strict(200.0))
                 .add_row(Row::strict(34.0))
                 .add_row(Row::strict(34.0))
                 .add_row(Row::strict(34.0))
-                .add_column(Column::strict(150.0))
+                .add_row(Row::strict(34.0))
+                .add_row(Row::strict(34.0))
+                .add_row(Row::strict(34.0))
+                .add_row(Row::strict(34.0))
+                .add_row(Row::strict(34.0))
+                .add_column(Column::strict(250.0))
                 .add_column(Column::stretch())
                 .build(ui))
             .build(ui);
@@ -294,7 +428,13 @@ impl Menu {
             sb_music_volume,
             lb_video_modes,
             cb_fullscreen,
-            video_modes
+            cb_spot_shadows,
+            cb_soft_spot_shadows,
+            cb_point_shadows,
+            cb_soft_point_shadows,
+            sb_point_shadow_distance,
+            sb_spot_shadow_distance,
+            video_modes,
         }
     }
 
@@ -322,12 +462,19 @@ impl Menu {
     }
 
     pub fn process_ui_event(&mut self, engine: &mut Engine, event: &UIEvent) {
-        let EngineInterfaceMut { sound_context, .. } = engine.interface_mut();
+        let EngineInterfaceMut { sound_context, renderer, .. } = engine.interface_mut();
+
+        let old_settings = renderer.get_quality_settings();
+        let mut settings = old_settings;
 
         match event.kind {
             UIEventKind::NumericValueChanged { new_value, .. } => {
                 if event.source() == self.sb_sound_volume {
                     sound_context.lock().unwrap().set_master_gain(new_value)
+                } else if event.source() == self.sb_point_shadow_distance {
+                    settings.point_shadows_distance = new_value;
+                } else if event.source() == self.sb_spot_shadow_distance {
+                    settings.spot_shadows_distance = new_value;
                 }
             }
             UIEventKind::SelectionChanged(new_value) => {
@@ -338,7 +485,24 @@ impl Menu {
                     }
                 }
             }
+            UIEventKind::Checked(value) => {
+                if event.source() == self.cb_point_shadows {
+                    settings.point_shadows_enabled = value.unwrap_or(false);
+                } else if event.source() == self.cb_spot_shadows {
+                    settings.spot_shadows_enabled = value.unwrap_or(false);
+                } else if event.source() == self.cb_soft_spot_shadows {
+                    settings.spot_soft_shadows = value.unwrap_or(false);
+                } else if event.source() == self.cb_soft_spot_shadows {
+                    settings.point_soft_shadows = value.unwrap_or(false);
+                }
+            }
             _ => ()
+        }
+
+        if settings != old_settings {
+            if let Err(err) = engine.interface_mut().renderer.set_quality_settings(&settings) {
+                println!("Failed to set quality settings! Reason: {:?}", err);
+            }
         }
     }
 }

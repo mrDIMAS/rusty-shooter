@@ -242,7 +242,7 @@ impl Projectile {
             let total_velocity = self.initial_velocity + self.dir.scale(self.speed);
             physics.borrow_body_mut(self.body).offset_by(total_velocity);
 
-            self.rotation_angle += 1.5; 
+            self.rotation_angle += 1.5;
         }
     }
 

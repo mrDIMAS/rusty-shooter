@@ -151,6 +151,7 @@ impl Weapon {
         let laser_dot = graph.add_node(Node::Light(
             LightBuilder::new(LightKind::Point(PointLight::new(0.5)), BaseBuilder::new())
                 .with_color(Color::opaque(255, 0, 0))
+                .cast_shadows(false)
                 .build()));
 
         let shot_point = graph.find_by_name(model, "Weapon:ShotPoint");
@@ -216,7 +217,7 @@ impl Weapon {
         if let Some(ray) = Ray::from_two_points(&begin, &end) {
             let mut result = Vec::new();
             if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
-                let offset = result[0].normal.normalized().unwrap().scale(0.2);
+                let offset = result[0].normal.normalized().unwrap_or_default().scale(0.2);
                 laser_dot_position = result[0].position + offset;
             }
         }

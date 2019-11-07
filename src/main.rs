@@ -61,7 +61,6 @@ use rg3d::{
         EngineInterfaceMut,
         EngineInterface,
     },
-
 };
 use crate::{
     jump_pad::JumpPadContainer,
@@ -71,7 +70,7 @@ use crate::{
     menu::Menu,
     hud::Hud,
     weapon::WeaponContainer,
-    item::ItemContainer
+    item::ItemContainer,
 };
 
 pub struct Game {
@@ -348,10 +347,14 @@ impl Game {
                "Pure frame time: {:.2} ms\n\
                Capped frame time: {:.2} ms\n\
                FPS: {}\n\
+               Triangles: {}\n\
+               Draw calls: {}\n\
                Up time: {:.2} s",
                statistics.pure_frame_time * 1000.0,
                statistics.capped_frame_time * 1000.0,
                statistics.frames_per_second,
+               statistics.geometry.triangles_rendered,
+               statistics.geometry.draw_calls,
                elapsed
         ).unwrap();
 
@@ -405,7 +408,6 @@ impl Game {
         self.menu.process_input_event(&mut self.engine, &event);
         self.hud.process_input_event(&mut self.engine, &event);
     }
-    
 }
 
 fn main() {

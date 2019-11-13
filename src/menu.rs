@@ -29,6 +29,9 @@ use std::{
     rc::Rc,
     cell::RefCell,
 };
+use rg3d::gui::{Styleable};
+use rg3d::gui::style::{Style, StyleBuilder};
+use rg3d::gui::widget::Widget;
 
 pub struct Menu {
     root: Handle<UINode>,
@@ -72,6 +75,13 @@ impl Menu {
         let font = Rc::new(RefCell::new(font));
 
         let settings = renderer.get_quality_settings();
+
+        let cb_style = Rc::new(StyleBuilder::new()
+            .with_setter(Widget::WIDTH, Box::new(24.0))
+            .with_setter(Widget::HEIGHT, Box::new(24.0))
+            .with_setter(Widget::VERTICAL_ALIGNMENT, Box::new(VerticalAlignment::Center))
+            .with_setter(Widget::HORIZONTAL_ALIGNMENT, Box::new(HorizontalAlignment::Left))
+            .build());
 
         let sb_sound_volume;
         let sb_music_volume;
@@ -180,11 +190,9 @@ impl Menu {
                     .build(ui))
                 .with_child({
                     cb_fullscreen = CheckBoxBuilder::new(WidgetBuilder::new()
-                        .with_width(24.0)
-                        .with_height(24.0)
+                        .with_style(cb_style.clone())
                         .on_row(4)
-                        .on_column(1)
-                        .with_horizontal_alignment(HorizontalAlignment::Left))
+                        .on_column(1))
                         .build(ui);
                     cb_fullscreen
                 })
@@ -200,11 +208,9 @@ impl Menu {
                     .build(ui))
                 .with_child({
                     cb_spot_shadows = CheckBoxBuilder::new(WidgetBuilder::new()
-                        .with_width(24.0)
-                        .with_height(24.0)
+                        .with_style(cb_style.clone())
                         .on_row(5)
-                        .on_column(1)
-                        .with_horizontal_alignment(HorizontalAlignment::Left))
+                        .on_column(1))
                         .checked(Some(settings.spot_shadows_enabled))
                         .build(ui);
                     cb_spot_shadows
@@ -221,11 +227,9 @@ impl Menu {
                     .build(ui))
                 .with_child({
                     cb_soft_spot_shadows = CheckBoxBuilder::new(WidgetBuilder::new()
-                        .with_width(24.0)
-                        .with_height(24.0)
+                        .with_style(cb_style.clone())
                         .on_row(6)
-                        .on_column(1)
-                        .with_horizontal_alignment(HorizontalAlignment::Left))
+                        .on_column(1))
                         .checked(Some(settings.spot_soft_shadows))
                         .build(ui);
                     cb_soft_spot_shadows
@@ -456,8 +460,8 @@ impl Menu {
             let EngineInterfaceMut { ui, renderer, .. } = engine.interface_mut();
             renderer.set_frame_size((*new_size).into()).unwrap();
             let root = ui.get_node_mut(self.root).widget_mut();
-            root.set_width(new_size.width as f32);
-            root.set_height(new_size.height as f32);
+            root.set_property("Width", &(new_size.width as f32));
+            root.set_property("Height", &(new_size.height as f32));
         }
     }
 

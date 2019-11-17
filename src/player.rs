@@ -1,4 +1,9 @@
 use rg3d::{
+    core::{
+        visitor::{Visit, Visitor, VisitResult},
+        pool::Handle,
+        math::{vec2::Vec2, vec3::Vec3, quat::Quat},
+    },
     event::{WindowEvent, MouseButton, MouseScrollDelta, ElementState, VirtualKeyCode},
     engine::{
         resource_manager::ResourceManager
@@ -7,30 +12,25 @@ use rg3d::{
         SceneInterfaceMut,
         node::Node,
         Scene,
+        base::AsBase
     },
-    scene::base::AsBase,
-};
-use rg3d_core::{
-    visitor::{Visit, Visitor, VisitResult},
-    pool::Handle,
-    math::{vec2::Vec2, vec3::Vec3, quat::Quat},
-};
-use rg3d_sound::{
-    source::{Source, SourceKind},
-    buffer::BufferKind,
-    context::Context,
+    sound::{
+        source::{Source, SourceKind},
+        buffer::BufferKind,
+        context::Context,
+    },
+    physics::{
+        convex_shape::ConvexShape,
+        rigid_body::RigidBody,
+        Physics,
+        convex_shape::{CapsuleShape, Axis},
+    }
 };
 use std::{
     path::Path,
     sync::{Arc, Mutex},
 };
 use rand::Rng;
-use rg3d_physics::{
-    convex_shape::ConvexShape,
-    rigid_body::RigidBody,
-    Physics,
-    convex_shape::{CapsuleShape, Axis},
-};
 use crate::{
     character::{
         AsCharacter,

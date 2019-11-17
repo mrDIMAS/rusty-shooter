@@ -1,14 +1,13 @@
-use rg3d_core::{
-    pool::{
-        Handle,
-        Pool,
-        PoolIterator,
-        PoolIteratorMut
-    },
-    visitor::{Visit, Visitor, VisitResult},
-    math::vec3::Vec3,
-};
 use rg3d::{
+    core::{
+        pool::{
+            Handle,
+            Pool,
+            PoolIteratorMut
+        },
+        visitor::{Visit, Visitor, VisitResult},
+        math::vec3::Vec3,
+    },
     engine::resource_manager::ResourceManager,
     resource::model::Model,
     scene::{
@@ -21,7 +20,7 @@ use rg3d::{
         node::Node,
         transform::TransformBuilder,
         graph::Graph,
-    },
+    }
 };
 use std::path::Path;
 use crate::{GameTime, effects};
@@ -63,8 +62,8 @@ pub struct Item {
     dest_offset: Vec3,
     offset_factor: f32,
     reactivation_timer: f32,
-    reactivation_interval: f32,
     active: bool,
+    definition: &'static ItemDefinition,
 }
 
 impl Default for Item {
@@ -77,34 +76,73 @@ impl Default for Item {
             dest_offset: Default::default(),
             offset_factor: 0.0,
             reactivation_timer: 0.0,
-            reactivation_interval: 3.0,
             active: true,
+            definition: Self::get_definition(ItemKind::Medkit)
         }
     }
 }
 
+pub struct ItemDefinition {
+    model: &'static str,
+    scale: f32,
+    reactivation_interval: f32,
+}
+
 impl Item {
+    pub fn get_definition(kind: ItemKind) -> &'static ItemDefinition {
+        match kind {
+            ItemKind::Medkit => {
+                static DEFINITION: ItemDefinition = ItemDefinition {
+                    model: "data/models/medkit.fbx",
+                    scale: 1.0,
+                    reactivation_interval: 20.0,
+                };
+                &DEFINITION
+            },
+            ItemKind::Plasma => {
+                static DEFINITION: ItemDefinition = ItemDefinition {
+                    model: "data/models/yellow_box.FBX",
+                    scale: 0.25,
+                    reactivation_interval: 15.0,
+                };
+                &DEFINITION
+            },
+            ItemKind::Ak47Ammo762 => {
+                static DEFINITION: ItemDefinition = ItemDefinition {
+                    model: "data/models/box_medium.FBX",
+                    scale: 0.30,
+                    reactivation_interval: 14.0,
+                };
+                &DEFINITION
+            },
+            ItemKind::M4Ammo556 => {
+                static DEFINITION: ItemDefinition = ItemDefinition {
+                    model: "data/models/box_small.FBX",
+                    scale: 0.30,
+                    reactivation_interval: 13.0,
+                };
+                &DEFINITION
+            },
+        }
+    }
+
     pub fn new(
         kind: ItemKind,
         position: Vec3,
         scene: &mut Scene,
         resource_manager: &mut ResourceManager,
     ) -> Self {
-        let (path, scale) = match kind {
-            ItemKind::Medkit => (Path::new("data/models/medkit.fbx"), 1.0),
-            ItemKind::Plasma => (Path::new("data/models/yellow_box.FBX"), 0.25),
-            ItemKind::M4Ammo556 => (Path::new("data/models/box_small.FBX"), 0.30),
-            ItemKind::Ak47Ammo762 => (Path::new("data/models/box_medium.FBX"), 0.30),
-        };
+        let definition = Self::get_definition(kind);
 
-        let model = Model::instantiate_geometry(resource_manager.request_model(path).unwrap(), scene) ;
+        let model = Model::instantiate_geometry(
+            resource_manager.request_model(Path::new(definition.model)).unwrap(), scene) ;
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
 
         let pivot = graph.add_node(Node::Base(BaseBuilder::new()
             .with_local_transform(TransformBuilder::new()
                 .with_local_position(position)
-                .with_local_scale(Vec3::new(scale, scale, scale))
+                .with_local_scale(Vec3::new(definition.scale, definition.scale, definition.scale))
                 .build())
             .build()));
 
@@ -127,8 +165,6 @@ impl Item {
                   resource_manager: &mut ResourceManager,
                   time: GameTime
     ) {
-
-
         self.offset_factor += 1.2 * time.delta;
 
         self.dest_offset = Vec3::new(0.0, 0.085 * self.offset_factor.sin(), 0.0);
@@ -154,7 +190,7 @@ impl Item {
     }
 
     pub fn pick_up(&mut self) {
-        self.reactivation_timer = self.reactivation_interval;
+        self.reactivation_timer = self.definition.reactivation_interval;
         self.active = false;
     }
 
@@ -167,13 +203,19 @@ impl Visit for Item {
     fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
         visitor.enter_region(name)?;
 
+        let mut kind = self.kind.id();
+        kind.visit("Kind", visitor)?;
+        if visitor.is_reading() {
+            self.kind = ItemKind::from_id(kind)?;
+        }
+
+        self.definition = Self::get_definition(self.kind);
         self.model.visit("Model", visitor)?;
         self.pivot.visit("Pivot", visitor)?;
         self.offset.visit("Offset", visitor)?;
         self.offset_factor.visit("OffsetFactor", visitor)?;
         self.dest_offset.visit("DestOffset", visitor)?;
         self.reactivation_timer.visit("ReactivationTimer", visitor)?;
-        self.reactivation_interval.visit("ReactivationInterval", visitor)?;
         self.active.visit("Active", visitor)?;
 
         visitor.leave_region()
@@ -209,10 +251,6 @@ impl ItemContainer {
 
     pub fn add(&mut self, item: Item) -> Handle<Item> {
         self.pool.spawn(item)
-    }
-
-    pub fn iter(&self) -> PoolIterator<Item> {
-        self.pool.iter()
     }
 
     pub fn iter_mut(&mut self) -> PoolIteratorMut<Item> {

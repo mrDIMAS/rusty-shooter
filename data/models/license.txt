@@ -1,0 +1,4 @@
+mutant.FBX - Mixamo
+parasite.FBX - Mixamo
+maw.FBX - Mixamo
+plasma_rifle.fbx - Enshin, sketchfab.com

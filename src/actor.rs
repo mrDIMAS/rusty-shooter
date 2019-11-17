@@ -14,22 +14,24 @@ use crate::{
     item::ItemKind,
     weapon::WeaponKind,
 };
-use rg3d_core::{
-    pool::{
-        Handle,
-        Pool,
-        PoolIterator,
-        PoolIteratorMut,
+use rg3d::{
+    core::{
+        pool::{
+            Handle,
+            Pool,
+            PoolIterator,
+            PoolIteratorMut,
+        },
+        visitor::{
+            Visit,
+            Visitor,
+            VisitResult,
+        },
     },
-    visitor::{
-        Visit,
-        Visitor,
-        VisitResult,
-    },
-};
-use rg3d::scene::{
-    SceneInterfaceMut,
-    base::AsBase,
+    scene::{
+        SceneInterfaceMut,
+        base::AsBase,
+    }
 };
 
 pub enum Actor {

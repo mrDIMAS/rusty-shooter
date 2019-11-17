@@ -1,11 +1,10 @@
-use rg3d_core::{
-    color_gradient::{GradientPoint, ColorGradient},
-    color::Color,
-    numeric_range::NumericRange,
-    math::vec3::Vec3,
-};
-use std::path::Path;
 use rg3d::{
+    core::{
+        color_gradient::{GradientPoint, ColorGradient},
+        color::Color,
+        numeric_range::NumericRange,
+        math::vec3::Vec3,
+    },
     engine::resource_manager::ResourceManager,
     scene::{
         particle_system::{ParticleSystemBuilder, EmitterKind, EmitterBuilder, SphereEmitter},
@@ -14,8 +13,9 @@ use rg3d::{
         graph::Graph,
         base::BaseBuilder
     },
-    resource::texture::TextureKind,
+    resource::texture::TextureKind
 };
+use std::path::Path;
 
 pub fn create_bullet_impact(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {
     graph.add_node(Node::ParticleSystem(ParticleSystemBuilder::new(BaseBuilder::new()

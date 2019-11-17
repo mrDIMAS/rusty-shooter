@@ -1,6 +1,18 @@
-use rg3d_core::pool::Handle;
+use std::{
+    path::Path,
+    rc::Rc,
+    cell::RefCell,
+};
 use rg3d::{
+    engine::{Engine, EngineInterfaceMut},
+    event::WindowEvent,
+    resource::ttf::Font,
+    monitor::VideoMode,
+    window::Fullscreen,
+    core::pool::Handle,
     gui::{
+        style::StyleBuilder,
+        check_box::CheckBoxBuilder,
         UserInterface,
         text_box::TextBoxBuilder,
         list_box::ListBoxBuilder,
@@ -16,22 +28,10 @@ use rg3d::{
         event::{UIEvent, UIEventKind},
         widget::{WidgetBuilder, AsWidget},
         HorizontalAlignment,
+        Styleable,
+        widget::Widget,
     },
-    engine::{Engine, EngineInterfaceMut},
-    event::WindowEvent,
-    resource::ttf::Font,
-    monitor::VideoMode,
-    window::Fullscreen,
-    gui::check_box::CheckBoxBuilder,
 };
-use std::{
-    path::Path,
-    rc::Rc,
-    cell::RefCell,
-};
-use rg3d::gui::{Styleable};
-use rg3d::gui::style::{Style, StyleBuilder};
-use rg3d::gui::widget::Widget;
 
 pub struct Menu {
     root: Handle<UINode>,
@@ -496,7 +496,7 @@ impl Menu {
                     settings.spot_shadows_enabled = value.unwrap_or(false);
                 } else if event.source() == self.cb_soft_spot_shadows {
                     settings.spot_soft_shadows = value.unwrap_or(false);
-                } else if event.source() == self.cb_soft_spot_shadows {
+                } else if event.source() == self.cb_soft_point_shadows {
                     settings.point_soft_shadows = value.unwrap_or(false);
                 }
             }
@@ -505,7 +505,7 @@ impl Menu {
 
         if settings != old_settings {
             if let Err(err) = engine.interface_mut().renderer.set_quality_settings(&settings) {
-                println!("Failed to set quality settings! Reason: {:?}", err);
+                println!("Failed to set renderer quality settings! Reason: {:?}", err);
             }
         }
     }

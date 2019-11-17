@@ -1,15 +1,17 @@
-use rg3d_physics::static_geometry::StaticGeometry;
-use rg3d_core::{
-    pool::{
-        Pool,
-        PoolIterator,
-        Handle
-    },
-    math::vec3::Vec3,
-    visitor::{
-        Visit,
-        Visitor,
-        VisitResult
+use rg3d::{
+    physics::static_geometry::StaticGeometry,
+    core::{
+        pool::{
+            Pool,
+            PoolIterator,
+            Handle
+        },
+        math::vec3::Vec3,
+        visitor::{
+            Visit,
+            Visitor,
+            VisitResult
+        }
     }
 };
 

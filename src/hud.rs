@@ -3,8 +3,11 @@ use std::{
     cell::RefCell,
     path::Path,
 };
-use rg3d_core::pool::Handle;
 use rg3d::{
+    core::{
+        pool::Handle,
+        color::Color
+    },
     engine::{
         Engine,
         EngineInterfaceMut,
@@ -29,16 +32,14 @@ use rg3d::{
         widget::AsWidget,
         Thickness,
         Visibility
-    }
+    },
 };
-use rg3d_core::color::Color;
 
 pub struct Hud {
     root: Handle<UINode>,
     health: Handle<UINode>,
     armor: Handle<UINode>,
     ammo: Handle<UINode>,
-    font: Rc<RefCell<Font>>,
 }
 
 impl Hud {
@@ -57,6 +58,15 @@ impl Hud {
             .with_width(frame_size.0 as f32)
             .with_height(frame_size.1 as f32)
             .with_visibility(Visibility::Collapsed)
+            .with_child(ImageBuilder::new(WidgetBuilder::new()
+                .with_horizontal_alignment(HorizontalAlignment::Center)
+                .with_vertical_alignment(VerticalAlignment::Center)
+                .with_width(33.0)
+                .with_height(33.0)
+                .on_row(0)
+                .on_column(1))
+                .with_opt_texture(resource_manager.request_texture(Path::new("data/ui/crosshair.tga"), TextureKind::RGBA8))
+                .build(ui))
             .with_child(StackPanelBuilder::new(WidgetBuilder::new()
                 .with_margin(Thickness::bottom(10.0))
                 .on_column(0)
@@ -153,7 +163,6 @@ impl Hud {
             health,
             armor,
             ammo,
-            font,
         }
     }
 

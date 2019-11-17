@@ -1,9 +1,5 @@
-#![allow(dead_code)]
-
-extern crate rg3d_core;
 extern crate rg3d;
 extern crate rand;
-extern crate rg3d_physics;
 
 mod actor;
 mod level;
@@ -28,26 +24,26 @@ use std::{
     time::Duration,
     sync::{Arc, Mutex},
 };
-use rg3d_core::{
-    pool::Handle,
-    visitor::{
-        Visitor,
-        VisitResult,
-        Visit,
-    },
-    color::Color,
-};
-use rg3d_sound::{
-    buffer::BufferKind,
-    source::{Source, SourceKind},
-    context::Context,
-};
 use rg3d::{
-    gui::widget::WidgetBuilder,
+    core::{
+        pool::Handle,
+        visitor::{
+            Visitor,
+            VisitResult,
+            Visit,
+        },
+        color::Color,
+    },
+    sound::{
+        buffer::BufferKind,
+        source::{Source, SourceKind},
+        context::Context,
+    },
     gui::{
+        widget::WidgetBuilder,
         node::UINode,
         text::TextBuilder,
-        event::{UIEvent, UIEventKind},
+        event::{UIEvent, UIEventKind}
     },
     scene::{
         particle_system::CustomEmitterFactory,
@@ -60,7 +56,7 @@ use rg3d::{
         Engine,
         EngineInterfaceMut,
         EngineInterface,
-    },
+    }
 };
 use crate::{
     jump_pad::JumpPadContainer,
@@ -82,6 +78,7 @@ pub struct Game {
     debug_string: String,
     running: bool,
     last_tick_time: time::Instant,
+    music: Handle<Source>
 }
 
 pub trait HandleFromSelf<T> {
@@ -109,7 +106,7 @@ pub enum CollisionGroups {
     Generic = 1 << 0,
     Projectile = 1 << 1,
     Actor = 1 << 2,
-    All = std::i64::MAX as isize,
+    All = std::isize::MAX,
 }
 
 impl Game {
@@ -146,7 +143,7 @@ impl Game {
         let mut source = Source::new(SourceKind::Flat, buffer).unwrap();
         source.play();
         source.set_gain(0.25);
-        sound_context.lock().unwrap().add_source(source);
+        let music = sound_context.lock().unwrap().add_source(source);
 
         let mut game = Game {
             hud: Hud::new(ui, resource_manager, frame_size),
@@ -157,6 +154,7 @@ impl Game {
             level: None,
             debug_string: String::new(),
             last_tick_time: time::Instant::now(),
+            music
         };
 
         game.create_debug_ui();
@@ -300,7 +298,19 @@ impl Game {
                     self.running = false;
                     event.handled = true;
                 }
+            },
+            UIEventKind::NumericValueChanged { new_value, ..} => {
+                if event.source() == self.menu.sb_music_volume {
+                    self.engine
+                        .interface_mut()
+                        .sound_context
+                        .lock()
+                        .unwrap()
+                        .get_source_mut(self.music)
+                        .set_gain( new_value);
+                }
             }
+
             _ => ()
         }
     }
@@ -328,6 +338,7 @@ impl Game {
                 let EngineInterfaceMut { ui, .. } = self.engine.interface_mut();
                 let player = level.get_actors().get(player);
                 self.hud.set_health(ui, player.character().get_health());
+                self.hud.set_armor(ui, player.character().get_armor());
                 let current_weapon = player.character().get_current_weapon();
                 if current_weapon.is_some() {
                     let current_weapon = level.get_weapons().get(current_weapon);

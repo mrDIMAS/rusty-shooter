@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
 use crate::{
     projectile::{
         Projectile,
@@ -9,13 +12,13 @@ use crate::{
     GameTime,
     level::CleanUp,
 };
-use rg3d_physics::{RayCastOptions, Physics};
-use rg3d_sound::{
-    source::Source,
-    buffer::BufferKind,
-    context::Context,
-};
 use rg3d::{
+    physics::{RayCastOptions, Physics},
+    sound::{
+        source::Source,
+        buffer::BufferKind,
+        context::Context,
+    },
     engine::resource_manager::ResourceManager,
     resource::{
         model::Model,
@@ -32,23 +35,22 @@ use rg3d::{
         },
         base::{BaseBuilder, AsBase},
     },
-};
-use rg3d_core::{
-    pool::{
-        Pool,
-        PoolIterator,
-        PoolIteratorMut,
-        Handle,
+    core::{
+        pool::{
+            Pool,
+            PoolIterator,
+            PoolIteratorMut,
+            Handle,
+        },
+        color::Color,
+        visitor::{
+            Visit,
+            VisitResult,
+            Visitor,
+        },
+        math::{vec3::Vec3, ray::Ray},
     },
-    color::Color,
-    visitor::{
-        Visit,
-        VisitResult,
-        Visitor,
-    },
-    math::{vec3::Vec3, ray::Ray},
 };
-use std::sync::{Arc, Mutex};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum WeaponKind {
@@ -88,6 +90,13 @@ pub struct Weapon {
     shot_position: Vec3,
     owner: Handle<Actor>,
     ammo: u32,
+    definition: &'static WeaponDefinition,
+}
+
+pub struct WeaponDefinition {
+    model: &'static str,
+    shot_sound: &'static str,
+    ammo: u32,
 }
 
 impl HandleFromSelf<Weapon> for Weapon {
@@ -110,6 +119,7 @@ impl Default for Weapon {
             shot_position: Vec3::ZERO,
             owner: Handle::NONE,
             ammo: 250,
+            definition: Self::get_definition(WeaponKind::M4),
         }
     }
 }
@@ -124,6 +134,7 @@ impl Visit for Weapon {
             self.kind = WeaponKind::new(kind_id)?
         }
 
+        self.definition = Self::get_definition(self.kind);
         self.self_handle.visit("SelfHandle", visitor)?;
         self.model.visit("Model", visitor)?;
         self.laser_dot.visit("LaserDot", visitor)?;
@@ -138,14 +149,40 @@ impl Visit for Weapon {
 }
 
 impl Weapon {
-    pub fn new(kind: WeaponKind, resource_manager: &mut ResourceManager, scene: &mut Scene) -> Weapon {
-        let model_path = match kind {
-            WeaponKind::Ak47 => Path::new("data/models/ak47.FBX"),
-            WeaponKind::M4 => Path::new("data/models/m4.FBX"),
-            WeaponKind::PlasmaRifle => Path::new("data/models/plasma_rifle.FBX"),
-        };
+    pub fn get_definition(kind: WeaponKind) -> &'static WeaponDefinition {
+        match kind {
+            WeaponKind::M4 => {
+                static DEFINITION: WeaponDefinition = WeaponDefinition {
+                    model: "data/models/m4.FBX",
+                    shot_sound: "data/sounds/m4_shot.wav",
+                    ammo: 115,
+                };
+                &DEFINITION
+            }
+            WeaponKind::Ak47 => {
+                static DEFINITION: WeaponDefinition = WeaponDefinition {
+                    model: "data/models/ak47.FBX",
+                    shot_sound: "data/sounds/m4_shot.wav",
+                    ammo: 100,
+                };
+                &DEFINITION
+            }
+            WeaponKind::PlasmaRifle => {
+                static DEFINITION: WeaponDefinition = WeaponDefinition {
+                    model: "data/models/plasma_rifle.fbx",
+                    shot_sound: "data/sounds/plasma_shot.wav", // TODO
+                    ammo: 40,
+                };
+                &DEFINITION
+            }
+        }
+    }
 
-        let model = Model::instantiate(resource_manager.request_model(model_path).unwrap(), scene).root;
+    pub fn new(kind: WeaponKind, resource_manager: &mut ResourceManager, scene: &mut Scene) -> Weapon {
+        let definition = Self::get_definition(kind);
+
+        let model = Model::instantiate(
+            resource_manager.request_model(Path::new(definition.model)).unwrap(), scene).root;
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
         let laser_dot = graph.add_node(Node::Light(
@@ -165,6 +202,8 @@ impl Weapon {
             laser_dot,
             model,
             shot_point,
+            definition,
+            ammo: definition.ammo,
             ..Default::default()
         }
     }
@@ -181,9 +220,7 @@ impl Weapon {
     pub fn update(&mut self, scene: &mut Scene) {
         let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
 
-        self.offset.x += (self.dest_offset.x - self.offset.x) * 0.2;
-        self.offset.y += (self.dest_offset.y - self.offset.y) * 0.2;
-        self.offset.z += (self.dest_offset.z - self.offset.z) * 0.2;
+        self.offset.follow(&self.dest_offset, 0.2);
 
         self.update_laser_sight(graph, physics);
 
@@ -228,7 +265,7 @@ impl Weapon {
     fn play_shot_sound(&self, resource_manager: &mut ResourceManager, sound_context: Arc<Mutex<Context>>) {
         let mut sound_context = sound_context.lock().unwrap();
         let shot_buffer = resource_manager.request_sound_buffer(
-            Path::new("data/sounds/m4_shot.wav"), BufferKind::Normal).unwrap();
+            Path::new(self.definition.shot_sound), BufferKind::Normal).unwrap();
         let mut shot_sound = Source::new_spatial(shot_buffer).unwrap();
         shot_sound.set_play_once(true);
         shot_sound.play();

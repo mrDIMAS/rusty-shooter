@@ -1,16 +1,18 @@
-use rg3d_core::{
-    pool::Handle,
-    math::vec3::Vec3,
-    visitor::{Visit, Visitor, VisitResult},
-};
-use rg3d::scene::{
-    node::Node,
-    Scene,
-    SceneInterfaceMut,
-};
-use rg3d_physics::{
-    rigid_body::RigidBody,
-    Physics,
+use rg3d::{
+    scene::{
+        node::Node,
+        Scene,
+        SceneInterfaceMut,
+    },
+    core::{
+        pool::Handle,
+        math::vec3::Vec3,
+        visitor::{Visit, Visitor, VisitResult},
+    },
+    physics::{
+        rigid_body::RigidBody,
+        Physics,
+    }
 };
 use crate::{
     weapon::Weapon,

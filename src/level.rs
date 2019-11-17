@@ -21,22 +21,22 @@ use rg3d::{
         Engine,
     },
     utils,
+    core::{
+        color::Color,
+        color_gradient::{ColorGradient, GradientPoint},
+        pool::Handle,
+        visitor::{
+            Visit,
+            VisitResult,
+            Visitor,
+        },
+        math::vec3::*,
+    },
 };
 use std::{
     path::Path
 };
 use rand::Rng;
-use rg3d_core::{
-    color::Color,
-    color_gradient::{ColorGradient, GradientPoint},
-    pool::Handle,
-    visitor::{
-        Visit,
-        VisitResult,
-        Visitor,
-    },
-    math::vec3::*,
-};
 use crate::{
     actor::{ActorContainer, Actor},
     weapon::{
@@ -54,8 +54,8 @@ use crate::{
     LevelUpdateContext,
     character::AsCharacter,
     jump_pad::{JumpPadContainer, JumpPad},
+    item::{ItemContainer, Item, ItemKind},
 };
-use crate::item::{ItemContainer, Item, ItemKind};
 
 pub struct Level {
     scene: Handle<Scene>,
@@ -224,8 +224,9 @@ impl Level {
         level.give_weapon(engine, m4, player);
         level.give_weapon(engine, ak47, player);
         level.give_weapon(engine, plasma_rifle, player);
-        level.add_bot(engine, Vec3::new(0.0, 0.0, -1.0));
-        level.add_bot(engine, Vec3::new(0.0, 0.0, 1.0));
+        level.add_bot(BotKind::Maw, engine, Vec3::new(0.0, 0.0, -1.0));
+        level.add_bot(BotKind::Mutant, engine, Vec3::new(0.0, 0.0, 1.0));
+        level.add_bot(BotKind::Parasite, engine, Vec3::new(1.0, 0.0, 0.0));
         level.analyze(engine);
         level
     }
@@ -265,13 +266,13 @@ impl Level {
         }
     }
 
-    pub fn add_bot(&mut self, engine: &mut Engine, position: Vec3) {
+    pub fn add_bot(&mut self, kind: BotKind, engine: &mut Engine, position: Vec3) {
         let EngineInterfaceMut { scenes, resource_manager, .. } = engine.interface_mut();
         let scene = scenes.get_mut(self.scene);
-        let bot = Actor::Bot(Bot::new(BotKind::Mutant, resource_manager, scene, position).unwrap());
+        let bot = Actor::Bot(Bot::new(kind, resource_manager, scene, position).unwrap());
         let bot = self.actors.add(bot);
-        // let weapon = self.weapons.add(Weapon::new(WeaponKind::Ak47, resource_manager, scene));
-        // self.give_weapon(engine, weapon, bot);
+        let weapon = self.weapons.add(Weapon::new(WeaponKind::Ak47, resource_manager, scene));
+        self.give_weapon(engine, weapon, bot);
     }
 
     pub fn destroy(&mut self, engine: &mut Engine) {
@@ -303,6 +304,12 @@ impl Level {
         &self.weapons
     }
 
+    fn update_bots(&mut self, engine: &mut Engine) {
+        for actor in self.actors.iter_mut() {
+            if let Actor::Bot(bot) = actor {}
+        }
+    }
+
     pub fn update(&mut self, engine: &mut Engine, time: GameTime) {
         let EngineInterfaceMut { scenes, sound_context, resource_manager, .. } = engine.interface_mut();
         let scene = scenes.get_mut(self.scene);
@@ -317,7 +324,7 @@ impl Level {
 
         self.weapons.update(scene);
         self.projectiles.update(scene, resource_manager, &mut self.actors, &self.weapons, time);
-        self.items.update(scene,  resource_manager, time);
+        self.items.update(scene, resource_manager, time);
 
         let mut context = LevelUpdateContext {
             time,

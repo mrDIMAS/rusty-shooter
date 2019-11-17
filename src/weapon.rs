@@ -169,8 +169,8 @@ impl Weapon {
             }
             WeaponKind::PlasmaRifle => {
                 static DEFINITION: WeaponDefinition = WeaponDefinition {
-                    model: "data/models/plasma_rifle.fbx",
-                    shot_sound: "data/sounds/plasma_shot.wav", // TODO
+                    model: "data/models/plasma_rifle.FBX",
+                    shot_sound: "data/sounds/plasma_shot.wav",
                     ammo: 40,
                 };
                 &DEFINITION

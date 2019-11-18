@@ -30,6 +30,4 @@
 
 ## Notes
 
-Cargo.toml contains hardcoded relative path to engine `rg3d = { path = "../rg3d" }`, so you have to change this or put engine folder near the game folder.
-
-It will probably *not compile* on Linux because of rg3d-sound crate which still has no backend for Linux. Still waiting for CPAL to get configurable output buffer size to be able to switch to it as backend.
+Cargo.toml contains hardcoded relative path to engine `rg3d = { path = "../rg3d" }`, so you have to change this or put engine folder near the game folder to get game compile, because it always uses latest rg3d which could be not published on crates.io 

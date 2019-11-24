@@ -8,9 +8,9 @@ use rg3d::{
         rigid_body::RigidBody,
         convex_shape::{ConvexShape, CapsuleShape, Axis},
     },
+    animation::{Animation, machine},
     scene::{
         node::Node,
-        animation::Animation,
         Scene,
         SceneInterfaceMut,
         base::{
@@ -35,13 +35,15 @@ use crate::{
     },
     actor::Actor,
 };
+use rg3d::animation::AnimationPose;
+use rg3d::animation::machine::{Machine, State};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum BotKind {
     // Beasts
     Mutant,
     Parasite,
-    Maw
+    Maw,
     // Humans
 }
 
@@ -73,6 +75,8 @@ pub struct Bot {
     walk_animation: Handle<Animation>,
     target_actor: Cell<Handle<Actor>>,
     definition: &'static BotDefinition,
+    pose: AnimationPose,
+    machine: Machine,
 }
 
 impl AsCharacter for Bot {
@@ -96,6 +100,8 @@ impl Default for Bot {
             target: Default::default(),
             target_actor: Default::default(),
             definition: Self::get_definition(BotKind::Mutant),
+            pose: Default::default(),
+            machine: Default::default(),
         }
     }
 }
@@ -109,6 +115,7 @@ pub struct BotDefinition {
     model: &'static str,
     idle_animation: &'static str,
     walk_animation: &'static str,
+    aim_walk_animation: &'static str,
     weapon_hand_name: &'static str,
 }
 
@@ -132,29 +139,30 @@ impl LevelEntity for Bot {
             transform.set_rotation(Quat::from_axis_angle(Vec3::UP, angle))
         }
 
-        let fade_speed = 1.5;
+        self.machine.set_parameter(Self::IDLE_WALK_PARAM_ID, machine::Parameter::Rule(distance > threshold));
+        self.machine.set_parameter(Self::WALK_IDLE_PARAM_ID, machine::Parameter::Rule(distance <= threshold));
+        self.machine.evaluate_pose(animations, context.time.delta).apply(graph);
 
-        if distance > threshold {
-            let walk_animation = animations.get_mut(self.walk_animation);
-            walk_animation.fade_in(fade_speed);
-            walk_animation.set_enabled(true);
-
-            let idle_animation = animations.get_mut(self.idle_animation);
-            idle_animation.fade_out(fade_speed);
-            idle_animation.set_enabled(true);
-        } else {
-            let walk_animation = animations.get_mut(self.walk_animation);
-            walk_animation.fade_out(fade_speed);
-            walk_animation.set_enabled(true);
-
-            let idle_animation = animations.get_mut(self.idle_animation);
-            idle_animation.fade_in(fade_speed);
-            idle_animation.set_enabled(true);
+        if distance > threshold && false { // Intentionally disabled.
+            if let Some(weapon) = self.character.weapons.get(self.character.current_weapon as usize) {
+                let weapon = context.weapons.get_mut(*weapon);
+                if let Some(projectile) = weapon.try_shoot(
+                    context.scene,
+                    context.resource_manager,
+                    context.sound_context.clone(),
+                    context.time,
+                    Vec3::ZERO) {
+                    context.projectiles.add(projectile);
+                }
+            }
         }
     }
 }
 
 impl Bot {
+    pub const WALK_IDLE_PARAM_ID: &'static str = "WalkIdleTransition";
+    pub const IDLE_WALK_PARAM_ID: &'static str = "IdleWalkTransition";
+
     pub fn get_definition(kind: BotKind) -> &'static BotDefinition {
         match kind {
             BotKind::Mutant => {
@@ -162,11 +170,12 @@ impl Bot {
                     kind: BotKind::Mutant,
                     model: "data/models/mutant.FBX",
                     idle_animation: "data/animations/mutant/idle.fbx",
-                    walk_animation: "data/animations/mutant/walk_weapon.fbx",
+                    walk_animation: "data/animations/mutant/walk.fbx",
+                    aim_walk_animation: "data/animations/mutant/walk_weapon.fbx",
                     weapon_hand_name: "Mutant:RightHand",
                     walk_speed: 0.35,
                     scale: 0.0085,
-                    weapon_scale: 2.0,
+                    weapon_scale: 2.6,
                     health: 100.0,
                 };
                 &DEFINITION
@@ -176,25 +185,27 @@ impl Bot {
                     kind: BotKind::Parasite,
                     model: "data/models/parasite.FBX",
                     idle_animation: "data/animations/parasite/idle.fbx",
-                    walk_animation: "data/animations/parasite/walk_weapon.fbx",
+                    walk_animation: "data/animations/parasite/walk.fbx",
+                    aim_walk_animation: "data/animations/parasite/walk_weapon.fbx",
                     weapon_hand_name: "RightHand",
                     walk_speed: 0.40,
                     scale: 0.0085,
-                    weapon_scale: 2.0,
+                    weapon_scale: 2.5,
                     health: 100.0,
                 };
                 &DEFINITION
-            },
+            }
             BotKind::Maw => {
                 static DEFINITION: BotDefinition = BotDefinition {
                     kind: BotKind::Parasite,
                     model: "data/models/maw.fbx",
                     idle_animation: "data/animations/maw/idle.fbx",
-                    walk_animation: "data/animations/maw/walk_weapon.fbx",
+                    walk_animation: "data/animations/maw/walk.fbx",
+                    aim_walk_animation: "data/animations/maw/walk_weapon.fbx",
                     weapon_hand_name: "RightHand",
                     walk_speed: 0.40,
                     scale: 0.0085,
-                    weapon_scale: 2.0,
+                    weapon_scale: 2.5,
                     health: 100.0,
                 };
                 &DEFINITION
@@ -226,6 +237,20 @@ impl Bot {
             (pivot, body)
         };
 
+        let hand = scene.interface().graph.find_by_name(model, definition.weapon_hand_name);
+        let wpn_scale = definition.weapon_scale * (1.0 / definition.scale);
+        let weapon_pivot = Node::Base(BaseBuilder::new()
+            .with_local_transform(TransformBuilder::new()
+                .with_local_scale(Vec3::new(wpn_scale, wpn_scale, wpn_scale))
+                .with_local_rotation(
+                    Quat::from_axis_angle(Vec3::RIGHT, std::f32::consts::FRAC_PI_2) *
+                        Quat::from_axis_angle(Vec3::UP, -std::f32::consts::FRAC_PI_2))
+                .build())
+            .build());
+        let graph = scene.interface_mut().graph;
+        let weapon_pivot = graph.add_node(weapon_pivot);
+        graph.link_nodes(weapon_pivot, hand);
+
         let idle_animation = *Model::retarget_animations(
             resource_manager.request_model(
                 Path::new(definition.idle_animation)).ok_or(())?,
@@ -238,16 +263,45 @@ impl Bot {
             model, scene,
         ).get(0).ok_or(())?;
 
-        let hand = scene.interface().graph.find_by_name(model, definition.weapon_hand_name);
-        let inv_scale = definition.weapon_scale * (1.0 / definition.scale);
-        let weapon_pivot = Node::Base(BaseBuilder::new()
-            .with_local_transform(TransformBuilder::new()
-                .with_local_scale(Vec3::new(inv_scale, inv_scale, inv_scale))
-                .build())
-            .build());
-        let graph = scene.interface_mut().graph;
-        let weapon_pivot = graph.add_node(weapon_pivot);
-        graph.link_nodes(weapon_pivot, hand);
+        let aim_animation = *Model::retarget_animations(
+            resource_manager.request_model(
+                Path::new(definition.aim_walk_animation)).ok_or(())?,
+            model, scene,
+        ).get(0).ok_or(())?;
+
+        let machine = {
+            let mut machine = Machine::new();
+
+            machine.add_parameter(Self::WALK_IDLE_PARAM_ID, machine::Parameter::Rule(false));
+            machine.add_parameter(Self::IDLE_WALK_PARAM_ID, machine::Parameter::Rule(false));
+
+            let aim = machine.add_node(machine::PoseNode::PlayAnimation(machine::PlayAnimation::new(aim_animation)));
+            let walk = machine.add_node(machine::PoseNode::PlayAnimation(machine::PlayAnimation::new(walk_animation)));
+
+            let blend_aim_walk = machine.add_node(machine::PoseNode::BlendAnimations(
+                machine::BlendAnimation::new(vec![
+                    machine::BlendPose::new(machine::PoseWeight::Constant(0.75), aim),
+                    machine::BlendPose::new(machine::PoseWeight::Constant(0.25), walk)
+                ])
+            ));
+
+            let walk_state = machine.add_state(State::new("Walk", blend_aim_walk));
+
+            let idle = machine.add_node(machine::PoseNode::PlayAnimation(machine::PlayAnimation::new(idle_animation)));
+            let idle_state = machine.add_state(State::new("Idle", idle));
+
+            machine.add_transition(machine::Transition::new("Walk->Idle",
+                                                            walk_state,
+                                                            idle_state,
+                                                            1.0,
+                                                            Self::WALK_IDLE_PARAM_ID));
+            machine.add_transition(machine::Transition::new("Idle->Walk",
+                                                            idle_state,
+                                                            walk_state,
+                                                            1.0,
+                                                            Self::IDLE_WALK_PARAM_ID));
+            machine
+        };
 
         Ok(Self {
             character: Character {
@@ -261,6 +315,7 @@ impl Bot {
             kind,
             idle_animation,
             walk_animation,
+            machine,
             ..Default::default()
         })
     }
@@ -296,6 +351,7 @@ impl Visit for Bot {
         self.idle_animation.visit("IdleAnimation", visitor)?;
         self.walk_animation.visit("WalkAnimation", visitor)?;
         self.target_actor.visit("TargetActor", visitor)?;
+        self.machine.visit("Machine", visitor)?;
 
         visitor.leave_region()
     }

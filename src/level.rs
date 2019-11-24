@@ -286,7 +286,7 @@ impl Level {
 
     pub fn process_input_event(&mut self, event: &WindowEvent) -> bool {
         if let Actor::Player(player) = self.actors.get_mut(self.player) {
-            player.process_input_event(event)
+            player.process_window_event(event)
         } else {
             false
         }

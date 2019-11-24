@@ -240,6 +240,7 @@ impl Player {
                 pivot: pivot_handle,
                 body: body_handle,
                 weapon_pivot: weapon_pivot_handle,
+                health: 999999.0,
                 ..Default::default()
             },
             camera: camera_handle,
@@ -396,7 +397,7 @@ impl Player {
         listener.set_orientation(&self.look_direction, &self.up_direction).unwrap();
     }
 
-    pub fn process_input_event(&mut self, event: &WindowEvent) -> bool {
+    pub fn process_window_event(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::CursorMoved { position, .. } => {
                 let mouse_velocity = Vec2 {

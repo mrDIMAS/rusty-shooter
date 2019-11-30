@@ -88,6 +88,16 @@ impl Character {
         self.body
     }
 
+    pub fn has_ground_contact(&self, physics: &Physics) -> bool {
+        let body = physics.borrow_body(self.body);
+        for contact in body.get_contacts() {
+            if contact.normal.y >= 0.7 {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn get_health(&self) -> f32 {
         self.health
     }

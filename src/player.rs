@@ -256,15 +256,7 @@ impl Player {
         }
     }
 
-    pub fn has_ground_contact(&self, physics: &Physics) -> bool {
-        let body = physics.borrow_body(self.character.body);
-        for contact in body.get_contacts() {
-            if contact.normal.y >= 0.7 {
-                return true;
-            }
-        }
-        false
-    }
+
 
     fn handle_crouch(&mut self, body: &mut RigidBody) {
         let capsule = body.get_shape_mut().as_capsule_mut();
@@ -294,7 +286,7 @@ impl Player {
         let look = pivot.get_look_vector();
         let side = pivot.get_side_vector();
 
-        let has_ground_contact = self.has_ground_contact(physics);
+        let has_ground_contact = self.character.has_ground_contact(physics);
 
         let mut velocity = Vec3::ZERO;
         if self.controller.move_forward {

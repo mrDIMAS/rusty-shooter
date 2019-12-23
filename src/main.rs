@@ -33,6 +33,7 @@ use rg3d::{
             Visit,
         },
         color::Color,
+        math::vec3::Vec3
     },
     sound::{
         buffer::BufferKind,
@@ -50,6 +51,7 @@ use rg3d::{
         Scene,
     },
     event::{WindowEvent, ElementState, VirtualKeyCode, Event},
+    window::Fullscreen,
     event_loop::{EventLoop, ControlFlow},
     engine::{
         resource_manager::ResourceManager,
@@ -125,6 +127,7 @@ impl Game {
             .with_resizable(true);
 
         let mut engine = Engine::new(window_builder, &events_loop).unwrap();
+        engine.interface_mut().sound_context.lock().unwrap().set_hrtf(rg3d::sound::hrtf::Hrtf::new("data/sounds/hrir_base.bin".as_ref()).unwrap());
         let frame_size = engine.interface().renderer.get_frame_size();
 
         if let Ok(mut factory) = CustomEmitterFactory::get() {
@@ -140,9 +143,12 @@ impl Game {
         renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
         let buffer = resource_manager.request_sound_buffer(Path::new("data/sounds/Antonio_Bizarro_Berzerker.wav"), BufferKind::Stream).unwrap();
-        let mut source = Source::new(SourceKind::Flat, buffer).unwrap();
+        let mut source = Source::new_spatial(buffer).unwrap();
         source.play();
-        source.set_gain(0.25);
+        if let SourceKind::Spatial(spatial) = source.get_kind_mut() {
+            spatial.set_position(&Vec3::new(0.0, 1.0, 0.0));
+        }
+        //source.set_gain(0.25);
         let music = sound_context.lock().unwrap().add_source(source);
 
         let mut game = Game {

@@ -134,8 +134,11 @@ impl Item {
     ) -> Self {
         let definition = Self::get_definition(kind);
 
-        let model = Model::instantiate_geometry(
-            resource_manager.request_model(Path::new(definition.model)).unwrap(), scene) ;
+        let model = resource_manager.request_model(Path::new(definition.model))
+            .unwrap()
+            .lock()
+            .unwrap()
+            .instantiate_geometry( scene);
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
 

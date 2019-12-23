@@ -56,6 +56,7 @@ use crate::{
     jump_pad::{JumpPadContainer, JumpPad},
     item::{ItemContainer, Item, ItemKind},
 };
+use rg3d::scene::transform::TransformBuilder;
 
 pub struct Level {
     scene: Handle<Scene>,
@@ -158,10 +159,10 @@ impl Level {
         let mut scene = Scene::new();
 
         let EngineInterfaceMut { resource_manager, .. } = engine.interface_mut();
-        let map_model_handle = resource_manager.request_model(Path::new("data/models/dm6.fbx"));
-        if map_model_handle.is_some() {
+        let map_model = resource_manager.request_model(Path::new("data/models/dm6.fbx"));
+        if map_model.is_some() {
             // Instantiate map
-            let map_root_handle = Model::instantiate(map_model_handle.unwrap(), &mut scene).root;
+            let map_root_handle = map_model.unwrap().lock().unwrap().instantiate(&mut scene).root;
             let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
             // Create collision geometry
             let polygon_handle = graph.find_by_name(map_root_handle, "Polygon");
@@ -175,8 +176,11 @@ impl Level {
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
 
         graph.add_node(Node::ParticleSystem(
-            ParticleSystemBuilder::new(BaseBuilder::new())
-                .with_acceleration(Vec3::new(0.0, -0.1, 0.0))
+            ParticleSystemBuilder::new(BaseBuilder::new()
+                .with_local_transform(TransformBuilder::new()
+                    .with_local_position(Vec3::new(0.0, 1.0, 0.0))
+                    .build()))
+                .with_acceleration(Vec3::new(0.0, -0.01, 0.0))
                 .with_color_over_lifetime_gradient({
                     let mut gradient = ColorGradient::new();
                     gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(150, 150, 150, 0)));
@@ -186,7 +190,7 @@ impl Level {
                     gradient
                 })
                 .with_emitters(vec![
-                    EmitterBuilder::new(EmitterKind::Custom(Box::new(CylinderEmitter::new()))).build()
+                    EmitterBuilder::new(EmitterKind::Custom(Box::new(CylinderEmitter{ height: 0.2, radius: 0.2 }))).build()
                 ])
                 .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8))
                 .build()));

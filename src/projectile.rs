@@ -376,6 +376,7 @@ impl Visit for Projectile {
         self.body.visit("Body", visitor)?;
         self.rotation_angle.visit("RotationAngle", visitor)?;
         self.initial_velocity.visit("InitialVelocity", visitor)?;
+        self.owner.visit("Owner", visitor)?;
 
         visitor.leave_region()
     }

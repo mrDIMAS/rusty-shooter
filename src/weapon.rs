@@ -181,8 +181,12 @@ impl Weapon {
     pub fn new(kind: WeaponKind, resource_manager: &mut ResourceManager, scene: &mut Scene) -> Weapon {
         let definition = Self::get_definition(kind);
 
-        let model = Model::instantiate(
-            resource_manager.request_model(Path::new(definition.model)).unwrap(), scene).root;
+        let model = resource_manager.request_model(Path::new(definition.model))
+            .unwrap()
+            .lock()
+            .unwrap()
+            .instantiate(scene)
+            .root;
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
         let laser_dot = graph.add_node(Node::Light(

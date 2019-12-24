@@ -127,7 +127,11 @@ impl Game {
             .with_resizable(true);
 
         let mut engine = Engine::new(window_builder, &events_loop).unwrap();
-        engine.interface_mut().sound_context.lock().unwrap().set_hrtf(rg3d::sound::hrtf::Hrtf::new("data/sounds/hrir_base.bin".as_ref()).unwrap());
+        let hrtf_sphere = rg3d::sound::hrtf::HrtfSphere::new("data/sounds/hrir_base.bin".as_ref()).unwrap();
+        engine.interface_mut().sound_context
+            .lock()
+            .unwrap()
+            .set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(rg3d::sound::hrtf::HrtfRenderer::new(hrtf_sphere)));
         let frame_size = engine.interface().renderer.get_frame_size();
 
         if let Ok(mut factory) = CustomEmitterFactory::get() {
@@ -355,7 +359,7 @@ impl Game {
     }
 
     pub fn update_statistics(&mut self, elapsed: f64) {
-        let EngineInterfaceMut { ui, renderer, .. } = self.engine.interface_mut();
+        let EngineInterfaceMut { ui, renderer, sound_context,  .. } = self.engine.interface_mut();
 
         self.debug_string.clear();
         use std::fmt::Write;
@@ -366,13 +370,15 @@ impl Game {
                FPS: {}\n\
                Triangles: {}\n\
                Draw calls: {}\n\
-               Up time: {:.2} s",
+               Up time: {:.2} s\n\
+               Sound render time: {:.3} ms",
                statistics.pure_frame_time * 1000.0,
                statistics.capped_frame_time * 1000.0,
                statistics.frames_per_second,
                statistics.geometry.triangles_rendered,
                statistics.geometry.draw_calls,
-               elapsed
+               elapsed,
+               sound_context.lock().unwrap().get_render_time() * 1000.0
         ).unwrap();
 
         ui.get_node_mut(self.debug_text).as_text_mut().set_text(self.debug_string.as_str());

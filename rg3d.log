@@ -1,0 +1,33 @@
+Shader DeferredLightShader_VertexShader compiled!
+Shader DeferredLightShader_FragmentShader compiled!
+Shader AmbientLightShader_VertexShader compiled!
+Shader AmbientLightShader_FragmentShader compiled!
+Shader FlatShader_VertexShader compiled!
+Shader FlatShader_FragmentShader compiled!
+Shader SpotShadowMapShader_VertexShader compiled!
+Shader SpotShadowMapShader_FragmentShader compiled!
+Shader PointShadowMapShader_VertexShader compiled!
+Shader PointShadowMapShader_FragmentShader compiled!
+Shader FlatShader_VertexShader compiled!
+Shader FlatShader_FragmentShader compiled!
+Shader GBufferShader_VertexShader compiled!
+Shader GBufferShader_FragmentShader compiled!
+Shader FlatShader_VertexShader compiled!
+Shader FlatShader_FragmentShader compiled!
+Shader UIShader_VertexShader compiled!
+Shader UIShader_FragmentShader compiled!
+Shader ParticleSystemShader_VertexShader compiled!
+Shader ParticleSystemShader_FragmentShader compiled!
+Sound buffer data/sounds/Antonio_Bizarro_Berzerker.wav is loaded!
+Texture data/ui/crosshair.tga is loaded!
+Texture data/ui/health_icon.png is loaded!
+Texture data/ui/ammo_icon.png is loaded!
+Texture data/ui/shield_icon.png is loaded!
+Texture data/ui/check_mark.png is loaded!
+Texture data/ui/circle.png is loaded!
+Texture resource "data/ui/crosshair.tga" destroyed!
+Texture resource "data/ui/health_icon.png" destroyed!
+Texture resource "data/ui/ammo_icon.png" destroyed!
+Texture resource "data/ui/shield_icon.png" destroyed!
+Texture resource "data/ui/check_mark.png" destroyed!
+Texture resource "data/ui/circle.png" destroyed!

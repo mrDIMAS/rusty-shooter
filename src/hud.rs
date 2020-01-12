@@ -2,25 +2,26 @@ use std::{
     rc::Rc,
     cell::RefCell,
     path::Path,
+    sync::{Arc, Mutex},
 };
 use rg3d::{
     core::{
         pool::Handle,
-        color::Color
+        color::Color,
     },
     engine::{
         Engine,
         EngineInterfaceMut,
-        resource_manager::ResourceManager
+        resource_manager::ResourceManager,
     },
     resource::{
         texture::TextureKind,
-        ttf::Font
+        ttf::Font,
     },
     event::WindowEvent,
     gui::{
         HorizontalAlignment,
-        node::UINode,
+        UINode,
         grid::{GridBuilder, Column, Row},
         UserInterface,
         widget::WidgetBuilder,
@@ -29,11 +30,14 @@ use rg3d::{
         image::ImageBuilder,
         scroll_bar::Orientation,
         VerticalAlignment,
-        widget::AsWidget,
         Thickness,
-        Visibility
+        Visibility,
+        Control,
+        text::Text,
+        Builder,
     },
 };
+use rg3d::gui::UINodeContainer;
 
 pub struct Hud {
     root: Handle<UINode>,
@@ -48,7 +52,7 @@ impl Hud {
             Path::new("data/ui/SquaresBold.ttf"),
             35.0,
             Font::default_char_set()).unwrap();
-        let font = Rc::new(RefCell::new(font));
+        let font = Arc::new(Mutex::new(font));
 
         let health;
         let armor;
@@ -85,7 +89,7 @@ impl Hud {
                     .build(ui))
                 .with_child({
                     health = TextBuilder::new(WidgetBuilder::new()
-                        .with_color(Color::opaque(180, 14, 22))
+                        .with_foreground(Color::opaque(180, 14, 22))
                         .with_width(170.0)
                         .with_height(35.0))
                         .with_text("100")
@@ -114,7 +118,7 @@ impl Hud {
                 )
                 .with_child({
                     ammo = TextBuilder::new(WidgetBuilder::new()
-                        .with_color(Color::opaque(79, 79, 255))
+                        .with_foreground(Color::opaque(79, 79, 255))
                         .with_width(170.0)
                         .with_height(35.0))
                         .with_font(font.clone())
@@ -142,7 +146,7 @@ impl Hud {
                     .build(ui))
                 .with_child({
                     armor = TextBuilder::new(WidgetBuilder::new()
-                        .with_color(Color::opaque(255, 100, 26))
+                        .with_foreground(Color::opaque(255, 100, 26))
                         .with_width(170.0)
                         .with_height(35.0))
                         .with_font(font.clone())
@@ -167,29 +171,45 @@ impl Hud {
     }
 
     pub fn set_health(&mut self, ui: &mut UserInterface, health: f32) {
-        ui.get_node_mut(self.health).as_text_mut().set_text(format!("{}", health).as_str());
+        ui.node_mut(self.health)
+            .downcast_mut::<Text>()
+            .unwrap()
+            .set_text(format!("{}", health));
     }
 
     pub fn set_armor(&mut self, ui: &mut UserInterface, armor: f32) {
-        ui.get_node_mut(self.armor).as_text_mut().set_text(format!("{}", armor).as_str());
+        ui.node_mut(self.armor)
+            .downcast_mut::<Text>()
+            .unwrap()
+            .set_text(format!("{}", armor));
     }
 
     pub fn set_ammo(&mut self, ui: &mut UserInterface, ammo: u32) {
-        ui.get_node_mut(self.ammo).as_text_mut().set_text(format!("{}", ammo).as_str());
+        ui.node_mut(self.ammo)
+            .downcast_mut::<Text>()
+            .unwrap()
+            .set_text(format!("{}", ammo));
     }
 
     pub fn set_visible(&mut self, ui: &mut UserInterface, visible: bool) {
-        ui.get_node_mut(self.root).widget_mut().set_visibility(
-            if visible { Visibility::Visible } else { Visibility::Collapsed })
+        ui.node_mut(self.root)
+            .widget_mut()
+            .set_visibility(if visible {
+                Visibility::Visible
+            } else {
+                Visibility::Collapsed
+            });
     }
 
     pub fn process_input_event(&mut self, engine: &mut Engine, event: &WindowEvent) {
         if let WindowEvent::Resized(new_size) = event {
             let EngineInterfaceMut { ui, renderer, .. } = engine.interface_mut();
             renderer.set_frame_size((*new_size).into()).unwrap();
-            let root = ui.get_node_mut(self.root).widget_mut();
-            root.set_width(new_size.width as f32);
-            root.set_height(new_size.height as f32);
+
+            ui.node_mut(self.root)
+                .widget_mut()
+                .set_width(new_size.width as f32)
+                .set_height(new_size.height as f32);
         }
     }
 }

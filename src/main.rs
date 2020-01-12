@@ -33,32 +33,39 @@ use rg3d::{
             Visit,
         },
         color::Color,
-        math::vec3::Vec3
+        math::{
+            vec3::Vec3,
+            mat4::Mat4,
+            quat::Quat,
+        },
     },
     sound::{
-        buffer::BufferKind,
-        source::{Source, SourceKind},
+        source::{
+            Status,
+            SoundSource,
+            spatial::SpatialSourceBuilder,
+            generic::GenericSourceBuilder,
+        },
         context::Context,
     },
     gui::{
         widget::WidgetBuilder,
-        node::UINode,
+        UINode,
         text::TextBuilder,
-        event::{UIEvent, UIEventKind}
+        event::{UIEvent, UIEventKind},
     },
     scene::{
         particle_system::CustomEmitterFactory,
         Scene,
     },
     event::{WindowEvent, ElementState, VirtualKeyCode, Event},
-    window::Fullscreen,
     event_loop::{EventLoop, ControlFlow},
     engine::{
         resource_manager::ResourceManager,
         Engine,
         EngineInterfaceMut,
         EngineInterface,
-    }
+    },
 };
 use crate::{
     jump_pad::JumpPadContainer,
@@ -70,6 +77,8 @@ use crate::{
     weapon::WeaponContainer,
     item::ItemContainer,
 };
+use rg3d::gui::text::Text;
+use rg3d::gui::{Builder, UINodeContainer};
 
 pub struct Game {
     menu: Menu,
@@ -80,7 +89,7 @@ pub struct Game {
     debug_string: String,
     running: bool,
     last_tick_time: time::Instant,
-    music: Handle<Source>
+    music: Handle<SoundSource>,
 }
 
 pub trait HandleFromSelf<T> {
@@ -127,11 +136,12 @@ impl Game {
             .with_resizable(true);
 
         let mut engine = Engine::new(window_builder, &events_loop).unwrap();
-        let hrtf_sphere = rg3d::sound::hrtf::HrtfSphere::new("data/sounds/hrir_base.bin".as_ref()).unwrap();
+        let mut hrtf_sphere = rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin").unwrap();
         engine.interface_mut().sound_context
             .lock()
             .unwrap()
             .set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(rg3d::sound::hrtf::HrtfRenderer::new(hrtf_sphere)));
+
         let frame_size = engine.interface().renderer.get_frame_size();
 
         if let Ok(mut factory) = CustomEmitterFactory::get() {
@@ -146,14 +156,19 @@ impl Game {
         let EngineInterfaceMut { sound_context, ui, resource_manager, renderer, .. } = engine.interface_mut();
         renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
-        let buffer = resource_manager.request_sound_buffer(Path::new("data/sounds/Antonio_Bizarro_Berzerker.wav"), BufferKind::Stream).unwrap();
-        let mut source = Source::new_spatial(buffer).unwrap();
-        source.play();
-        if let SourceKind::Spatial(spatial) = source.get_kind_mut() {
-            spatial.set_position(&Vec3::new(0.0, 1.0, 0.0));
-        }
-        //source.set_gain(0.25);
-        let music = sound_context.lock().unwrap().add_source(source);
+        let buffer = resource_manager.request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.wav", true).unwrap();
+        let music = sound_context.lock()
+            .unwrap()
+            .add_source(GenericSourceBuilder::new(buffer)
+                .with_looping(true)
+                .with_status(Status::Playing)
+                .with_gain(0.25)
+                .build_source()
+                .unwrap());
+
+        let mut reverb = rg3d::sound::effects::reverb::Reverb::new();
+        reverb.set_decay_time(Duration::from_secs_f32(5.0));
+        sound_context.lock().unwrap().add_effect(rg3d::sound::effects::Effect::Reverb(reverb));
 
         let mut game = Game {
             hud: Hud::new(ui, resource_manager, frame_size),
@@ -164,7 +179,7 @@ impl Game {
             level: None,
             debug_string: String::new(),
             last_tick_time: time::Instant::now(),
-            music
+            music,
         };
 
         game.create_debug_ui();
@@ -308,16 +323,17 @@ impl Game {
                     self.running = false;
                     event.handled = true;
                 }
-            },
-            UIEventKind::NumericValueChanged { new_value, ..} => {
+            }
+            UIEventKind::NumericValueChanged { new_value, .. } => {
                 if event.source() == self.menu.sb_music_volume {
                     self.engine
                         .interface_mut()
                         .sound_context
                         .lock()
                         .unwrap()
-                        .get_source_mut(self.music)
-                        .set_gain( new_value);
+                        .source_mut(self.music)
+                        .generic_mut()
+                        .set_gain(new_value);
                 }
             }
 
@@ -359,7 +375,7 @@ impl Game {
     }
 
     pub fn update_statistics(&mut self, elapsed: f64) {
-        let EngineInterfaceMut { ui, renderer, sound_context,  .. } = self.engine.interface_mut();
+        let EngineInterfaceMut { ui, renderer, sound_context, .. } = self.engine.interface_mut();
 
         self.debug_string.clear();
         use std::fmt::Write;
@@ -371,17 +387,20 @@ impl Game {
                Triangles: {}\n\
                Draw calls: {}\n\
                Up time: {:.2} s\n\
-               Sound render time: {:.3} ms",
+               Sound render time: {:?}",
                statistics.pure_frame_time * 1000.0,
                statistics.capped_frame_time * 1000.0,
                statistics.frames_per_second,
                statistics.geometry.triangles_rendered,
                statistics.geometry.draw_calls,
                elapsed,
-               sound_context.lock().unwrap().get_render_time() * 1000.0
+               sound_context.lock().unwrap().full_render_duration()
         ).unwrap();
 
-        ui.get_node_mut(self.debug_text).as_text_mut().set_text(self.debug_string.as_str());
+        ui.node_mut(self.debug_text)
+            .downcast_mut::<Text>()
+            .unwrap()
+            .set_text(self.debug_string.as_str());
     }
 
     pub fn limit_fps(&mut self, value: f64) {

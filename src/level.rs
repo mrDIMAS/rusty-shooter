@@ -1,6 +1,5 @@
 use rg3d::{
     resource::{
-        model::Model,
         texture::TextureKind,
     },
     event::WindowEvent,

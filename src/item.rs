@@ -9,7 +9,6 @@ use rg3d::{
         math::vec3::Vec3,
     },
     engine::resource_manager::ResourceManager,
-    resource::model::Model,
     scene::{
         base::{
             BaseBuilder,

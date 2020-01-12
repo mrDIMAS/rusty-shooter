@@ -15,14 +15,15 @@ use crate::{
 use rg3d::{
     physics::{RayCastOptions, Physics},
     sound::{
-        source::Source,
-        buffer::BufferKind,
+        source::{
+            Status,
+            SoundSource,
+            spatial::SpatialSourceBuilder,
+            generic::GenericSourceBuilder,
+        },
         context::Context,
     },
     engine::resource_manager::ResourceManager,
-    resource::{
-        model::Model,
-    },
     scene::{
         SceneInterfaceMut,
         node::Node,
@@ -269,11 +270,15 @@ impl Weapon {
     fn play_shot_sound(&self, resource_manager: &mut ResourceManager, sound_context: Arc<Mutex<Context>>) {
         let mut sound_context = sound_context.lock().unwrap();
         let shot_buffer = resource_manager.request_sound_buffer(
-            Path::new(self.definition.shot_sound), BufferKind::Normal).unwrap();
-        let mut shot_sound = Source::new_spatial(shot_buffer).unwrap();
-        shot_sound.set_play_once(true);
-        shot_sound.play();
-        shot_sound.as_spatial_mut().set_position(&self.shot_position);
+            Path::new(self.definition.shot_sound), false).unwrap();
+        let shot_sound = SpatialSourceBuilder::new(
+            GenericSourceBuilder::new(shot_buffer)
+                .with_status(Status::Playing)
+                .with_play_once(true)
+                .build()
+                .unwrap())
+            .with_position(self.shot_position)
+            .build_source();
         sound_context.add_source(shot_sound);
     }
 

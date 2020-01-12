@@ -2,7 +2,7 @@ use rg3d::{
     core::{
         visitor::{Visit, Visitor, VisitResult},
         pool::Handle,
-        math::{vec2::Vec2, vec3::Vec3, quat::Quat},
+        math::{vec2::Vec2, vec3::Vec3, quat::Quat, mat4::Mat4, mat3::Mat3},
     },
     event::{WindowEvent, MouseButton, MouseScrollDelta, ElementState, VirtualKeyCode},
     engine::{
@@ -12,11 +12,14 @@ use rg3d::{
         SceneInterfaceMut,
         node::Node,
         Scene,
-        base::AsBase
+        base::AsBase,
     },
     sound::{
-        source::{Source, SourceKind},
-        buffer::BufferKind,
+        source::{
+            SoundSource,
+            spatial::SpatialSourceBuilder,
+            generic::GenericSourceBuilder,
+        },
         context::Context,
     },
     physics::{
@@ -24,7 +27,7 @@ use rg3d::{
         rigid_body::RigidBody,
         Physics,
         convex_shape::{CapsuleShape, Axis},
-    }
+    },
 };
 use std::{
     path::Path,
@@ -86,7 +89,7 @@ pub struct Player {
     move_speed: f32,
     camera_offset: Vec3,
     camera_dest_offset: Vec3,
-    footsteps: Vec<Handle<Source>>,
+    footsteps: Vec<Handle<SoundSource>>,
     path_len: f32,
     feet_position: Vec3,
     head_position: Vec3,
@@ -97,6 +100,7 @@ pub struct Player {
     weapon_shake_factor: f32,
     crouch_speed: f32,
     stand_up_speed: f32,
+    listener_basis: Mat3,
 }
 
 impl AsCharacter for Player {
@@ -163,6 +167,7 @@ impl Default for Player {
             weapon_shake_factor: 0.0,
             crouch_speed: 0.15,
             stand_up_speed: 0.12,
+            listener_basis: Default::default(),
         }
     }
 }
@@ -228,10 +233,10 @@ impl Player {
 
         let footsteps = {
             [
-                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step1.wav"), BufferKind::Normal).unwrap(),
-                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step2.wav"), BufferKind::Normal).unwrap(),
-                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step3.wav"), BufferKind::Normal).unwrap(),
-                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step4.wav"), BufferKind::Normal).unwrap()
+                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step1.wav"), false).unwrap(),
+                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step2.wav"), false).unwrap(),
+                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step3.wav"), false).unwrap(),
+                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step4.wav"), false).unwrap()
             ]
         };
 
@@ -248,15 +253,17 @@ impl Player {
             footsteps: {
                 let mut sound_context = sound_context.lock().unwrap();
                 footsteps.iter().map(|buf| {
-                    let source = Source::new_spatial(buf.clone()).unwrap();
+                    let source = SpatialSourceBuilder::new(
+                        GenericSourceBuilder::new(buf.clone())
+                            .build()
+                            .unwrap())
+                        .build_source();
                     sound_context.add_source(source)
                 }).collect()
             },
             ..Default::default()
         }
     }
-
-
 
     fn handle_crouch(&mut self, body: &mut RigidBody) {
         let capsule = body.get_shape_mut().as_capsule_mut();
@@ -348,6 +355,9 @@ impl Player {
         self.head_position = camera_node.get_global_position();
         self.look_direction = camera_node.get_look_vector();
         self.up_direction = camera_node.get_up_vector();
+        self.listener_basis = Mat3::from_vectors(camera_node.get_side_vector(),
+                                                 camera_node.get_up_vector(),
+                                                 -camera_node.get_look_vector());
 
         for (i, weapon) in self.character.weapons.iter().enumerate() {
             let weapon = context.weapons.get_mut(*weapon);
@@ -367,11 +377,10 @@ impl Player {
     fn emit_footstep_sound(&self, sound_context: Arc<Mutex<Context>>) {
         let mut sound_context = sound_context.lock().unwrap();
         let handle = self.footsteps[rand::thread_rng().gen_range(0, self.footsteps.len())];
-        let source = sound_context.get_source_mut(handle);
-        if let SourceKind::Spatial(spatial) = source.get_kind_mut() {
+        if let SoundSource::Spatial(spatial) = sound_context.source_mut(handle) {
             spatial.set_position(&self.feet_position);
+            spatial.generic_mut().play();
         }
-        source.play();
     }
 
     pub fn set_position(&mut self, physics: &mut Physics, position: Vec3) {
@@ -384,9 +393,9 @@ impl Player {
 
     fn update_listener(&mut self, sound_context: Arc<Mutex<Context>>) {
         let mut sound_context = sound_context.lock().unwrap();
-        let listener = sound_context.get_listener_mut();
-        listener.set_position(&self.head_position);
-        listener.set_orientation(&self.look_direction, &self.up_direction).unwrap();
+        let listener = sound_context.listener_mut();
+        listener.set_basis(self.listener_basis);
+        listener.set_position(self.head_position);
     }
 
     pub fn process_window_event(&mut self, event: &WindowEvent) -> bool {

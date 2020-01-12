@@ -32,7 +32,6 @@ use rg3d::{
         transform::TransformBuilder,
         graph::Graph,
     },
-    resource::model::Model,
     engine::resource_manager::ResourceManager,
 };
 

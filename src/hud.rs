@@ -1,6 +1,4 @@
 use std::{
-    rc::Rc,
-    cell::RefCell,
     path::Path,
     sync::{Arc, Mutex},
 };
@@ -18,7 +16,7 @@ use rg3d::{
         texture::TextureKind,
         ttf::Font,
     },
-    event::WindowEvent,
+    event::{Event, WindowEvent},
     gui::{
         HorizontalAlignment,
         UINode,
@@ -32,7 +30,6 @@ use rg3d::{
         VerticalAlignment,
         Thickness,
         Visibility,
-        Control,
         text::Text,
         Builder,
     },
@@ -201,15 +198,17 @@ impl Hud {
             });
     }
 
-    pub fn process_input_event(&mut self, engine: &mut Engine, event: &WindowEvent) {
-        if let WindowEvent::Resized(new_size) = event {
-            let EngineInterfaceMut { ui, renderer, .. } = engine.interface_mut();
-            renderer.set_frame_size((*new_size).into()).unwrap();
+    pub fn process_input_event(&mut self, engine: &mut Engine, event: &Event<()>) {
+        if let Event::WindowEvent { event, .. } = event {
+            if let WindowEvent::Resized(new_size) = event {
+                let EngineInterfaceMut { ui, renderer, .. } = engine.interface_mut();
+                renderer.set_frame_size((*new_size).into()).unwrap();
 
-            ui.node_mut(self.root)
-                .widget_mut()
-                .set_width(new_size.width as f32)
-                .set_height(new_size.height as f32);
+                ui.node_mut(self.root)
+                    .widget_mut()
+                    .set_width(new_size.width as f32)
+                    .set_height(new_size.height as f32);
+            }
         }
     }
 }

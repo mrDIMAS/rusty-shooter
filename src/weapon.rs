@@ -17,7 +17,6 @@ use rg3d::{
     sound::{
         source::{
             Status,
-            SoundSource,
             spatial::SpatialSourceBuilder,
             generic::GenericSourceBuilder,
         },

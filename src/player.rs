@@ -2,9 +2,9 @@ use rg3d::{
     core::{
         visitor::{Visit, Visitor, VisitResult},
         pool::Handle,
-        math::{vec2::Vec2, vec3::Vec3, quat::Quat, mat4::Mat4, mat3::Mat3},
+        math::{vec3::Vec3, quat::Quat, mat3::Mat3},
     },
-    event::{WindowEvent, MouseButton, MouseScrollDelta, ElementState, VirtualKeyCode},
+    event::{DeviceEvent, Event, MouseScrollDelta, ElementState, VirtualKeyCode},
     engine::{
         resource_manager::ResourceManager
     },
@@ -54,7 +54,6 @@ pub struct Controller {
     crouch: bool,
     jump: bool,
     run: bool,
-    last_mouse_pos: Vec2,
     shoot: bool,
 }
 
@@ -68,7 +67,6 @@ impl Default for Controller {
             crouch: false,
             jump: false,
             run: false,
-            last_mouse_pos: Vec2::ZERO,
             shoot: false,
         }
     }
@@ -398,86 +396,78 @@ impl Player {
         listener.set_position(self.head_position);
     }
 
-    pub fn process_window_event(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            WindowEvent::CursorMoved { position, .. } => {
-                let mouse_velocity = Vec2 {
-                    x: position.x as f32 - self.controller.last_mouse_pos.x,
-                    y: position.y as f32 - self.controller.last_mouse_pos.y,
-                };
+    pub fn process_window_event(&mut self, event: &Event<()>) -> bool {
+        if let Event::DeviceEvent { event, .. } = event {
+            match event {
+                DeviceEvent::MouseMotion { delta} => {
+                    let sens: f32 = 0.3;
 
-                let sens: f32 = 0.3;
+                    self.dest_pitch += delta.1 as f32 * sens;
+                    self.dest_yaw -= delta.0 as f32 * sens;
 
-                self.dest_pitch += mouse_velocity.y * sens;
-                self.dest_yaw -= mouse_velocity.x * sens;
-
-                if self.dest_pitch > 90.0 {
-                    self.dest_pitch = 90.0;
-                } else if self.dest_pitch < -90.0 {
-                    self.dest_pitch = -90.0;
+                    if self.dest_pitch > 90.0 {
+                        self.dest_pitch = 90.0;
+                    } else if self.dest_pitch < -90.0 {
+                        self.dest_pitch = -90.0;
+                    }
                 }
 
-                self.controller.last_mouse_pos = Vec2 {
-                    x: position.x as f32,
-                    y: position.y as f32,
-                };
-            }
+                DeviceEvent::Button { button, state } => {
+                    if *button == 1 {
+                        match state {
+                            ElementState::Pressed => {
+                                self.controller.shoot = true;
+                            }
+                            ElementState::Released => {
+                                self.controller.shoot = false;
+                            }
+                        }
+                    }
+                }
 
-            WindowEvent::MouseInput { button, state, .. } => {
-                if let MouseButton::Left = button {
-                    match state {
+                DeviceEvent::MouseWheel { delta } => {
+                    if let MouseScrollDelta::LineDelta(_, y) = delta {
+                        if *y < 0.0 {
+                            self.character_mut().prev_weapon();
+                        } else if *y > 0.0 {
+                            self.character_mut().next_weapon();
+                        }
+                    }
+                }
+
+                DeviceEvent::Key(input) => {
+                    match input.state {
                         ElementState::Pressed => {
-                            self.controller.shoot = true;
+                            if let Some(key) = input.virtual_keycode {
+                                match key {
+                                    VirtualKeyCode::W => self.controller.move_forward = true,
+                                    VirtualKeyCode::S => self.controller.move_backward = true,
+                                    VirtualKeyCode::A => self.controller.move_left = true,
+                                    VirtualKeyCode::D => self.controller.move_right = true,
+                                    VirtualKeyCode::C => self.controller.crouch = true,
+                                    VirtualKeyCode::Space => self.controller.jump = true,
+                                    VirtualKeyCode::LShift => self.controller.run = true,
+                                    _ => ()
+                                }
+                            }
                         }
                         ElementState::Released => {
-                            self.controller.shoot = false;
-                        }
-                    }
-                }
-            }
-
-            WindowEvent::MouseWheel { delta, .. } => {
-                if let MouseScrollDelta::LineDelta(_, y) = delta {
-                    if *y < 0.0 {
-                        self.character_mut().prev_weapon();
-                    } else if *y > 0.0 {
-                        self.character_mut().next_weapon();
-                    }
-                }
-            }
-
-            WindowEvent::KeyboardInput { input, .. } => {
-                match input.state {
-                    ElementState::Pressed => {
-                        if let Some(key) = input.virtual_keycode {
-                            match key {
-                                VirtualKeyCode::W => self.controller.move_forward = true,
-                                VirtualKeyCode::S => self.controller.move_backward = true,
-                                VirtualKeyCode::A => self.controller.move_left = true,
-                                VirtualKeyCode::D => self.controller.move_right = true,
-                                VirtualKeyCode::C => self.controller.crouch = true,
-                                VirtualKeyCode::Space => self.controller.jump = true,
-                                VirtualKeyCode::LShift => self.controller.run = true,
-                                _ => ()
-                            }
-                        }
-                    }
-                    ElementState::Released => {
-                        if let Some(key) = input.virtual_keycode {
-                            match key {
-                                VirtualKeyCode::W => self.controller.move_forward = false,
-                                VirtualKeyCode::S => self.controller.move_backward = false,
-                                VirtualKeyCode::A => self.controller.move_left = false,
-                                VirtualKeyCode::D => self.controller.move_right = false,
-                                VirtualKeyCode::C => self.controller.crouch = false,
-                                VirtualKeyCode::LShift => self.controller.run = false,
-                                _ => ()
+                            if let Some(key) = input.virtual_keycode {
+                                match key {
+                                    VirtualKeyCode::W => self.controller.move_forward = false,
+                                    VirtualKeyCode::S => self.controller.move_backward = false,
+                                    VirtualKeyCode::A => self.controller.move_left = false,
+                                    VirtualKeyCode::D => self.controller.move_right = false,
+                                    VirtualKeyCode::C => self.controller.crouch = false,
+                                    VirtualKeyCode::LShift => self.controller.run = false,
+                                    _ => ()
+                                }
                             }
                         }
                     }
                 }
+                _ => ()
             }
-            _ => ()
         }
         false
     }

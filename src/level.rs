@@ -2,7 +2,7 @@ use rg3d::{
     resource::{
         texture::TextureKind,
     },
-    event::WindowEvent,
+    event::Event,
     scene::{
         Scene,
         SceneInterfaceMut,
@@ -287,7 +287,7 @@ impl Level {
         self.player
     }
 
-    pub fn process_input_event(&mut self, event: &WindowEvent) -> bool {
+    pub fn process_input_event(&mut self, event: &Event<()>) -> bool {
         if let Actor::Player(player) = self.actors.get_mut(self.player) {
             player.process_window_event(event)
         } else {

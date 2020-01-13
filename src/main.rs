@@ -33,17 +33,11 @@ use rg3d::{
             Visit,
         },
         color::Color,
-        math::{
-            vec3::Vec3,
-            mat4::Mat4,
-            quat::Quat,
-        },
     },
     sound::{
         source::{
             Status,
             SoundSource,
-            spatial::SpatialSourceBuilder,
             generic::GenericSourceBuilder,
         },
         context::Context,
@@ -58,7 +52,7 @@ use rg3d::{
         particle_system::CustomEmitterFactory,
         Scene,
     },
-    event::{WindowEvent, ElementState, VirtualKeyCode, Event},
+    event::{DeviceEvent, WindowEvent, ElementState, VirtualKeyCode, Event},
     event_loop::{EventLoop, ControlFlow},
     engine::{
         resource_manager::ResourceManager,
@@ -87,9 +81,9 @@ pub struct Game {
     level: Option<Level>,
     debug_text: Handle<UINode>,
     debug_string: String,
-    running: bool,
     last_tick_time: time::Instant,
     music: Handle<SoundSource>,
+    running: bool,
 }
 
 pub trait HandleFromSelf<T> {
@@ -136,7 +130,7 @@ impl Game {
             .with_resizable(true);
 
         let mut engine = Engine::new(window_builder, &events_loop).unwrap();
-        let mut hrtf_sphere = rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin").unwrap();
+        let hrtf_sphere = rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin").unwrap();
         engine.interface_mut().sound_context
             .lock()
             .unwrap()
@@ -193,6 +187,8 @@ impl Game {
         };
 
         events_loop.run(move |event, _, control_flow| {
+            game.process_input_event(&event);
+
             match event {
                 Event::EventsCleared => {
                     let mut dt = clock.elapsed().as_secs_f64() - game_time.elapsed;
@@ -201,7 +197,7 @@ impl Game {
                         game_time.elapsed += fixed_timestep as f64;
 
                         while let Some(mut ui_event) = game.engine.get_ui_mut().poll_ui_event() {
-                            game.menu.process_ui_event(&mut game.engine, &mut ui_event);
+                            game.menu.handle_ui_event(&mut game.engine, &mut ui_event);
                             game.process_ui_event(&mut ui_event);
                         }
 
@@ -225,9 +221,7 @@ impl Game {
                             game.destroy_level();
                             *control_flow = ControlFlow::Exit
                         }
-                        _ => {
-                            game.process_input_event(event);
-                        }
+                        _ => ()
                     }
                 }
                 _ => *control_flow = ControlFlow::Poll,
@@ -353,6 +347,10 @@ impl Game {
     }
 
     pub fn update(&mut self, time: GameTime) {
+        let window = self.engine.get_window();
+        window.set_cursor_visible(self.is_menu_visible());
+        let _ = window.set_cursor_grab(!self.is_menu_visible());
+
         self.engine.update(time.delta);
 
         if let Some(ref mut level) = self.level {
@@ -413,29 +411,26 @@ impl Game {
         }
     }
 
-    fn process_dispatched_event(&mut self, event: &WindowEvent) {
+    fn process_dispatched_event(&mut self, event: &Event<()>) {
         let EngineInterfaceMut { ui, .. } = self.engine.interface_mut();
 
-        // Some events can be consumed so they won't be dispatched further,
-        // this allows to catch events by UI for example and don't send them
-        // to player controller so when you click on some button in UI you
-        // won't shoot from your current weapon in game.
-        let event_processed = ui.process_input_event(event);
+        if let Event::WindowEvent { event, .. } = event {
+            ui.process_input_event(event);
+        }
 
-        if !event_processed {
+        if !self.is_menu_visible() {
             if let Some(ref mut level) = self.level {
                 level.process_input_event(event);
             }
         }
     }
 
-    pub fn process_input_event(&mut self, event: WindowEvent) {
-        self.process_dispatched_event(&event);
+    pub fn process_input_event(&mut self, event: &Event<()>) {
+        self.process_dispatched_event(event);
 
         // Some events processed in any case.
-        match event {
-            WindowEvent::CloseRequested => self.running = false,
-            WindowEvent::KeyboardInput { input, .. } => {
+        if let Event::DeviceEvent { event, ..} = event {
+            if let DeviceEvent::Key(input) = event {
                 if let ElementState::Pressed = input.state {
                     if let Some(key) = input.virtual_keycode {
                         if key == VirtualKeyCode::Escape {
@@ -444,7 +439,6 @@ impl Game {
                     }
                 }
             }
-            _ => ()
         }
 
         self.menu.process_input_event(&mut self.engine, &event);

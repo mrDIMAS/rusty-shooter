@@ -1,49 +1,60 @@
 use std::{
     path::Path,
     rc::Rc,
-    cell::RefCell,
-    sync::{Mutex, Arc}
+    sync::{Mutex, Arc},
 };
 use rg3d::{
+    resource::texture::TextureKind,
     engine::{Engine, EngineInterfaceMut},
-    event::WindowEvent,
+    event::{WindowEvent, Event},
     resource::ttf::Font,
     monitor::VideoMode,
     window::Fullscreen,
     core::{
         pool::Handle,
-        color::Color,
     },
     gui::{
+        check_box::CheckBox,
+        UINodeContainer,
+        ControlTemplate,
         style::StyleBuilder,
         check_box::CheckBoxBuilder,
         UserInterface,
         text_box::TextBoxBuilder,
         list_box::ListBoxBuilder,
         UINode,
-        grid::{GridBuilder, Row, Column},
+        grid::{
+            GridBuilder,
+            Row,
+            Column,
+        },
         Thickness,
         VerticalAlignment,
-        window::{WindowBuilder, WindowTitle},
+        window::{
+            WindowBuilder,
+            WindowTitle,
+        },
         text::TextBuilder,
         scroll_bar::ScrollBarBuilder,
         button::ButtonBuilder,
         Visibility,
-        event::{UIEvent, UIEventKind},
-        widget::{WidgetBuilder},
+        event::{
+            UIEvent,
+            UIEventKind,
+        },
+        widget::WidgetBuilder,
         HorizontalAlignment,
         widget::Widget,
         Control,
-        Builder
-    }
+        Builder,
+        image::ImageBuilder,
+        scroll_bar::ScrollBar,
+        tab_control::{
+            TabControlBuilder,
+            TabDefinition,
+        },
+    },
 };
-use rg3d::gui::image::ImageBuilder;
-use rg3d::resource::texture::TextureKind;
-use rg3d::gui::{UINodeContainer, ControlTemplate};
-use rg3d::gui::border::BorderBuilder;
-use rg3d::gui::check_box::CheckBox;
-use rg3d::gui::scroll_bar::ScrollBar;
-use rg3d::gui::tab_control::{TabControlBuilder, TabDefinition};
 
 pub struct Menu {
     root: Handle<UINode>,
@@ -342,7 +353,7 @@ impl Menu {
                         .add_column(Column::strict(250.0))
                         .add_column(Column::stretch())
                         .build(ui)
-                }
+                },
             })
             .with_tab(TabDefinition {
                 header: {
@@ -401,7 +412,7 @@ impl Menu {
                         .add_column(Column::strict(250.0))
                         .add_column(Column::stretch())
                         .build(ui)
-                }
+                },
             })
             .build(ui);
 
@@ -533,17 +544,19 @@ impl Menu {
             .get_visibility() == Visibility::Visible
     }
 
-    pub fn process_input_event(&mut self, engine: &mut Engine, event: &WindowEvent) {
-        if let WindowEvent::Resized(new_size) = event {
-            let EngineInterfaceMut { ui, renderer, .. } = engine.interface_mut();
-            renderer.set_frame_size((*new_size).into()).unwrap();
-            let root = ui.node_mut(self.root).widget_mut();
-            root.set_width(new_size.width as f32);
-            root.set_height(new_size.height as f32);
+    pub fn process_input_event(&mut self, engine: &mut Engine, event: &Event<()>) {
+        if let Event::WindowEvent { event, .. } = event {
+            if let WindowEvent::Resized(new_size) = event {
+                let EngineInterfaceMut { ui, renderer, .. } = engine.interface_mut();
+                renderer.set_frame_size((*new_size).into()).unwrap();
+                let root = ui.node_mut(self.root).widget_mut();
+                root.set_width(new_size.width as f32);
+                root.set_height(new_size.height as f32);
+            }
         }
     }
 
-    pub fn process_ui_event(&mut self, engine: &mut Engine, event: &UIEvent) {
+    pub fn handle_ui_event(&mut self, engine: &mut Engine, event: &UIEvent) {
         let EngineInterfaceMut { sound_context, renderer, .. } = engine.interface_mut();
 
         let old_settings = renderer.get_quality_settings();

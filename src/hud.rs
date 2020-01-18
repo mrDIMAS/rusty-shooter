@@ -9,15 +9,15 @@ use rg3d::{
     },
     engine::{
         Engine,
-        EngineInterfaceMut,
         resource_manager::ResourceManager,
     },
     resource::{
         texture::TextureKind,
-        ttf::Font,
     },
     event::{Event, WindowEvent},
+    utils,
     gui::{
+        ttf::Font,
         HorizontalAlignment,
         UINode,
         grid::{GridBuilder, Column, Row},
@@ -32,9 +32,9 @@ use rg3d::{
         Visibility,
         text::Text,
         Builder,
-    },
+        UINodeContainer
+    }
 };
-use rg3d::gui::UINodeContainer;
 
 pub struct Hud {
     root: Handle<UINode>,
@@ -42,6 +42,7 @@ pub struct Hud {
     armor: Handle<UINode>,
     ammo: Handle<UINode>,
 }
+
 
 impl Hud {
     pub fn new(ui: &mut UserInterface, resource_manager: &mut ResourceManager, frame_size: (u32, u32)) -> Self {
@@ -66,7 +67,7 @@ impl Hud {
                 .with_height(33.0)
                 .on_row(0)
                 .on_column(1))
-                .with_opt_texture(resource_manager.request_texture(Path::new("data/ui/crosshair.tga"), TextureKind::RGBA8))
+                .with_opt_texture(utils::into_any_arc(resource_manager.request_texture(Path::new("data/ui/crosshair.tga"), TextureKind::RGBA8)))
                 .build(ui))
             .with_child(StackPanelBuilder::new(WidgetBuilder::new()
                 .with_margin(Thickness::bottom(10.0))
@@ -76,7 +77,7 @@ impl Hud {
                 .with_child(ImageBuilder::new(WidgetBuilder::new()
                     .with_width(35.0)
                     .with_height(35.0))
-                    .with_opt_texture(resource_manager.request_texture(Path::new("data/ui/health_icon.png"), TextureKind::RGBA8))
+                    .with_opt_texture(utils::into_any_arc(resource_manager.request_texture(Path::new("data/ui/health_icon.png"), TextureKind::RGBA8)))
                     .build(ui))
                 .with_child(TextBuilder::new(WidgetBuilder::new()
                     .with_width(170.0)
@@ -104,7 +105,7 @@ impl Hud {
                 .with_child(ImageBuilder::new(WidgetBuilder::new()
                     .with_width(35.0)
                     .with_height(35.0))
-                    .with_opt_texture(resource_manager.request_texture(Path::new("data/ui/ammo_icon.png"), TextureKind::RGBA8))
+                    .with_opt_texture(utils::into_any_arc(resource_manager.request_texture(Path::new("data/ui/ammo_icon.png"), TextureKind::RGBA8)))
                     .build(ui))
                 .with_child(TextBuilder::new(WidgetBuilder::new()
                     .with_width(170.0)
@@ -133,7 +134,7 @@ impl Hud {
                 .with_child(ImageBuilder::new(WidgetBuilder::new()
                     .with_width(35.0)
                     .with_height(35.0))
-                    .with_opt_texture(resource_manager.request_texture(Path::new("data/ui/shield_icon.png"), TextureKind::RGBA8))
+                    .with_opt_texture(utils::into_any_arc(resource_manager.request_texture(Path::new("data/ui/shield_icon.png"), TextureKind::RGBA8)))
                     .build(ui))
                 .with_child(TextBuilder::new(WidgetBuilder::new()
                     .with_width(170.0)
@@ -201,10 +202,12 @@ impl Hud {
     pub fn process_input_event(&mut self, engine: &mut Engine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             if let WindowEvent::Resized(new_size) = event {
-                let EngineInterfaceMut { ui, renderer, .. } = engine.interface_mut();
-                renderer.set_frame_size((*new_size).into()).unwrap();
+                engine.renderer
+                    .set_frame_size((*new_size).into())
+                    .unwrap();
 
-                ui.node_mut(self.root)
+                engine.user_interface
+                    .node_mut(self.root)
                     .widget_mut()
                     .set_width(new_size.width as f32)
                     .set_height(new_size.height as f32);

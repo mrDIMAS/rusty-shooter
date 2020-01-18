@@ -1,3 +1,5 @@
+#![deny(unsafe_code)]
+
 extern crate rg3d;
 extern crate rand;
 
@@ -14,15 +16,16 @@ mod hud;
 mod jump_pad;
 mod item;
 
-use std::{
-    fs::File,
-    path::Path,
-    time::Instant,
-    io::Write,
-    time,
-    thread,
-    time::Duration,
-    sync::{Arc, Mutex},
+use crate::{
+    jump_pad::JumpPadContainer,
+    character::AsCharacter,
+    projectile::ProjectileContainer,
+    level::{Level, CylinderEmitter},
+    menu::Menu,
+    hud::Hud,
+    weapon::WeaponContainer,
+    item::ItemContainer,
+    actor::Actor,
 };
 use rg3d::{
     core::{
@@ -47,6 +50,9 @@ use rg3d::{
         UINode,
         text::TextBuilder,
         event::{UIEvent, UIEventKind},
+        text::Text,
+        Builder,
+        UINodeContainer,
     },
     scene::{
         particle_system::CustomEmitterFactory,
@@ -57,22 +63,21 @@ use rg3d::{
     engine::{
         resource_manager::ResourceManager,
         Engine,
-        EngineInterfaceMut,
-        EngineInterface,
     },
 };
-use crate::{
-    jump_pad::JumpPadContainer,
-    character::AsCharacter,
-    projectile::ProjectileContainer,
-    level::{Level, CylinderEmitter},
-    menu::Menu,
-    hud::Hud,
-    weapon::WeaponContainer,
-    item::ItemContainer,
+use std::{
+    rc::Rc,
+    fs::File,
+    path::Path,
+    time::Instant,
+    io::Write,
+    time,
+    thread,
+    time::Duration,
+    sync::{Arc, Mutex},
+    cell::RefCell,
 };
-use rg3d::gui::text::Text;
-use rg3d::gui::{Builder, UINodeContainer};
+use rg3d::utils::translate_event;
 
 pub struct Game {
     menu: Menu,
@@ -84,6 +89,7 @@ pub struct Game {
     last_tick_time: time::Instant,
     music: Handle<SoundSource>,
     running: bool,
+    control_scheme: Rc<RefCell<ControlScheme>>,
 }
 
 pub trait HandleFromSelf<T> {
@@ -114,6 +120,143 @@ pub enum CollisionGroups {
     All = std::isize::MAX,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub enum ControlButton {
+    Mouse(u8),
+    Key(VirtualKeyCode),
+    WheelUp,
+    WheelDown,
+}
+
+impl ControlButton {
+    pub fn name(&self) -> &'static str {
+        match self {
+            ControlButton::Mouse(index) => {
+                match index {
+                    1 => "LMB",
+                    2 => "RMB",
+                    3 => "MMB",
+                    4 => "MB4",
+                    5 => "MB5",
+                    _ => "Unknown"
+                }
+            }
+            ControlButton::Key(code) => rg3d::utils::virtual_key_code_name(*code),
+            ControlButton::WheelUp => "Wheel Up",
+            ControlButton::WheelDown => "Wheel Down",
+        }
+    }
+}
+
+pub struct ControlButtonDefinition {
+    description: String,
+    pub button: ControlButton,
+}
+
+pub struct ControlScheme {
+    pub move_forward: ControlButtonDefinition,
+    pub move_backward: ControlButtonDefinition,
+    pub move_left: ControlButtonDefinition,
+    pub move_right: ControlButtonDefinition,
+    pub jump: ControlButtonDefinition,
+    pub crouch: ControlButtonDefinition,
+    pub shoot: ControlButtonDefinition,
+    pub next_weapon: ControlButtonDefinition,
+    pub prev_weapon: ControlButtonDefinition,
+    pub run: ControlButtonDefinition,
+    pub mouse_sens: f32,
+    pub mouse_y_inverse: bool,
+    pub smooth_mouse: bool,
+    pub shake_camera: bool,
+}
+
+impl Default for ControlScheme {
+    fn default() -> Self {
+        Self {
+            move_forward: ControlButtonDefinition {
+                description: "Move Forward".to_string(),
+                button: ControlButton::Key(VirtualKeyCode::W),
+            },
+            move_backward: ControlButtonDefinition {
+                description: "Move Backward".to_string(),
+                button: ControlButton::Key(VirtualKeyCode::S),
+            },
+            move_left: ControlButtonDefinition {
+                description: "Move Left".to_string(),
+                button: ControlButton::Key(VirtualKeyCode::A),
+            },
+            move_right: ControlButtonDefinition {
+                description: "Move Right".to_string(),
+                button: ControlButton::Key(VirtualKeyCode::D),
+            },
+            jump: ControlButtonDefinition {
+                description: "Jump".to_string(),
+                button: ControlButton::Key(VirtualKeyCode::Space),
+            },
+            crouch: ControlButtonDefinition {
+                description: "Crouch".to_string(),
+                button: ControlButton::Key(VirtualKeyCode::C),
+            },
+            shoot: ControlButtonDefinition {
+                description: "Shoot".to_string(),
+                button: ControlButton::Mouse(1),
+            },
+            next_weapon: ControlButtonDefinition {
+                description: "Next Weapon".to_string(),
+                button: ControlButton::WheelUp,
+            },
+            prev_weapon: ControlButtonDefinition {
+                description: "Previous Weapon".to_string(),
+                button: ControlButton::WheelDown,
+            },
+            run: ControlButtonDefinition {
+                description: "Run".to_string(),
+                button: ControlButton::Key(VirtualKeyCode::LShift),
+            },
+            mouse_sens: 0.3,
+            mouse_y_inverse: false,
+            smooth_mouse: true,
+            shake_camera: true,
+        }
+    }
+}
+
+impl ControlScheme {
+    pub fn buttons_mut(&mut self) -> [&mut ControlButtonDefinition; 10] {
+        [
+            &mut self.move_forward,
+            &mut self.move_backward,
+            &mut self.move_left,
+            &mut self.move_right,
+            &mut self.jump,
+            &mut self.crouch,
+            &mut self.shoot,
+            &mut self.next_weapon,
+            &mut self.prev_weapon,
+            &mut self.run,
+        ]
+    }
+
+    pub fn buttons(&self) -> [&ControlButtonDefinition; 10] {
+        [
+            &self.move_forward,
+            &self.move_backward,
+            &self.move_left,
+            &self.move_right,
+            &self.jump,
+            &self.crouch,
+            &self.shoot,
+            &self.next_weapon,
+            &self.prev_weapon,
+            &self.run,
+        ]
+    }
+
+    pub fn reset(&mut self) {
+        *self = Default::default();
+    }
+}
+
 impl Game {
     pub fn run() {
         let events_loop = EventLoop::<()>::new();
@@ -131,12 +274,12 @@ impl Game {
 
         let mut engine = Engine::new(window_builder, &events_loop).unwrap();
         let hrtf_sphere = rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin").unwrap();
-        engine.interface_mut().sound_context
+        engine.sound_context
             .lock()
             .unwrap()
             .set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(rg3d::sound::hrtf::HrtfRenderer::new(hrtf_sphere)));
 
-        let frame_size = engine.interface().renderer.get_frame_size();
+        let frame_size = engine.renderer.get_frame_size();
 
         if let Ok(mut factory) = CustomEmitterFactory::get() {
             factory.set_callback(Box::new(|kind| {
@@ -147,11 +290,11 @@ impl Game {
             }))
         }
 
-        let EngineInterfaceMut { sound_context, ui, resource_manager, renderer, .. } = engine.interface_mut();
-        renderer.set_ambient_color(Color::opaque(60, 60, 60));
+        engine.renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
-        let buffer = resource_manager.request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.wav", true).unwrap();
-        let music = sound_context.lock()
+        let buffer = engine.resource_manager.request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.wav", true).unwrap();
+        let music = engine.sound_context
+            .lock()
             .unwrap()
             .add_source(GenericSourceBuilder::new(buffer)
                 .with_looping(true)
@@ -162,12 +305,18 @@ impl Game {
 
         let mut reverb = rg3d::sound::effects::reverb::Reverb::new();
         reverb.set_decay_time(Duration::from_secs_f32(5.0));
-        sound_context.lock().unwrap().add_effect(rg3d::sound::effects::Effect::Reverb(reverb));
+        engine.sound_context
+            .lock()
+            .unwrap()
+            .add_effect(rg3d::sound::effects::Effect::Reverb(reverb));
+
+        let control_scheme = Rc::new(RefCell::new(ControlScheme::default()));
 
         let mut game = Game {
-            hud: Hud::new(ui, resource_manager, frame_size),
+            hud: Hud::new(&mut engine.user_interface, &mut engine.resource_manager, frame_size),
             running: true,
-            menu: Menu::new(&mut engine),
+            menu: Menu::new(&mut engine, control_scheme.clone()),
+            control_scheme,
             debug_text: Handle::NONE,
             engine,
             level: None,
@@ -230,12 +379,10 @@ impl Game {
     }
 
     pub fn create_debug_ui(&mut self) {
-        let EngineInterfaceMut { ui, .. } = self.engine.interface_mut();
-
         self.debug_text = TextBuilder::new(WidgetBuilder::new()
             .with_width(400.0)
             .with_height(200.0))
-            .build(ui);
+            .build(&mut self.engine.user_interface);
     }
 
     pub fn save_game(&mut self) -> VisitResult {
@@ -271,7 +418,15 @@ impl Game {
                                 println!("Game state successfully loaded!");
 
                                 // Hide menu only of we successfully loaded a save.
-                                self.set_menu_visible(false)
+                                self.set_menu_visible(false);
+
+                                // Set control scheme for player.
+                                if let Some(level) = &mut self.level {
+                                    let player = level.get_player();
+                                    if let Actor::Player(player) = level.get_actors_mut().get_mut(player) {
+                                        player.set_control_scheme(self.control_scheme.clone());
+                                    }
+                                }
                             }
                             Err(e) => println!("Failed to load game state! Reason: {}", e)
                         }
@@ -293,7 +448,7 @@ impl Game {
 
     pub fn start_new_game(&mut self) {
         self.destroy_level();
-        self.level = Some(Level::new(&mut self.engine));
+        self.level = Some(Level::new(&mut self.engine, self.control_scheme.clone()));
         self.set_menu_visible(false);
     }
 
@@ -321,7 +476,6 @@ impl Game {
             UIEventKind::NumericValueChanged { new_value, .. } => {
                 if event.source() == self.menu.sb_music_volume {
                     self.engine
-                        .interface_mut()
                         .sound_context
                         .lock()
                         .unwrap()
@@ -336,14 +490,13 @@ impl Game {
     }
 
     pub fn set_menu_visible(&mut self, visible: bool) {
-        let EngineInterfaceMut { ui, .. } = self.engine.interface_mut();
+        let ui = &mut self.engine.user_interface;
         self.menu.set_visible(ui, visible);
         self.hud.set_visible(ui, !visible);
     }
 
     pub fn is_menu_visible(&self) -> bool {
-        let EngineInterface { ui, .. } = self.engine.interface();
-        self.menu.is_visible(ui)
+        self.menu.is_visible(&self.engine.user_interface)
     }
 
     pub fn update(&mut self, time: GameTime) {
@@ -359,8 +512,8 @@ impl Game {
             let player = level.get_player();
             if player.is_some() {
                 // Sync hud with player state.
-                let EngineInterfaceMut { ui, .. } = self.engine.interface_mut();
                 let player = level.get_actors().get(player);
+                let ui = &mut self.engine.user_interface;
                 self.hud.set_health(ui, player.character().get_health());
                 self.hud.set_armor(ui, player.character().get_armor());
                 let current_weapon = player.character().get_current_weapon();
@@ -373,11 +526,9 @@ impl Game {
     }
 
     pub fn update_statistics(&mut self, elapsed: f64) {
-        let EngineInterfaceMut { ui, renderer, sound_context, .. } = self.engine.interface_mut();
-
         self.debug_string.clear();
         use std::fmt::Write;
-        let statistics = renderer.get_statistics();
+        let statistics = self.engine.renderer.get_statistics();
         write!(self.debug_string,
                "Pure frame time: {:.2} ms\n\
                Capped frame time: {:.2} ms\n\
@@ -392,10 +543,12 @@ impl Game {
                statistics.geometry.triangles_rendered,
                statistics.geometry.draw_calls,
                elapsed,
-               sound_context.lock().unwrap().full_render_duration()
+               self.engine.sound_context.lock().unwrap().full_render_duration()
         ).unwrap();
 
-        ui.node_mut(self.debug_text)
+        self.engine
+            .user_interface
+            .node_mut(self.debug_text)
             .downcast_mut::<Text>()
             .unwrap()
             .set_text(self.debug_string.as_str());
@@ -412,10 +565,12 @@ impl Game {
     }
 
     fn process_dispatched_event(&mut self, event: &Event<()>) {
-        let EngineInterfaceMut { ui, .. } = self.engine.interface_mut();
-
         if let Event::WindowEvent { event, .. } = event {
-            ui.process_input_event(event);
+            if let Some(event) = translate_event(event) {
+                self.engine
+                    .user_interface
+                    .process_input_event(&event);
+            }
         }
 
         if !self.is_menu_visible() {
@@ -429,7 +584,7 @@ impl Game {
         self.process_dispatched_event(event);
 
         // Some events processed in any case.
-        if let Event::DeviceEvent { event, ..} = event {
+        if let Event::DeviceEvent { event, .. } = event {
             if let DeviceEvent::Key(input) = event {
                 if let ElementState::Pressed = input.state {
                     if let Some(key) = input.virtual_keycode {

@@ -15,10 +15,7 @@ use rg3d::{
         particle_system::{ParticleSystemBuilder, EmitterBuilder},
         node::Node,
     },
-    engine::{
-        EngineInterfaceMut,
-        Engine,
-    },
+    engine::Engine,
     utils,
     core::{
         color::Color,
@@ -36,26 +33,17 @@ use std::{
     path::Path
 };
 use rand::Rng;
-use crate::{
-    actor::{ActorContainer, Actor},
-    weapon::{
-        Weapon,
-        WeaponKind,
-        WeaponContainer,
-    },
-    player::Player,
-    GameTime,
-    bot::{
-        Bot,
-        BotKind,
-    },
-    projectile::ProjectileContainer,
-    LevelUpdateContext,
-    character::AsCharacter,
-    jump_pad::{JumpPadContainer, JumpPad},
-    item::{ItemContainer, Item, ItemKind},
-};
+use crate::{actor::{ActorContainer, Actor}, weapon::{
+    Weapon,
+    WeaponKind,
+    WeaponContainer,
+}, player::Player, GameTime, bot::{
+    Bot,
+    BotKind,
+}, projectile::ProjectileContainer, LevelUpdateContext, character::AsCharacter, jump_pad::{JumpPadContainer, JumpPad}, item::{ItemContainer, Item, ItemKind}, ControlScheme};
 use rg3d::scene::transform::TransformBuilder;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct Level {
     scene: Handle<Scene>,
@@ -157,8 +145,7 @@ impl Level {
     fn load_level(engine: &mut Engine) -> Scene {
         let mut scene = Scene::new();
 
-        let EngineInterfaceMut { resource_manager, .. } = engine.interface_mut();
-        let map_model = resource_manager.request_model(Path::new("data/models/dm6.fbx"));
+        let map_model = engine.resource_manager.request_model(Path::new("data/models/dm6.fbx"));
         if map_model.is_some() {
             // Instantiate map
             let map_root_handle = map_model.unwrap().lock().unwrap().instantiate(&mut scene).root;
@@ -189,16 +176,16 @@ impl Level {
                     gradient
                 })
                 .with_emitters(vec![
-                    EmitterBuilder::new(EmitterKind::Custom(Box::new(CylinderEmitter{ height: 0.2, radius: 0.2 }))).build()
+                    EmitterBuilder::new(EmitterKind::Custom(Box::new(CylinderEmitter { height: 0.2, radius: 0.2 }))).build()
                 ])
-                .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8))
+                .with_opt_texture(engine.resource_manager.request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8))
                 .build()));
 
         scene
     }
 
     pub fn give_weapon(&mut self, engine: &mut Engine, weapon_handle: Handle<Weapon>, actor_handle: Handle<Actor>) {
-        let graph = engine.interface_mut().scenes.get_mut(self.scene).interface_mut().graph;
+        let graph = engine.scenes.get_mut(self.scene).interface_mut().graph;
         let weapon = self.weapons.get_mut(weapon_handle);
         let actor = self.actors.get_mut(actor_handle);
         weapon.set_owner(actor_handle);
@@ -206,17 +193,17 @@ impl Level {
         graph.link_nodes(weapon.get_model(), actor.character().get_weapon_pivot());
     }
 
-    pub fn new(engine: &mut Engine) -> Level {
+    pub fn new(engine: &mut Engine, control_scheme: Rc<RefCell<ControlScheme>>) -> Level {
         let mut scene = Self::load_level(engine);
-        let EngineInterfaceMut { scenes, sound_context, resource_manager, .. } = engine.interface_mut();
         let mut actors = ActorContainer::new();
         let mut weapons = WeaponContainer::new();
-        let plasma_rifle = weapons.add(Weapon::new(WeaponKind::PlasmaRifle, resource_manager, &mut scene));
-        let ak47 = weapons.add(Weapon::new(WeaponKind::Ak47, resource_manager, &mut scene));
-        let m4 = weapons.add(Weapon::new(WeaponKind::M4, resource_manager, &mut scene));
-        let player = Player::new(sound_context, resource_manager, &mut scene);
+        let plasma_rifle = weapons.add(Weapon::new(WeaponKind::PlasmaRifle, &mut engine.resource_manager, &mut scene));
+        let ak47 = weapons.add(Weapon::new(WeaponKind::Ak47, &mut engine.resource_manager, &mut scene));
+        let m4 = weapons.add(Weapon::new(WeaponKind::M4, &mut engine.resource_manager, &mut scene));
+        let mut player = Player::new(engine.sound_context.clone(), &mut engine.resource_manager, &mut scene);
+        player.set_control_scheme(control_scheme);
         let player = actors.add(Actor::Player(player));
-        let scene = scenes.add(scene);
+        let scene = engine.scenes.add(scene);
         let mut level = Level {
             weapons,
             actors,
@@ -236,8 +223,7 @@ impl Level {
 
     pub fn analyze(&mut self, engine: &mut Engine) {
         let mut items = Vec::new();
-        let EngineInterfaceMut { scenes, resource_manager, .. } = engine.interface_mut();
-        let scene = scenes.get_mut(self.scene);
+        let scene = engine.scenes.get_mut(self.scene);
         let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
         for node in graph.linear_iter() {
             let position = node.base().get_global_position();
@@ -265,22 +251,20 @@ impl Level {
             }
         }
         for (kind, position) in items {
-            self.items.add(Item::new(kind, position, scene, resource_manager));
+            self.items.add(Item::new(kind, position, scene, &mut engine.resource_manager));
         }
     }
 
     pub fn add_bot(&mut self, kind: BotKind, engine: &mut Engine, position: Vec3) {
-        let EngineInterfaceMut { scenes, resource_manager, .. } = engine.interface_mut();
-        let scene = scenes.get_mut(self.scene);
-        let bot = Actor::Bot(Bot::new(kind, resource_manager, scene, position).unwrap());
+        let scene = engine.scenes.get_mut(self.scene);
+        let bot = Actor::Bot(Bot::new(kind, &mut engine.resource_manager, scene, position).unwrap());
         let bot = self.actors.add(bot);
-        let weapon = self.weapons.add(Weapon::new(WeaponKind::Ak47, resource_manager, scene));
+        let weapon = self.weapons.add(Weapon::new(WeaponKind::Ak47, &mut engine.resource_manager, scene));
         self.give_weapon(engine, weapon, bot);
     }
 
     pub fn destroy(&mut self, engine: &mut Engine) {
-        let EngineInterfaceMut { scenes, .. } = engine.interface_mut();
-        scenes.remove(self.scene);
+        engine.scenes.remove(self.scene);
     }
 
     pub fn get_player(&self) -> Handle<Actor> {
@@ -289,7 +273,7 @@ impl Level {
 
     pub fn process_input_event(&mut self, event: &Event<()>) -> bool {
         if let Actor::Player(player) = self.actors.get_mut(self.player) {
-            player.process_window_event(event)
+            player.process_input_event(event)
         } else {
             false
         }
@@ -314,8 +298,7 @@ impl Level {
     }
 
     pub fn update(&mut self, engine: &mut Engine, time: GameTime) {
-        let EngineInterfaceMut { scenes, sound_context, resource_manager, .. } = engine.interface_mut();
-        let scene = scenes.get_mut(self.scene);
+        let scene = engine.scenes.get_mut(self.scene);
 
         let player_position = self.actors.get(self.player).character().get_position(scene.interface().physics);
 
@@ -326,14 +309,14 @@ impl Level {
         }
 
         self.weapons.update(scene);
-        self.projectiles.update(scene, resource_manager, &mut self.actors, &self.weapons, time);
-        self.items.update(scene, resource_manager, time);
+        self.projectiles.update(scene, &mut engine.resource_manager, &mut self.actors, &self.weapons, time);
+        self.items.update(scene, &mut engine.resource_manager, time);
 
         let mut context = LevelUpdateContext {
             time,
             scene,
-            sound_context,
-            resource_manager,
+            sound_context: engine.sound_context.clone(),
+            resource_manager: &mut engine.resource_manager,
             items: &mut self.items,
             weapons: &mut self.weapons,
             jump_pads: &mut self.jump_pads,

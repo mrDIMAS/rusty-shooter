@@ -5,14 +5,12 @@ use crate::{
         AsCharacter,
         Character,
     },
-    LevelUpdateContext,
     level::{
+        LevelUpdateContext,
         LevelEntity,
-        CleanUp,
     },
     HandleFromSelf,
-    item::ItemKind,
-    weapon::WeaponKind,
+    level::GameEvent
 };
 use rg3d::{
     core::{
@@ -31,7 +29,7 @@ use rg3d::{
     scene::{
         SceneInterfaceMut,
         base::AsBase,
-    }
+    },
 };
 
 pub enum Actor {
@@ -43,6 +41,15 @@ impl Default for Actor {
     fn default() -> Self {
         Actor::Bot(Default::default())
     }
+}
+
+macro_rules! dispatch {
+    ($self:ident, $func:ident, $($args:expr),*) => {
+        match $self {
+            Actor::Player(v) => v.$func($($args),*),
+            Actor::Bot(v) => v.$func($($args),*),
+        }
+    };
 }
 
 impl Actor {
@@ -60,15 +67,10 @@ impl Actor {
             Actor::Bot(_) => 1,
         }
     }
-}
 
-macro_rules! dispatch {
-    ($self:ident, $func:ident, $($args:expr),*) => {
-        match $self {
-            Actor::Player(v) => v.$func($($args),*),
-            Actor::Bot(v) => v.$func($($args),*),
-        }
-    };
+    pub fn can_be_removed(&self) -> bool {
+        dispatch!(self, can_be_removed,)
+    }
 }
 
 impl AsCharacter for Actor {
@@ -137,41 +139,40 @@ impl ActorContainer {
         self.pool.borrow_mut(actor)
     }
 
+    pub fn free(&mut self, actor: Handle<Actor>) {
+        self.pool.free(actor)
+    }
+
     pub fn update(&mut self, context: &mut LevelUpdateContext) {
-        for actor in self.pool.iter_mut() {
+        for (handle, actor) in self.pool.pair_iter_mut() {
+            let is_dead = actor.character().is_dead();
+
             actor.update(context);
 
-            for item in context.items.iter_mut() {
-                let SceneInterfaceMut { graph, physics, .. } = context.scene.interface_mut();
-                let pivot = graph.get_mut(item.get_pivot());
-                let body = physics.borrow_body(actor.character().get_body());
-                let distance = (pivot.base().get_global_position() - body.get_position()).len();
-                if distance < 1.25 && !item.is_picked_up() {
-                    match item.get_kind() {
-                        ItemKind::Medkit => actor.character_mut().heal(20.0),
-                        ItemKind::Plasma | ItemKind::Ak47Ammo762 | ItemKind::M4Ammo556 => {
-                            for weapon in actor.character().get_weapons() {
-                                let weapon = context.weapons.get_mut(*weapon);
-                                let (weapon_kind, ammo) = match item.get_kind() {
-                                    ItemKind::Medkit => continue,
-                                    ItemKind::Plasma => (WeaponKind::PlasmaRifle, 20),
-                                    ItemKind::Ak47Ammo762 => (WeaponKind::Ak47, 30),
-                                    ItemKind::M4Ammo556 => (WeaponKind::M4, 25),
-                                };
-                                if weapon.get_kind() == weapon_kind {
-                                    weapon.add_ammo(ammo);
-                                    break;
-                                }
-                            }
-                        }
+            let character = actor.character_mut();
+
+            if !is_dead {
+                for (item_handle, item) in context.items.pair_iter() {
+                    let SceneInterfaceMut { graph, physics, .. } = context.scene.interface_mut();
+                    let pivot = graph.get_mut(item.get_pivot());
+                    let body = physics.borrow_body(character.get_body());
+                    let distance = (pivot.base().get_global_position() - body.get_position()).len();
+                    if distance < 1.25 && !item.is_picked_up() {
+                        character.sender
+                            .as_ref()
+                            .unwrap()
+                            .send(GameEvent::PickUpItem {
+                                actor: handle,
+                                item: item_handle,
+                            }).unwrap();
                     }
-                    item.pick_up();
                 }
             }
 
+            // Actors can jump on jump pads.
             for jump_pad in context.jump_pads.iter() {
                 let physics = context.scene.interface_mut().physics;
-                let body = physics.borrow_body_mut(actor.character().get_body());
+                let body = physics.borrow_body_mut(character.get_body());
                 let mut push = false;
                 for contact in body.get_contacts() {
                     if contact.static_geom == jump_pad.get_shape() {
@@ -184,18 +185,24 @@ impl ActorContainer {
                 }
             }
 
-            if actor.character().is_dead() {
-                // Detach weapons first so their nodes won't be removed along with pivot.
-                for weapon in actor.character().get_weapons() {
-                    let weapon = context.weapons.get(*weapon);
-                    context.scene.interface_mut().graph.unlink_nodes(weapon.get_model());
-                }
+            if actor.can_be_removed() {
+                // Abuse the fact that actor has sender and use it to send event.
+                if let Some(sender) = actor.character().sender.clone().as_ref() {
+                    sender.send(GameEvent::RemoveActor { actor: handle }).unwrap();
 
-                actor.character_mut().clean_up(context.scene);
+                    match actor {
+                        Actor::Bot(bot) => {
+                            // Spawn bot of same kind, we don't care of preserving state of bot
+                            // after death. Leader board still will correctly count score.
+                            sender.send(GameEvent::SpawnBot { kind: bot.definition.kind }).unwrap()
+                        },
+                        Actor::Player(player) => {
+                            // TODO Spawn player here
+                        },
+                    }
+                }
             }
         }
-
-        self.pool.retain(|actor| !actor.character().is_dead());
     }
 
     pub fn iter(&self) -> PoolIterator<Actor> {

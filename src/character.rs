@@ -12,14 +12,16 @@ use rg3d::{
     physics::{
         rigid_body::RigidBody,
         Physics,
-    }
+    },
 };
 use crate::{
     weapon::Weapon,
     level::CleanUp,
     HandleFromSelf,
-    actor::Actor
+    actor::Actor,
+    level::GameEvent
 };
+use std::sync::mpsc::Sender;
 
 pub struct Character {
     pub self_handle: Handle<Actor>,
@@ -30,6 +32,7 @@ pub struct Character {
     pub weapons: Vec<Handle<Weapon>>,
     pub current_weapon: u32,
     pub weapon_pivot: Handle<Node>,
+    pub sender: Option<Sender<GameEvent>>,
 }
 
 impl HandleFromSelf<Actor> for Character {
@@ -54,6 +57,7 @@ impl Default for Character {
             weapons: Vec::new(),
             current_weapon: 0,
             weapon_pivot: Handle::NONE,
+            sender: None,
         }
     }
 }
@@ -123,7 +127,29 @@ impl Character {
     }
 
     pub fn damage(&mut self, amount: f32) {
-        self.health -= amount.abs();
+        let amount = amount.abs();
+        if self.armor > 0.0 {
+            self.armor -= amount;
+            if self.armor < 0.0 {
+                self.health += self.armor;
+            }
+        } else {
+            self.health -= amount;
+        }
+
+        if self.health <= 0.0 {
+            if let Some(sender) = self.sender.as_ref() {
+                // Drop all weapons when dying.
+                for weapon in self.weapons.iter() {
+                    let _ = sender.send(GameEvent::DropWeapon {
+                        weapon: *weapon,
+                        position: Default::default(),
+                        adjust_height: true,
+                    });
+                }
+                self.weapons.clear();
+            }
+        }
     }
 
     pub fn heal(&mut self, amount: f32) {
@@ -147,7 +173,19 @@ impl Character {
     }
 
     pub fn add_weapon(&mut self, weapon: Handle<Weapon>) {
+        if let Some(sender) = self.sender.as_ref() {
+            for other_weapon in self.weapons.iter() {
+                sender.send(GameEvent::ShowWeapon {
+                    weapon: *other_weapon,
+                    state: false,
+                }).unwrap();
+            }
+        }
+
+        self.current_weapon = self.weapons.len() as u32;
         self.weapons.push(weapon);
+
+        self.request_current_weapon_visible(true);
     }
 
     pub fn get_current_weapon(&self) -> Handle<Weapon> {
@@ -158,15 +196,34 @@ impl Character {
         }
     }
 
+    fn request_current_weapon_visible(&self, state: bool) {
+        if let Some(sender) = self.sender.as_ref() {
+            if let Some(current_weapon) = self.weapons.get(self.current_weapon as usize) {
+                sender.send(GameEvent::ShowWeapon {
+                    weapon: *current_weapon,
+                    state,
+                }).unwrap()
+            }
+        }
+    }
+
     pub fn next_weapon(&mut self) {
         if !self.weapons.is_empty() && (self.current_weapon as usize) < self.weapons.len() - 1 {
+            self.request_current_weapon_visible(false);
+
             self.current_weapon += 1;
+
+            self.request_current_weapon_visible(true);
         }
     }
 
     pub fn prev_weapon(&mut self) {
         if self.current_weapon > 0 {
+            self.request_current_weapon_visible(false);
+
             self.current_weapon -= 1;
+
+            self.request_current_weapon_visible(true);
         }
     }
 }

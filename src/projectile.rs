@@ -66,7 +66,6 @@ impl ProjectileKind {
 }
 
 pub struct Projectile {
-    self_handle: Handle<Projectile>,
     kind: ProjectileKind,
     model: Handle<Node>,
     /// Handle of rigid body assigned to projectile. Some projectiles, like grenades,
@@ -87,16 +86,9 @@ pub struct Projectile {
     definition: &'static ProjectileDefinition,
 }
 
-impl HandleFromSelf<Projectile> for Projectile {
-    fn self_handle(&self) -> Handle<Projectile> {
-        self.self_handle
-    }
-}
-
 impl Default for Projectile {
     fn default() -> Self {
         Self {
-            self_handle: Default::default(),
             kind: ProjectileKind::Plasma,
             model: Default::default(),
             dir: Default::default(),
@@ -369,7 +361,6 @@ impl Visit for Projectile {
         }
 
         self.definition = Self::get_definition(self.kind);
-        self.self_handle.visit("SelfHandle", visitor)?;
         self.lifetime.visit("Lifetime", visitor)?;
         self.dir.visit("Direction", visitor)?;
         self.model.visit("Model", visitor)?;
@@ -394,9 +385,7 @@ impl ProjectileContainer {
     }
 
     pub fn add(&mut self, projectile: Projectile) -> Handle<Projectile> {
-        let handle = self.pool.spawn(projectile);
-        self.pool.borrow_mut(handle).self_handle = handle;
-        handle
+        self.pool.spawn(projectile)
     }
 
     pub fn iter(&self) -> PoolIterator<Projectile> {

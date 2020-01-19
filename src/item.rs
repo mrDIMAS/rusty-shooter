@@ -3,7 +3,7 @@ use rg3d::{
         pool::{
             Handle,
             Pool,
-            PoolIteratorMut
+            PoolPairIterator
         },
         visitor::{Visit, Visitor, VisitResult},
         math::vec3::Vec3,
@@ -162,6 +162,10 @@ impl Item {
         self.pivot
     }
 
+    pub fn position(&self, graph: &Graph) -> Vec3 {
+        graph.get(self.pivot).base().get_global_position()
+    }
+
     pub fn update(&mut self,
                   graph: &mut Graph,
                   resource_manager: &mut ResourceManager,
@@ -255,8 +259,12 @@ impl ItemContainer {
         self.pool.spawn(item)
     }
 
-    pub fn iter_mut(&mut self) -> PoolIteratorMut<Item> {
-        self.pool.iter_mut()
+    pub fn get_mut(&mut self, item: Handle<Item>) -> &mut Item {
+        self.pool.borrow_mut(item)
+    }
+
+    pub fn pair_iter(&self) -> PoolPairIterator<Item> {
+        self.pool.pair_iter()
     }
 
     pub fn update(&mut self,

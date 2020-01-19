@@ -30,19 +30,25 @@ use rg3d::{
     },
 };
 use rand::Rng;
-use crate::{character::{
-    AsCharacter,
-    Character,
-}, LevelUpdateContext, level::{
-    LevelEntity,
-    CleanUp,
-}, ControlScheme, ControlButton};
+use crate::{
+    character::{
+        AsCharacter,
+        Character,
+    },
+    level::{
+        LevelUpdateContext,
+        LevelEntity,
+        CleanUp,
+    }, ControlScheme, ControlButton,
+};
 use std::{
     rc::Rc,
     path::Path,
     sync::{Arc, Mutex},
     cell::RefCell,
 };
+use std::sync::mpsc::Sender;
+use crate::level::GameEvent;
 
 pub struct Controller {
     move_forward: bool,
@@ -114,16 +120,18 @@ impl LevelEntity for Player {
     fn update(&mut self, context: &mut LevelUpdateContext) {
         self.update_movement(context);
 
-        if let Some(current_weapon) = self.character.weapons.get(self.character.current_weapon as usize) {
-            let current_weapon = context.weapons.get_mut(*current_weapon);
-
-            let velocity = context.scene.interface_mut().physics.borrow_body(self.character.body).get_velocity();
+        if let Some(current_weapon_handle) = self.character.weapons.get(self.character.current_weapon as usize) {
+            let velocity = context.scene
+                .interface_mut()
+                .physics
+                .borrow_body(self.character.body)
+                .get_velocity();
 
             if self.controller.shoot {
-                if let Some(projectile) = current_weapon.try_shoot(context.scene, context.resource_manager,
-                                                                   context.sound_context.clone(), context.time, velocity) {
-                    context.projectiles.add(projectile);
-                }
+                self.character.sender.as_ref().unwrap().send(GameEvent::ShootWeapon {
+                    weapon: *current_weapon_handle,
+                    initial_velocity: velocity
+                }).unwrap();
             }
         }
 
@@ -200,7 +208,7 @@ impl CleanUp for Player {
 }
 
 impl Player {
-    pub fn new(sound_context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager, scene: &mut Scene) -> Player {
+    pub fn new(sound_context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager, scene: &mut Scene, sender: Sender<GameEvent>) -> Player {
         let SceneInterfaceMut { graph, physics, node_rigid_body_map, .. } = scene.interface_mut();
 
         let camera_handle = graph.add_node(Node::Camera(Default::default()));
@@ -214,7 +222,8 @@ impl Player {
         pivot.base_mut().get_local_transform_mut().set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
 
         let capsule_shape = CapsuleShape::new(0.35, Self::default().stand_body_height, Axis::Y);
-        let body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
+        let mut body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
+        body.set_friction(Vec3::new(0.2, 0.0, 0.2));
         let body_handle = physics.add_body(body);
         let pivot_handle = graph.add_node(pivot);
         node_rigid_body_map.insert(pivot_handle, body_handle);
@@ -244,6 +253,7 @@ impl Player {
                 body: body_handle,
                 weapon_pivot: weapon_pivot_handle,
                 health: 999999.0,
+                sender: Some(sender),
                 ..Default::default()
             },
             camera: camera_handle,
@@ -365,11 +375,6 @@ impl Player {
                                                  camera_node.get_up_vector(),
                                                  -camera_node.get_look_vector());
 
-        for (i, weapon) in self.character.weapons.iter().enumerate() {
-            let weapon = context.weapons.get_mut(*weapon);
-            weapon.set_visibility(i == self.character.current_weapon as usize, graph);
-        }
-
         if self.control_scheme.clone().unwrap().borrow().smooth_mouse {
             self.yaw += (self.dest_yaw - self.yaw) * 0.2;
             self.pitch += (self.dest_pitch - self.pitch) * 0.2;
@@ -407,6 +412,10 @@ impl Player {
         let listener = sound_context.listener_mut();
         listener.set_basis(self.listener_basis);
         listener.set_position(self.head_position);
+    }
+
+    pub fn can_be_removed(&self) -> bool {
+        self.character.is_dead()
     }
 
     pub fn process_input_event(&mut self, event: &Event<()>) -> bool {

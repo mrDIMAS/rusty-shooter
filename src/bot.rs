@@ -1,12 +1,13 @@
 use std::{
     path::Path,
     cell::Cell,
+    sync::mpsc::Sender
 };
 use crate::{
     character::{Character, AsCharacter},
-    LevelUpdateContext,
-    level::{LevelEntity, CleanUp},
+    level::{LevelEntity, CleanUp, LevelUpdateContext},
     actor::Actor,
+    level::GameEvent
 };
 use rg3d::{
     core::{
@@ -35,7 +36,7 @@ use rg3d::{
     engine::resource_manager::ResourceManager,
 };
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum BotKind {
     // Beasts
     Mutant,
@@ -70,12 +71,14 @@ pub struct Bot {
     character: Character,
     target_actor: Cell<Handle<Actor>>,
     hit_reaction_animation: Handle<Animation>,
-    definition: &'static BotDefinition,
+    pub definition: &'static BotDefinition,
     pose: AnimationPose,
     locomotion_machine: Machine,
     combat_machine: Machine,
+    dying_machine: Machine,
     last_health: f32,
     restoration_time: f32,
+    dead_state: Handle<State>
 }
 
 impl AsCharacter for Bot {
@@ -101,106 +104,114 @@ impl Default for Bot {
             pose: Default::default(),
             locomotion_machine: Default::default(),
             combat_machine: Default::default(),
+            dying_machine: Default::default(),
             last_health: 0.0,
             restoration_time: 0.0,
+            dead_state: Handle::NONE
         }
     }
 }
 
 pub struct BotDefinition {
-    scale: f32,
-    health: f32,
-    kind: BotKind,
-    walk_speed: f32,
-    weapon_scale: f32,
-    model: &'static str,
-    idle_animation: &'static str,
-    walk_animation: &'static str,
-    aim_animation: &'static str,
-    whip_animation: &'static str,
-    jump_animation: &'static str,
-    falling_animation: &'static str,
-    hit_reaction_animation: &'static str,
-    weapon_hand_name: &'static str,
-    left_leg_name: &'static str,
-    right_leg_name: &'static str,
+    pub scale: f32,
+    pub health: f32,
+    pub kind: BotKind,
+    pub walk_speed: f32,
+    pub weapon_scale: f32,
+    pub model: &'static str,
+    pub idle_animation: &'static str,
+    pub walk_animation: &'static str,
+    pub aim_animation: &'static str,
+    pub whip_animation: &'static str,
+    pub jump_animation: &'static str,
+    pub falling_animation: &'static str,
+    pub hit_reaction_animation: &'static str,
+    pub dying_animation: &'static str,
+    pub dead_animation: &'static str,
+    pub weapon_hand_name: &'static str,
+    pub left_leg_name: &'static str,
+    pub right_leg_name: &'static str,
 }
 
 impl LevelEntity for Bot {
     fn update(&mut self, context: &mut LevelUpdateContext) {
         let SceneInterfaceMut { graph, physics, animations, .. } = context.scene.interface_mut();
 
-        let threshold = 2.0;
-        let has_ground_contact = self.character.has_ground_contact(physics);
-        let body = physics.borrow_body_mut(self.character.body);
-        let dir = self.target - body.get_position();
-        let distance = dir.len();
+        if self.character.is_dead() {
+            self.dying_machine
+                .set_parameter(Self::DYING_TO_DEAD, machine::Parameter::Rule(self.character.is_dead()))
+                .evaluate_pose(animations, context.time.delta)
+                .apply(graph);
+        } else {
+            let threshold = 2.0;
+            let has_ground_contact = self.character.has_ground_contact(physics);
+            let body = physics.borrow_body_mut(self.character.body);
+            let dir = self.target - body.get_position();
+            let distance = dir.len();
 
-        if let Some(dir) = dir.normalized() {
-            if distance > threshold {
-                body.move_by(dir.scale(self.definition.walk_speed * context.time.delta));
+            if let Some(dir) = dir.normalized() {
+                if distance > threshold {
+                    body.move_by(dir.scale(self.definition.walk_speed * context.time.delta));
+                }
+
+                let pivot = graph.get_mut(self.character.pivot);
+                let transform = pivot.base_mut().get_local_transform_mut();
+                let angle = dir.x.atan2(dir.z);
+                transform.set_rotation(Quat::from_axis_angle(Vec3::UP, angle))
             }
 
-            let pivot = graph.get_mut(self.character.pivot);
-            let transform = pivot.base_mut().get_local_transform_mut();
-            let angle = dir.x.atan2(dir.z);
-            transform.set_rotation(Quat::from_axis_angle(Vec3::UP, angle))
-        }
-
-        let need_jump = dir.y >= 0.3 && has_ground_contact;
-        if need_jump {
-            body.set_y_velocity(0.08);
-        }
-        let was_damaged = self.character.health < self.last_health;
-        if was_damaged {
-            let hit_reaction = animations.get_mut(self.hit_reaction_animation);
-            if hit_reaction.has_ended() {
-                hit_reaction.rewind();
+            let need_jump = dir.y >= 0.3 && has_ground_contact;
+            if need_jump {
+                body.set_y_velocity(0.08);
             }
-            self.restoration_time = 0.8;
-        }
-        let can_aim = self.restoration_time <= 0.0;
-        self.last_health = self.character.health;
+            let was_damaged = self.character.health < self.last_health;
+            if was_damaged {
+                let hit_reaction = animations.get_mut(self.hit_reaction_animation);
+                if hit_reaction.has_ended() {
+                    hit_reaction.rewind();
+                }
+                self.restoration_time = 0.8;
+            }
+            let can_aim = self.restoration_time <= 0.0;
+            self.last_health = self.character.health;
 
-        self.locomotion_machine
-            .set_parameter(Self::IDLE_TO_WALK_PARAM, machine::Parameter::Rule(distance > threshold))
-            .set_parameter(Self::WALK_TO_IDLE_PARAM, machine::Parameter::Rule(distance <= threshold))
-            .set_parameter(Self::WALK_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
-            .set_parameter(Self::IDLE_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
-            .set_parameter(Self::JUMP_TO_FALLING_PARAM, machine::Parameter::Rule(!has_ground_contact))
-            .set_parameter(Self::FALLING_TO_IDLE_PARAM, machine::Parameter::Rule(has_ground_contact))
-            .evaluate_pose(animations, context.time.delta)
-            .apply(graph);
+            self.locomotion_machine
+                .set_parameter(Self::IDLE_TO_WALK_PARAM, machine::Parameter::Rule(distance > threshold))
+                .set_parameter(Self::WALK_TO_IDLE_PARAM, machine::Parameter::Rule(distance <= threshold))
+                .set_parameter(Self::WALK_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
+                .set_parameter(Self::IDLE_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
+                .set_parameter(Self::JUMP_TO_FALLING_PARAM, machine::Parameter::Rule(!has_ground_contact))
+                .set_parameter(Self::FALLING_TO_IDLE_PARAM, machine::Parameter::Rule(has_ground_contact))
+                .evaluate_pose(animations, context.time.delta)
+                .apply(graph);
 
-        // Overwrite upper body with combat machine
-        self.combat_machine
-            .set_parameter(Self::WHIP_TO_AIM_PARAM, machine::Parameter::Rule(distance > threshold))
-            .set_parameter(Self::AIM_TO_WHIP_PARAM, machine::Parameter::Rule(distance <= threshold))
-            .set_parameter(Self::WHIP_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
-            .set_parameter(Self::AIM_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
-            .set_parameter(Self::HIT_REACTION_TO_AIM_PARAM, machine::Parameter::Rule(can_aim))
-            .evaluate_pose(animations, context.time.delta)
-            .apply(graph);
+            // Overwrite upper body with combat machine
+            self.combat_machine
+                .set_parameter(Self::WHIP_TO_AIM_PARAM, machine::Parameter::Rule(distance > threshold))
+                .set_parameter(Self::AIM_TO_WHIP_PARAM, machine::Parameter::Rule(distance <= threshold))
+                .set_parameter(Self::WHIP_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
+                .set_parameter(Self::AIM_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
+                .set_parameter(Self::HIT_REACTION_TO_AIM_PARAM, machine::Parameter::Rule(can_aim))
+                .evaluate_pose(animations, context.time.delta)
+                .apply(graph);
 
-        if distance > threshold && can_aim && false { // DISABLED
-            if let Some(weapon) = self.character.weapons.get(self.character.current_weapon as usize) {
-                let weapon = context.weapons.get_mut(*weapon);
-                if let Some(projectile) = weapon.try_shoot(
-                    context.scene,
-                    context.resource_manager,
-                    context.sound_context.clone(),
-                    context.time,
-                    Vec3::ZERO) {
-                    context.projectiles.add(projectile);
+            if distance > threshold && can_aim && false {
+                if let Some(weapon) = self.character.weapons.get(self.character.current_weapon as usize) {
+                    self.character.sender.as_ref().unwrap().send(GameEvent::ShootWeapon { weapon: *weapon, initial_velocity: Vec3::ZERO }).unwrap();
                 }
             }
-        }
 
-        self.restoration_time -= context.time.delta;
+            self.restoration_time -= context.time.delta;
+        }
     }
 }
 
-fn load_animation(resource_manager: &mut ResourceManager, path: &Path, model: Handle<Node>, scene: &mut Scene) -> Result<Handle<Animation>, ()> {
+fn load_animation<P: AsRef<Path>>(
+    resource_manager: &mut ResourceManager,
+    path: P,
+    model: Handle<Node>,
+    scene: &mut Scene
+) -> Result<Handle<Animation>, ()> {
     Ok(*resource_manager.request_model(path)
         .ok_or(())?
         .lock()
@@ -210,7 +221,12 @@ fn load_animation(resource_manager: &mut ResourceManager, path: &Path, model: Ha
         .ok_or(())?)
 }
 
-fn disable_leg_tracks(animation: &mut Animation, root: Handle<Node>, leg_name: &str, graph: &Graph) {
+fn disable_leg_tracks(
+    animation: &mut Animation,
+    root: Handle<Node>,
+    leg_name: &str,
+    graph: &Graph
+) {
     animation.set_tracks_enabled_from(graph.find_by_name(root, leg_name), false, graph)
 }
 
@@ -230,6 +246,9 @@ impl Bot {
     pub const AIM_TO_HIT_REACTION_PARAM: &'static str = "AimToHitReaction";
     pub const WHIP_TO_HIT_REACTION_PARAM: &'static str = "WhipToHitReaction";
 
+    // Dying machine parameters
+    pub const DYING_TO_DEAD: &'static str = "DyingToDead";
+
     pub fn get_definition(kind: BotKind) -> &'static BotDefinition {
         match kind {
             BotKind::Mutant => {
@@ -242,6 +261,8 @@ impl Bot {
                     whip_animation: "data/animations/mutant/whip.fbx",
                     jump_animation: "data/animations/mutant/jump.fbx",
                     falling_animation: "data/animations/mutant/falling.fbx",
+                    dying_animation: "data/animations/mutant/dying.fbx",
+                    dead_animation: "data/animations/mutant/dead.fbx",
                     hit_reaction_animation: "data/animations/mutant/hit_reaction.fbx",
                     weapon_hand_name: "Mutant:RightHand",
                     left_leg_name: "Mutant:LeftUpLeg",
@@ -263,6 +284,8 @@ impl Bot {
                     whip_animation: "data/animations/parasite/whip.fbx",
                     jump_animation: "data/animations/parasite/jump.fbx",
                     falling_animation: "data/animations/parasite/falling.fbx",
+                    dying_animation: "data/animations/parasite/dying.fbx",
+                    dead_animation: "data/animations/parasite/dead.fbx",
                     hit_reaction_animation: "data/animations/parasite/hit_reaction.fbx",
                     weapon_hand_name: "RightHand",
                     left_leg_name: "LeftUpLeg",
@@ -276,7 +299,7 @@ impl Bot {
             }
             BotKind::Maw => {
                 static DEFINITION: BotDefinition = BotDefinition {
-                    kind: BotKind::Parasite,
+                    kind: BotKind::Maw,
                     model: "data/models/maw.fbx",
                     idle_animation: "data/animations/maw/idle.fbx",
                     walk_animation: "data/animations/maw/walk.fbx",
@@ -284,6 +307,8 @@ impl Bot {
                     whip_animation: "data/animations/maw/whip.fbx",
                     jump_animation: "data/animations/maw/jump.fbx",
                     falling_animation: "data/animations/maw/falling.fbx",
+                    dying_animation: "data/animations/maw/dying.fbx",
+                    dead_animation: "data/animations/maw/dead.fbx",
                     hit_reaction_animation: "data/animations/maw/hit_reaction.fbx",
                     weapon_hand_name: "RightHand",
                     left_leg_name: "LeftUpLeg",
@@ -298,7 +323,7 @@ impl Bot {
         }
     }
 
-    pub fn new(kind: BotKind, resource_manager: &mut ResourceManager, scene: &mut Scene, position: Vec3) -> Result<Self, ()> {
+    pub fn new(kind: BotKind, resource_manager: &mut ResourceManager, scene: &mut Scene, position: Vec3, sender: Sender<GameEvent>) -> Result<Self, ()> {
         let definition = Self::get_definition(kind);
 
         let body_height = 1.25;
@@ -341,10 +366,10 @@ impl Bot {
         graph.link_nodes(weapon_pivot, hand);
 
         let locomotion_machine = {
-            let idle_animation = load_animation(resource_manager, definition.idle_animation.as_ref(), model, scene)?;
-            let walk_animation = load_animation(resource_manager, definition.walk_animation.as_ref(), model, scene)?;
-            let jump_animation = load_animation(resource_manager, definition.jump_animation.as_ref(), model, scene)?;
-            let falling_animation = load_animation(resource_manager, definition.falling_animation.as_ref(), model, scene)?;
+            let idle_animation = load_animation(resource_manager, definition.idle_animation, model, scene)?;
+            let walk_animation = load_animation(resource_manager, definition.walk_animation, model, scene)?;
+            let jump_animation = load_animation(resource_manager, definition.jump_animation, model, scene)?;
+            let falling_animation = load_animation(resource_manager, definition.falling_animation, model, scene)?;
 
             let mut machine = Machine::new();
 
@@ -376,9 +401,9 @@ impl Bot {
 
         let hit_reaction_animation;
         let combat_machine = {
-            let aim_animation = load_animation(resource_manager, definition.aim_animation.as_ref(), model, scene)?;
-            let whip_animation = load_animation(resource_manager, definition.whip_animation.as_ref(), model, scene)?;
-            hit_reaction_animation = load_animation(resource_manager, definition.hit_reaction_animation.as_ref(), model, scene)?;
+            let aim_animation = load_animation(resource_manager, definition.aim_animation, model, scene)?;
+            let whip_animation = load_animation(resource_manager, definition.whip_animation, model, scene)?;
+            hit_reaction_animation = load_animation(resource_manager, definition.hit_reaction_animation, model, scene)?;
 
             let SceneInterfaceMut { graph, animations, .. } = scene.interface_mut();
 
@@ -410,7 +435,27 @@ impl Bot {
                 .add_transition(machine::Transition::new("Aim->HitReaction", aim_state, hit_reaction_state, 0.2, Self::AIM_TO_HIT_REACTION_PARAM))
                 .add_transition(machine::Transition::new("HitReaction->Aim", hit_reaction_state, aim_state, 0.5, Self::HIT_REACTION_TO_AIM_PARAM));
 
-            machine.debug(true);
+           // machine.debug(true);
+
+            machine
+        };
+
+        let dead_state;
+        let dying_machine = {
+            let dying_animation = load_animation(resource_manager, definition.dying_animation, model, scene)?;
+            let dead_animation = load_animation(resource_manager, definition.dead_animation, model, scene)?;
+
+            let mut machine = Machine::new();
+
+            let dying_node = machine.add_node(machine::PoseNode::make_play_animation(dying_animation));
+            let dying_state = machine.add_state(State::new("Dying", dying_node));
+
+            let dead_node = machine.add_node(machine::PoseNode::make_play_animation(dead_animation));
+            dead_state = machine.add_state(State::new("Dead", dead_node));
+
+            machine.set_entry_state(dying_state);
+
+            machine.add_transition(machine::Transition::new("Dying->Dead", dying_state, dead_state, 1.5, Self::DYING_TO_DEAD));
 
             machine
         };
@@ -420,17 +465,27 @@ impl Bot {
                 pivot,
                 body,
                 weapon_pivot,
-                health: definition.health,
+               // health: definition.health,
+                health: 10.0,
+                armor: 10.0,
+                sender: Some(sender),
                 ..Default::default()
             },
+            definition,
             hit_reaction_animation,
             last_health: definition.health,
             model,
             kind,
             locomotion_machine,
             combat_machine,
+            dying_machine,
+            dead_state,
             ..Default::default()
         })
+    }
+
+    pub fn can_be_removed(&self) -> bool {
+        self.dying_machine.active_state() == self.dead_state
     }
 
     pub fn set_target(&mut self, target: Vec3) {

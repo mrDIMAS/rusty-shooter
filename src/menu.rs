@@ -61,7 +61,6 @@ use rg3d::{resource::{
         TabDefinition,
     },
 }, utils};
-use std::any::Any;
 
 pub struct Menu {
     root: Handle<UINode>,
@@ -426,7 +425,7 @@ impl Menu {
                                 .unwrap()
                                 .set_min_value(0.0)
                                 .set_max_value(1.0)
-                                .set_value(1.0)
+                                .set_value(0.0)
                                 .set_step(0.025)
                                 .widget_mut()
                                 .set_row(1)

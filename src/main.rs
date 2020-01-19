@@ -1,4 +1,5 @@
 #![deny(unsafe_code)]
+#![deny(unused_must_use)]
 
 extern crate rg3d;
 extern crate rand;
@@ -17,14 +18,10 @@ mod jump_pad;
 mod item;
 
 use crate::{
-    jump_pad::JumpPadContainer,
     character::AsCharacter,
-    projectile::ProjectileContainer,
     level::{Level, CylinderEmitter},
     menu::Menu,
     hud::Hud,
-    weapon::WeaponContainer,
-    item::ItemContainer,
     actor::Actor,
 };
 use rg3d::{
@@ -43,7 +40,6 @@ use rg3d::{
             SoundSource,
             generic::GenericSourceBuilder,
         },
-        context::Context,
     },
     gui::{
         widget::WidgetBuilder,
@@ -56,12 +52,10 @@ use rg3d::{
     },
     scene::{
         particle_system::CustomEmitterFactory,
-        Scene,
     },
     event::{DeviceEvent, WindowEvent, ElementState, VirtualKeyCode, Event},
     event_loop::{EventLoop, ControlFlow},
     engine::{
-        resource_manager::ResourceManager,
         Engine,
     },
 };
@@ -74,7 +68,6 @@ use std::{
     time,
     thread,
     time::Duration,
-    sync::{Arc, Mutex},
     cell::RefCell,
 };
 use rg3d::utils::translate_event;
@@ -90,6 +83,7 @@ pub struct Game {
     music: Handle<SoundSource>,
     running: bool,
     control_scheme: Rc<RefCell<ControlScheme>>,
+    time: GameTime
 }
 
 pub trait HandleFromSelf<T> {
@@ -98,19 +92,9 @@ pub trait HandleFromSelf<T> {
 
 #[derive(Copy, Clone)]
 pub struct GameTime {
+    clock: time::Instant,
     elapsed: f64,
     delta: f32,
-}
-
-pub struct LevelUpdateContext<'a> {
-    time: GameTime,
-    scene: &'a mut Scene,
-    sound_context: Arc<Mutex<Context>>,
-    projectiles: &'a mut ProjectileContainer,
-    resource_manager: &'a mut ResourceManager,
-    items: &'a mut ItemContainer,
-    weapons: &'a mut WeaponContainer,
-    jump_pads: &'a mut JumpPadContainer,
 }
 
 pub enum CollisionGroups {
@@ -292,7 +276,7 @@ impl Game {
 
         engine.renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
-        let buffer = engine.resource_manager.request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.wav", true).unwrap();
+        let buffer = engine.resource_manager.request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true).unwrap();
         let music = engine.sound_context
             .lock()
             .unwrap()
@@ -312,6 +296,15 @@ impl Game {
 
         let control_scheme = Rc::new(RefCell::new(ControlScheme::default()));
 
+        let fixed_fps = 60.0;
+        let fixed_timestep = 1.0 / fixed_fps;
+
+        let mut time = GameTime {
+            clock: Instant::now(),
+            elapsed: 0.0,
+            delta: fixed_timestep,
+        };
+
         let mut game = Game {
             hud: Hud::new(&mut engine.user_interface, &mut engine.resource_manager, frame_size),
             running: true,
@@ -323,34 +316,27 @@ impl Game {
             debug_string: String::new(),
             last_tick_time: time::Instant::now(),
             music,
+            time
         };
 
         game.create_debug_ui();
-
-        let fixed_fps = 60.0;
-        let fixed_timestep = 1.0 / fixed_fps;
-        let clock = Instant::now();
-        let mut game_time = GameTime {
-            elapsed: 0.0,
-            delta: fixed_timestep,
-        };
 
         events_loop.run(move |event, _, control_flow| {
             game.process_input_event(&event);
 
             match event {
                 Event::EventsCleared => {
-                    let mut dt = clock.elapsed().as_secs_f64() - game_time.elapsed;
+                    let mut dt = game.time.clock.elapsed().as_secs_f64() - game.time.elapsed;
                     while dt >= fixed_timestep as f64 {
                         dt -= fixed_timestep as f64;
-                        game_time.elapsed += fixed_timestep as f64;
+                        game.time.elapsed += fixed_timestep as f64;
 
                         while let Some(mut ui_event) = game.engine.get_ui_mut().poll_ui_event() {
                             game.menu.handle_ui_event(&mut game.engine, &mut ui_event);
                             game.process_ui_event(&mut ui_event);
                         }
 
-                        game.update(game_time);
+                        game.update(game.time);
                     }
                     if !game.running {
                         *control_flow = ControlFlow::Exit;
@@ -360,7 +346,7 @@ impl Game {
                 Event::WindowEvent { event, .. } => {
                     match event {
                         WindowEvent::RedrawRequested => {
-                            game.update_statistics(game_time.elapsed);
+                            game.update_statistics(game.time.elapsed);
                             // Render at max speed
                             game.engine.render().unwrap();
                             // Make sure to cap update rate to 60 FPS.
@@ -427,6 +413,8 @@ impl Game {
                                         player.set_control_scheme(self.control_scheme.clone());
                                     }
                                 }
+
+                                self.time.elapsed = self.time.clock.elapsed().as_secs_f64();
                             }
                             Err(e) => println!("Failed to load game state! Reason: {}", e)
                         }

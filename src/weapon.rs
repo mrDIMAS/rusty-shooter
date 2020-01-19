@@ -1,27 +1,17 @@
 use std::{
     path::Path,
-    sync::{Arc, Mutex},
+    sync::mpsc::Sender,
+    path::PathBuf,
 };
 use crate::{
-    projectile::{
-        Projectile,
-        ProjectileKind,
-    },
+    projectile::ProjectileKind,
     actor::Actor,
-    HandleFromSelf,
     GameTime,
     level::CleanUp,
+    level::GameEvent,
 };
 use rg3d::{
     physics::{RayCastOptions, Physics},
-    sound::{
-        source::{
-            Status,
-            spatial::SpatialSourceBuilder,
-            generic::GenericSourceBuilder,
-        },
-        context::Context,
-    },
     engine::resource_manager::ResourceManager,
     scene::{
         SceneInterfaceMut,
@@ -79,7 +69,6 @@ impl WeaponKind {
 }
 
 pub struct Weapon {
-    self_handle: Handle<Weapon>,
     kind: WeaponKind,
     model: Handle<Node>,
     laser_dot: Handle<Node>,
@@ -90,25 +79,20 @@ pub struct Weapon {
     shot_position: Vec3,
     owner: Handle<Actor>,
     ammo: u32,
-    definition: &'static WeaponDefinition,
+    pub definition: &'static WeaponDefinition,
+    pub sender: Option<Sender<GameEvent>>,
 }
 
 pub struct WeaponDefinition {
-    model: &'static str,
-    shot_sound: &'static str,
-    ammo: u32,
-}
-
-impl HandleFromSelf<Weapon> for Weapon {
-    fn self_handle(&self) -> Handle<Weapon> {
-        self.self_handle
-    }
+    pub model: &'static str,
+    pub shot_sound: &'static str,
+    pub ammo: u32,
+    pub projectile: ProjectileKind,
 }
 
 impl Default for Weapon {
     fn default() -> Self {
         Self {
-            self_handle: Default::default(),
             kind: WeaponKind::M4,
             laser_dot: Handle::NONE,
             model: Handle::NONE,
@@ -120,6 +104,7 @@ impl Default for Weapon {
             owner: Handle::NONE,
             ammo: 250,
             definition: Self::get_definition(WeaponKind::M4),
+            sender: None,
         }
     }
 }
@@ -135,7 +120,6 @@ impl Visit for Weapon {
         }
 
         self.definition = Self::get_definition(self.kind);
-        self.self_handle.visit("SelfHandle", visitor)?;
         self.model.visit("Model", visitor)?;
         self.laser_dot.visit("LaserDot", visitor)?;
         self.offset.visit("Offset", visitor)?;
@@ -154,31 +138,34 @@ impl Weapon {
             WeaponKind::M4 => {
                 static DEFINITION: WeaponDefinition = WeaponDefinition {
                     model: "data/models/m4.FBX",
-                    shot_sound: "data/sounds/m4_shot.wav",
+                    shot_sound: "data/sounds/m4_shot.ogg",
                     ammo: 115,
+                    projectile: ProjectileKind::Bullet,
                 };
                 &DEFINITION
             }
             WeaponKind::Ak47 => {
                 static DEFINITION: WeaponDefinition = WeaponDefinition {
                     model: "data/models/ak47.FBX",
-                    shot_sound: "data/sounds/m4_shot.wav",
+                    shot_sound: "data/sounds/m4_shot.ogg",
                     ammo: 100,
+                    projectile: ProjectileKind::Bullet,
                 };
                 &DEFINITION
             }
             WeaponKind::PlasmaRifle => {
                 static DEFINITION: WeaponDefinition = WeaponDefinition {
                     model: "data/models/plasma_rifle.FBX",
-                    shot_sound: "data/sounds/plasma_shot.wav",
+                    shot_sound: "data/sounds/plasma_shot.ogg",
                     ammo: 40,
+                    projectile: ProjectileKind::Plasma,
                 };
                 &DEFINITION
             }
         }
     }
 
-    pub fn new(kind: WeaponKind, resource_manager: &mut ResourceManager, scene: &mut Scene) -> Weapon {
+    pub fn new(kind: WeaponKind, resource_manager: &mut ResourceManager, scene: &mut Scene, sender: Sender<GameEvent>) -> Weapon {
         let definition = Self::get_definition(kind);
 
         let model = resource_manager.request_model(Path::new(definition.model))
@@ -208,13 +195,18 @@ impl Weapon {
             shot_point,
             definition,
             ammo: definition.ammo,
+            sender: Some(sender),
             ..Default::default()
         }
     }
 
     pub fn set_visibility(&self, visibility: bool, graph: &mut Graph) {
-        graph.get_mut(self.model).base_mut().set_visibility(visibility);
-        graph.get_mut(self.laser_dot).base_mut().set_visibility(visibility);
+        graph.get_mut(self.model)
+            .base_mut()
+            .set_visibility(visibility);
+        graph.get_mut(self.laser_dot)
+            .base_mut()
+            .set_visibility(visibility);
     }
 
     pub fn get_model(&self) -> Handle<Node> {
@@ -233,13 +225,23 @@ impl Weapon {
         self.shot_position = node.base().get_global_position();
     }
 
-    fn get_shot_position(&self, graph: &Graph) -> Vec3 {
+    pub fn get_shot_position(&self, graph: &Graph) -> Vec3 {
         if self.shot_point.is_some() {
-            graph.get(self.shot_point).base().get_global_position()
+            graph.get(self.shot_point)
+                .base()
+                .get_global_position()
         } else {
             // Fallback
-            graph.get(self.model).base().get_global_position()
+            graph.get(self.model)
+                .base()
+                .get_global_position()
         }
+    }
+
+    pub fn get_shot_direction(&self, graph: &Graph) -> Vec3 {
+        graph.get(self.model)
+            .base()
+            .get_look_vector()
     }
 
     pub fn get_kind(&self) -> WeaponKind {
@@ -266,21 +268,6 @@ impl Weapon {
         graph.get_mut(self.laser_dot).base_mut().get_local_transform_mut().set_position(laser_dot_position);
     }
 
-    fn play_shot_sound(&self, resource_manager: &mut ResourceManager, sound_context: Arc<Mutex<Context>>) {
-        let mut sound_context = sound_context.lock().unwrap();
-        let shot_buffer = resource_manager.request_sound_buffer(
-            Path::new(self.definition.shot_sound), false).unwrap();
-        let shot_sound = SpatialSourceBuilder::new(
-            GenericSourceBuilder::new(shot_buffer)
-                .with_status(Status::Playing)
-                .with_play_once(true)
-                .build()
-                .unwrap())
-            .with_position(self.shot_position)
-            .build_source();
-        sound_context.add_source(shot_sound);
-    }
-
     pub fn get_ammo(&self) -> u32 {
         self.ammo
     }
@@ -293,37 +280,25 @@ impl Weapon {
         self.owner = owner;
     }
 
-    pub fn try_shoot(&mut self,
-                     scene: &mut Scene,
-                     resource_manager: &mut ResourceManager,
-                     sound_context: Arc<Mutex<Context>>,
-                     time: GameTime,
-                     weapon_velocity: Vec3) -> Option<Projectile> {
+    pub fn try_shoot(&mut self, scene: &mut Scene, time: GameTime, weapon_velocity: Vec3) -> bool {
         if self.ammo != 0 && time.elapsed - self.last_shot_time >= 0.1 {
             self.ammo -= 1;
 
             self.offset = Vec3::new(0.0, 0.0, -0.05);
             self.last_shot_time = time.elapsed;
 
-            self.play_shot_sound(resource_manager, sound_context);
+            let position = self.get_shot_position(scene.interface().graph);
 
-            let (dir, pos) = {
-                let graph = scene.interface().graph;
-                (graph.get(self.model).base().get_look_vector(), self.get_shot_position(graph))
-            };
-
-            match self.kind {
-                WeaponKind::M4 | WeaponKind::Ak47 => {
-                    Some(Projectile::new(ProjectileKind::Bullet, resource_manager, scene,
-                                         dir, pos, self.self_handle, weapon_velocity))
-                }
-                WeaponKind::PlasmaRifle => {
-                    Some(Projectile::new(ProjectileKind::Plasma, resource_manager, scene,
-                                         dir, pos, self.self_handle, weapon_velocity))
-                }
+            if let Some(sender) = self.sender.as_ref() {
+                sender.send(GameEvent::PlaySound {
+                    path: PathBuf::from(self.definition.shot_sound),
+                    position,
+                }).unwrap();
             }
+
+            true
         } else {
-            None
+            false
         }
     }
 }
@@ -348,9 +323,7 @@ impl WeaponContainer {
     }
 
     pub fn add(&mut self, weapon: Weapon) -> Handle<Weapon> {
-        let handle = self.pool.spawn(weapon);
-        self.pool.borrow_mut(handle).self_handle = handle;
-        handle
+        self.pool.spawn(weapon)
     }
 
     pub fn iter(&self) -> PoolIterator<Weapon> {

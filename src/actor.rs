@@ -9,7 +9,6 @@ use crate::{
         LevelUpdateContext,
         LevelEntity,
     },
-    HandleFromSelf,
     level::GameEvent
 };
 use rg3d::{
@@ -19,6 +18,7 @@ use rg3d::{
             Pool,
             PoolIterator,
             PoolIteratorMut,
+            PoolPairIterator
         },
         visitor::{
             Visit,
@@ -112,12 +112,6 @@ pub struct ActorContainer {
     pool: Pool<Actor>
 }
 
-impl HandleFromSelf<Actor> for Actor {
-    fn self_handle(&self) -> Handle<Actor> {
-        self.character().self_handle()
-    }
-}
-
 impl ActorContainer {
     pub fn new() -> Self {
         Self {
@@ -126,9 +120,7 @@ impl ActorContainer {
     }
 
     pub fn add(&mut self, actor: Actor) -> Handle<Actor> {
-        let handle = self.pool.spawn(actor);
-        self.pool.borrow_mut(handle).character_mut().self_handle = handle;
-        handle
+        self.pool.spawn(actor)
     }
 
     pub fn get(&self, actor: Handle<Actor>) -> &Actor {
@@ -196,8 +188,8 @@ impl ActorContainer {
                             // after death. Leader board still will correctly count score.
                             sender.send(GameEvent::SpawnBot { kind: bot.definition.kind }).unwrap()
                         },
-                        Actor::Player(player) => {
-                            // TODO Spawn player here
+                        Actor::Player(_) => {
+                            sender.send(GameEvent::SpawnPlayer).unwrap()
                         },
                     }
                 }
@@ -207,6 +199,10 @@ impl ActorContainer {
 
     pub fn iter(&self) -> PoolIterator<Actor> {
         self.pool.iter()
+    }
+
+    pub fn pair_iter(&self) -> PoolPairIterator<Actor> {
+        self.pool.pair_iter()
     }
 
     pub fn iter_mut(&mut self) -> PoolIteratorMut<Actor> {

@@ -252,7 +252,6 @@ impl Player {
                 pivot: pivot_handle,
                 body: body_handle,
                 weapon_pivot: weapon_pivot_handle,
-                health: 999999.0,
                 sender: Some(sender),
                 ..Default::default()
             },

@@ -5,34 +5,23 @@ use std::{
     sync::{
         Mutex,
         Arc,
-        mpsc::{Sender, Receiver, channel},
+        mpsc::{Sender},
     },
     path::PathBuf,
 };
 use rand::Rng;
-use crate::{
-    actor::{ActorContainer, Actor},
-    weapon::{
-        Weapon,
-        WeaponKind,
-        WeaponContainer,
-    },
-    player::Player,
-    GameTime,
-    bot::{
-        Bot,
-        BotKind,
-    },
-    projectile::{
-        ProjectileContainer,
-        ProjectileKind,
-        Projectile,
-    },
-    character::AsCharacter,
-    jump_pad::{JumpPadContainer, JumpPad},
-    item::{ItemContainer, Item, ItemKind},
-    ControlScheme,
-};
+use crate::{actor::{ActorContainer, Actor}, weapon::{
+    Weapon,
+    WeaponKind,
+    WeaponContainer,
+}, player::Player, GameTime, bot::{
+    Bot,
+    BotKind,
+}, projectile::{
+    ProjectileContainer,
+    ProjectileKind,
+    Projectile,
+}, character::AsCharacter, jump_pad::{JumpPadContainer, JumpPad}, item::{ItemContainer, Item, ItemKind}, ControlScheme, effects};
 use rg3d::{
     engine::{
         resource_manager::ResourceManager,
@@ -78,6 +67,7 @@ use rg3d::{
         },
     },
 };
+use crate::effects::EffectKind;
 
 pub struct Level {
     scene: Handle<Scene>,
@@ -88,13 +78,12 @@ pub struct Level {
     jump_pads: JumpPadContainer,
     items: ItemContainer,
     spawn_points: Vec<SpawnPoint>,
-    events_receiver: Receiver<GameEvent>,
-    events_sender: Sender<GameEvent>,
+    events_sender: Option<Sender<GameEvent>>,
+    pub control_scheme: Option<Rc<RefCell<ControlScheme>>>,
 }
 
 impl Default for Level {
     fn default() -> Self {
-        let (tx, rx) = channel();
         Self {
             projectiles: ProjectileContainer::new(),
             actors: ActorContainer::new(),
@@ -104,8 +93,8 @@ impl Default for Level {
             jump_pads: JumpPadContainer::new(),
             items: ItemContainer::new(),
             spawn_points: Default::default(),
-            events_receiver: rx,
-            events_sender: tx,
+            events_sender: None,
+            control_scheme: None,
         }
     }
 }
@@ -129,15 +118,6 @@ impl Visit for Level {
         self.weapons.visit("Weapons", visitor)?;
         self.jump_pads.visit("JumpPads", visitor)?;
         self.spawn_points.visit("SpawnPoints", visitor)?;
-
-        // Attach new sender to all event sources.
-        for actor in self.actors.iter_mut() {
-            actor.character_mut().sender = Some(self.events_sender.clone());
-        }
-
-        for weapon in self.weapons.iter_mut() {
-            weapon.sender = Some(self.events_sender.clone());
-        }
 
         visitor.leave_region()
     }
@@ -246,28 +226,27 @@ impl Level {
         scene
     }
 
-    pub fn new(engine: &mut Engine, control_scheme: Rc<RefCell<ControlScheme>>) -> Level {
+    pub fn new(engine: &mut Engine, control_scheme: Rc<RefCell<ControlScheme>>, sender: Sender<GameEvent>) -> Level {
         let mut scene = Self::load_level(engine);
         let mut actors = ActorContainer::new();
-        let (tx, rx) = channel();
-        let mut player = Player::new(engine.sound_context.clone(), &mut engine.resource_manager, &mut scene, tx.clone());
-        player.set_control_scheme(control_scheme);
+        let mut player = Player::new(engine.sound_context.clone(), &mut engine.resource_manager, &mut scene, sender.clone());
+        player.set_control_scheme(control_scheme.clone());
         let player = actors.add(Actor::Player(player));
         let mut level = Level {
             weapons: WeaponContainer::new(),
             actors,
             player,
             scene: engine.scenes.add(scene),
-            events_receiver: rx,
-            events_sender: tx,
+            events_sender: Some(sender.clone()),
+            control_scheme: Some(control_scheme),
             ..Default::default()
         };
-        level.events_sender.send(GameEvent::GiveNewWeapon { actor: player, kind: WeaponKind::M4 }).unwrap();
-        level.events_sender.send(GameEvent::GiveNewWeapon { actor: player, kind: WeaponKind::Ak47 }).unwrap();
-        level.events_sender.send(GameEvent::GiveNewWeapon { actor: player, kind: WeaponKind::PlasmaRifle }).unwrap();
-        level.events_sender.send(GameEvent::AddBot { kind: BotKind::Maw, position: Vec3::new(0.0, 0.0, -1.0) }).unwrap();
-        level.events_sender.send(GameEvent::AddBot { kind: BotKind::Mutant, position: Vec3::new(0.0, 0.0, 1.0) }).unwrap();
-        level.events_sender.send(GameEvent::AddBot { kind: BotKind::Parasite, position: Vec3::new(1.0, 0.0, 0.0) }).unwrap();
+        sender.send(GameEvent::GiveNewWeapon { actor: player, kind: WeaponKind::M4 }).unwrap();
+        sender.send(GameEvent::GiveNewWeapon { actor: player, kind: WeaponKind::Ak47 }).unwrap();
+        sender.send(GameEvent::GiveNewWeapon { actor: player, kind: WeaponKind::PlasmaRifle }).unwrap();
+        sender.send(GameEvent::AddBot { kind: BotKind::Maw, position: Vec3::new(0.0, 0.0, -1.0) }).unwrap();
+        sender.send(GameEvent::AddBot { kind: BotKind::Mutant, position: Vec3::new(0.0, 0.0, 1.0) }).unwrap();
+        sender.send(GameEvent::AddBot { kind: BotKind::Parasite, position: Vec3::new(1.0, 0.0, 0.0) }).unwrap();
         level.analyze(engine);
         level
     }
@@ -295,9 +274,9 @@ impl Level {
             } else if name.starts_with("Medkit") {
                 items.push((ItemKind::Medkit, position));
             } else if name.starts_with("Ammo_Ak47") {
-                items.push((ItemKind::Ak47Ammo762, position));
+                items.push((ItemKind::Ak47Ammo, position));
             } else if name.starts_with("Ammo_M4") {
-                items.push((ItemKind::M4Ammo556, position));
+                items.push((ItemKind::M4Ammo, position));
             } else if name.starts_with("Ammo_Plasma") {
                 items.push((ItemKind::Plasma, position));
             } else if name.starts_with("SpawnPoint") {
@@ -305,7 +284,7 @@ impl Level {
             }
         }
         for (kind, position) in items {
-            self.items.add(Item::new(kind, position, scene, &mut engine.resource_manager));
+            self.items.add(Item::new(kind, position, scene, &mut engine.resource_manager, self.events_sender.as_ref().unwrap().clone()));
         }
         self.spawn_points = spawn_points.into_iter().map(|p| SpawnPoint { position: p }).collect();
     }
@@ -338,12 +317,6 @@ impl Level {
         &self.weapons
     }
 
-    fn update_bots(&mut self, engine: &mut Engine) {
-        for actor in self.actors.iter_mut() {
-            if let Actor::Bot(bot) = actor {}
-        }
-    }
-
     fn pick(&self, engine: &mut Engine, from: Vec3, to: Vec3) -> Vec3 {
         let scene = engine.scenes.get_mut(self.scene);
         let SceneInterfaceMut { physics, .. } = scene.interface_mut();
@@ -361,43 +334,15 @@ impl Level {
         }
     }
 
-    fn drop_weapon(&mut self, engine: &mut Engine, weapon: Handle<Weapon>, position: Vec3, adjust_height: bool) {
-        let position = if adjust_height {
-            self.pick(engine, position, position - Vec3::new(0.0, 1000.0, 0.0))
-        } else {
-            position
-        };
+    fn remove_weapon(&mut self, engine: &mut Engine, weapon: Handle<Weapon>) {
         let scene = engine.scenes.get_mut(self.scene);
-        let SceneInterfaceMut { physics, graph, .. } = scene.interface_mut();
-        let weapon = self.weapons.get_mut(weapon);
-        weapon.set_owner(Handle::NONE);
-        graph.unlink_nodes(weapon.get_model());
-        graph.get_mut(weapon.get_model())
-            .base_mut()
-            .get_local_transform_mut()
-            .set_position(position);
-    }
-
-    fn spawn_weapon(&mut self, engine: &mut Engine, kind: WeaponKind, position: Vec3, adjust_height: bool) {
-        let position = if adjust_height {
-            self.pick(engine, position, position - Vec3::new(0.0, 1000.0, 0.0))
-        } else {
-            position
-        };
-        let scene = engine.scenes.get_mut(self.scene);
-        let weapon = Weapon::new(kind, &mut engine.resource_manager, scene, self.events_sender.clone());
-        scene.interface_mut()
-            .graph
-            .get_mut(weapon.get_model())
-            .base_mut()
-            .get_local_transform_mut()
-            .set_position(position);
-        self.weapons.add(weapon);
+        self.weapons.get_mut(weapon).clean_up(scene);
+        self.weapons.free(weapon);
     }
 
     fn give_new_weapon(&mut self, engine: &mut Engine, actor: Handle<Actor>, kind: WeaponKind) {
         let scene = engine.scenes.get_mut(self.scene);
-        let mut weapon = Weapon::new(kind, &mut engine.resource_manager, scene, self.events_sender.clone());
+        let mut weapon = Weapon::new(kind, &mut engine.resource_manager, scene, self.events_sender.as_ref().unwrap().clone());
         weapon.set_owner(actor);
         let weapon_model = weapon.get_model();
         let actor = self.actors.get_mut(actor);
@@ -409,9 +354,9 @@ impl Level {
 
     fn add_bot(&mut self, engine: &mut Engine, kind: BotKind, position: Vec3) {
         let scene = engine.scenes.get_mut(self.scene);
-        let bot = Actor::Bot(Bot::new(kind, &mut engine.resource_manager, scene, position, self.events_sender.clone()).unwrap());
+        let bot = Actor::Bot(Bot::new(kind, &mut engine.resource_manager, scene, position, self.events_sender.as_ref().unwrap().clone()).unwrap());
         let bot = self.actors.add(bot);
-        self.events_sender.send(GameEvent::GiveNewWeapon { actor: bot, kind: WeaponKind::Ak47 }).unwrap();
+        self.events_sender.as_ref().unwrap().send(GameEvent::GiveNewWeapon { actor: bot, kind: WeaponKind::Ak47 }).unwrap();
         println!("Bot {:?} was added!", kind);
     }
 
@@ -419,33 +364,95 @@ impl Level {
         let scene = engine.scenes.get_mut(self.scene);
         let character = self.actors.get(actor).character();
 
-        // Make sure to drop weapons
+        // Make sure to remove weapons and drop appropriate items (items will be temporary).
         let drop_position = character.get_position(scene.interface_mut().physics);
         let weapons = character.get_weapons()
             .iter()
             .map(|h| *h)
             .collect::<Vec<Handle<Weapon>>>();
         for weapon in weapons {
-            self.drop_weapon(engine, weapon, drop_position, true);
+            let item_kind = match self.weapons.get(weapon).get_kind() {
+                WeaponKind::M4 => ItemKind::M4,
+                WeaponKind::Ak47 => ItemKind::Ak47,
+                WeaponKind::PlasmaRifle => ItemKind::PlasmaGun,
+            };
+            self.spawn_item(engine, item_kind, drop_position, true, Some(20.0));
+            self.remove_weapon(engine, weapon);
         }
 
         let scene = engine.scenes.get_mut(self.scene);
-        self.actors.get_mut(actor).character_mut().clean_up(scene);
-        self.actors.free(actor)
+        self.actors
+            .get_mut(actor)
+            .character_mut()
+            .clean_up(scene);
+        self.actors.free(actor);
+
+        if self.player == actor {
+            self.player = Handle::NONE;
+        }
+    }
+
+    fn spawn_player(&mut self, engine: &mut Engine) {
+        let index = self.find_suitable_spawn_point(engine);
+        let spawn_position = self.spawn_points
+            .get(index)
+            .map_or(Vec3::ZERO, |pt| pt.position);
+        let scene = engine.scenes.get_mut(self.scene);
+        let resource_manager = &mut engine.resource_manager;
+        let mut player = Player::new(engine.sound_context.clone(), resource_manager, scene, self.events_sender.as_ref().unwrap().clone());
+        if let Some(control_scheme) = self.control_scheme.as_ref() {
+            player.set_control_scheme(control_scheme.clone());
+        }
+        self.player = self.actors.add(Actor::Player(player));
+        self.actors
+            .get_mut(self.player)
+            .character_mut()
+            .set_position(scene.interface_mut().physics, spawn_position);
+        self.events_sender
+            .as_ref()
+            .unwrap()
+            .send(GameEvent::GiveNewWeapon {
+                actor: self.player,
+                kind: WeaponKind::PlasmaRifle
+            })
+            .unwrap();
     }
 
     fn give_item(&mut self, engine: &mut Engine, actor: Handle<Actor>, kind: ItemKind) {
         let character = self.actors.get_mut(actor).character_mut();
         match kind {
             ItemKind::Medkit => character.heal(20.0),
-            ItemKind::Plasma | ItemKind::Ak47Ammo762 | ItemKind::M4Ammo556 => {
+            ItemKind::Ak47 | ItemKind::PlasmaGun | ItemKind::M4 => {
+                let weapon_kind = match kind {
+                    ItemKind::Ak47 => WeaponKind::Ak47,
+                    ItemKind::PlasmaGun => WeaponKind::PlasmaRifle,
+                    ItemKind::M4 => WeaponKind::M4,
+                    _ => unreachable!()
+                };
+
+                let mut found = false;
+                for weapon_handle in character.get_weapons() {
+                    let weapon = self.weapons.get_mut(*weapon_handle);
+                    // If actor already has weapon of given kind, then just add ammo to it.
+                    if weapon.get_kind() == weapon_kind {
+                        found = true;
+                        weapon.add_ammo(30);
+                        break;
+                    }
+                }
+                // Finally if actor does not have such weapon, give new one to him.
+                if !found {
+                    self.give_new_weapon(engine, actor, weapon_kind);
+                }
+            }
+            ItemKind::Plasma | ItemKind::Ak47Ammo | ItemKind::M4Ammo => {
                 for weapon in character.get_weapons() {
                     let weapon = self.weapons.get_mut(*weapon);
                     let (weapon_kind, ammo) = match kind {
-                        ItemKind::Medkit => continue,
                         ItemKind::Plasma => (WeaponKind::PlasmaRifle, 20),
-                        ItemKind::Ak47Ammo762 => (WeaponKind::Ak47, 30),
-                        ItemKind::M4Ammo556 => (WeaponKind::M4, 25),
+                        ItemKind::Ak47Ammo => (WeaponKind::Ak47, 30),
+                        ItemKind::M4Ammo => (WeaponKind::M4, 25),
+                        _ => continue,
                     };
                     if weapon.get_kind() == weapon_kind {
                         weapon.add_ammo(ammo);
@@ -485,6 +492,7 @@ impl Level {
             position,
             owner,
             initial_velocity,
+            self.events_sender.as_ref().unwrap().clone(),
         );
         self.projectiles.add(projectile);
     }
@@ -506,7 +514,7 @@ impl Level {
     fn shoot_weapon(&mut self, engine: &mut Engine, weapon_handle: Handle<Weapon>, initial_velocity: Vec3, time: GameTime) {
         let scene = engine.scenes.get_mut(self.scene);
         let weapon = self.weapons.get_mut(weapon_handle);
-        if weapon.try_shoot(scene, time, initial_velocity) {
+        if weapon.try_shoot(scene, time) {
             let graph = scene.interface().graph;
             let kind = weapon.definition.projectile;
             let position = weapon.get_shot_position(graph);
@@ -520,7 +528,7 @@ impl Level {
         self.weapons.get(weapon_handle).set_visibility(state, scene.interface_mut().graph)
     }
 
-    fn spawn_bot(&mut self, engine: &mut Engine, kind: BotKind) {
+    fn find_suitable_spawn_point(&self, engine: &mut Engine) -> usize {
         // Find spawn point with least amount of enemies nearby.
         let scene = engine.scenes.get(self.scene);
         let physics = scene.interface().physics;
@@ -537,9 +545,14 @@ impl Level {
                 index = i;
             }
         }
+        index
+    }
 
-        let spawn_position = self.spawn_points.get(index).map_or(Vec3::ZERO, |pt| pt.position);
-
+    fn spawn_bot(&mut self, engine: &mut Engine, kind: BotKind) {
+        let index = self.find_suitable_spawn_point(engine);
+        let spawn_position = self.spawn_points
+            .get(index)
+            .map_or(Vec3::ZERO, |pt| pt.position);
         self.add_bot(engine, kind, spawn_position);
     }
 
@@ -553,10 +566,26 @@ impl Level {
         }
     }
 
+    fn spawn_item(&mut self, engine: &mut Engine, kind: ItemKind, position: Vec3, adjust_height: bool, lifetime: Option<f32>) {
+        let position = if adjust_height {
+            self.pick(engine, position, position - Vec3::new(0.0, 1000.0, 0.0))
+        } else {
+            position
+        };
+        let scene = engine.scenes.get_mut(self.scene);
+        let resource_manager = &mut engine.resource_manager;
+        let mut item = Item::new(kind, position, scene, resource_manager, self.events_sender.as_ref().unwrap().clone());
+        item.set_lifetime(lifetime);
+        self.items.add(item);
+    }
+
     pub fn update(&mut self, engine: &mut Engine, time: GameTime) {
         let scene = engine.scenes.get_mut(self.scene);
 
-        let player_position = self.actors.get(self.player).character().get_position(scene.interface().physics);
+        let player_position = self.actors
+            .get(self.player)
+            .character()
+            .get_position(scene.interface().physics);
 
         for actor in self.actors.iter_mut() {
             if let Actor::Bot(bot) = actor {
@@ -565,8 +594,8 @@ impl Level {
         }
 
         self.weapons.update(scene);
-        self.projectiles.update(scene, &mut engine.resource_manager, &mut self.actors, &self.weapons, time);
-        self.items.update(scene, &mut engine.resource_manager, time);
+        self.projectiles.update(scene, &mut self.actors, &self.weapons, time);
+        self.items.update(scene, time);
 
         let mut context = LevelUpdateContext {
             time,
@@ -580,49 +609,69 @@ impl Level {
         };
 
         self.actors.update(&mut context);
+    }
 
-        while let Ok(event) = self.events_receiver.try_recv() {
-            match event {
-                GameEvent::SpawnWeapon { kind, position, adjust_height } => {
-                    self.spawn_weapon(engine, kind, position, adjust_height)
-                }
-                GameEvent::DropWeapon { weapon, position, adjust_height } => {
-                    self.drop_weapon(engine, weapon, position, adjust_height)
-                }
-                GameEvent::GiveNewWeapon { actor, kind } => {
-                    self.give_new_weapon(engine, actor, kind)
-                }
-                GameEvent::AddBot { kind, position } => {
-                    self.add_bot(engine, kind, position)
-                }
-                GameEvent::RemoveActor { actor } => {
-                    self.remove_actor(engine, actor)
-                }
-                GameEvent::GiveItem { actor, kind } => {
-                    self.give_item(engine, actor, kind)
-                }
-                GameEvent::PickUpItem { actor, item } => {
-                    self.pickup_item(engine, actor, item)
-                }
-                GameEvent::ShootWeapon { weapon, initial_velocity } => {
-                    self.shoot_weapon(engine, weapon, initial_velocity, time)
-                }
-                GameEvent::CreateProjectile { kind, position, direction, initial_velocity, owner } => {
-                    self.create_projectile(engine, kind, position, direction, initial_velocity, owner)
-                }
-                GameEvent::PlaySound { path, position } => {
-                    self.play_sound(engine, path, position)
-                }
-                GameEvent::ShowWeapon { weapon, state } => {
-                    self.show_weapon(engine, weapon, state)
-                }
-                GameEvent::SpawnBot { kind } => {
-                    self.spawn_bot(engine, kind)
-                }
-                GameEvent::DamageActor { actor, who, amount } => {
-                    self.damage_actor(actor, who, amount)
-                }
+    pub fn handle_game_event(&mut self, engine: &mut Engine, event: &GameEvent, time: GameTime) {
+        match event {
+            GameEvent::GiveNewWeapon { actor, kind } => {
+                self.give_new_weapon(engine, *actor, *kind)
             }
+            GameEvent::AddBot { kind, position } => {
+                self.add_bot(engine, *kind, *position)
+            }
+            GameEvent::RemoveActor { actor } => {
+                self.remove_actor(engine, *actor)
+            }
+            GameEvent::GiveItem { actor, kind } => {
+                self.give_item(engine, *actor, *kind)
+            }
+            GameEvent::PickUpItem { actor, item } => {
+                self.pickup_item(engine, *actor, *item)
+            }
+            GameEvent::ShootWeapon { weapon, initial_velocity } => {
+                self.shoot_weapon(engine, *weapon, *initial_velocity, time)
+            }
+            GameEvent::CreateProjectile { kind, position, direction, initial_velocity, owner } => {
+                self.create_projectile(engine, *kind, *position, *direction, *initial_velocity, *owner)
+            }
+            GameEvent::PlaySound { path, position } => {
+                self.play_sound(engine, path, *position)
+            }
+            GameEvent::ShowWeapon { weapon, state } => {
+                self.show_weapon(engine, *weapon, *state)
+            }
+            GameEvent::SpawnBot { kind } => {
+                self.spawn_bot(engine, *kind)
+            }
+            GameEvent::DamageActor { actor, who, amount } => {
+                self.damage_actor(*actor, *who, *amount)
+            }
+            GameEvent::CreateEffect { kind, position } => {
+                let scene = engine.scenes.get_mut(self.scene);
+                let graph = scene.interface_mut().graph;
+                effects::create(*kind, graph, &mut engine.resource_manager, *position)
+            }
+            GameEvent::SpawnPlayer => {
+                self.spawn_player(engine)
+            }
+            GameEvent::SpawnItem { kind, position, adjust_height, lifetime } => {
+                self.spawn_item(engine, *kind, *position, *adjust_height, *lifetime)
+            }
+        }
+    }
+
+    pub fn set_events_sender(&mut self, sender: Sender<GameEvent>) {
+        self.events_sender = Some(sender.clone());
+
+        // Attach new sender to all event sources.
+        for actor in self.actors.iter_mut() {
+            actor.character_mut().sender = Some(sender.clone());
+        }
+        for weapon in self.weapons.iter_mut() {
+            weapon.sender = Some(sender.clone());
+        }
+        for projectile in self.projectiles.iter_mut() {
+            projectile.sender = Some(sender.clone());
         }
     }
 }
@@ -650,16 +699,6 @@ impl Visit for SpawnPoint {
 }
 
 pub enum GameEvent {
-    SpawnWeapon {
-        kind: WeaponKind,
-        position: Vec3,
-        adjust_height: bool,
-    },
-    DropWeapon {
-        weapon: Handle<Weapon>,
-        position: Vec3,
-        adjust_height: bool,
-    },
     GiveNewWeapon {
         actor: Handle<Actor>,
         kind: WeaponKind,
@@ -687,6 +726,12 @@ pub enum GameEvent {
         actor: Handle<Actor>,
         item: Handle<Item>,
     },
+    SpawnItem {
+        kind: ItemKind,
+        position: Vec3,
+        adjust_height: bool,
+        lifetime: Option<f32>
+    },
     CreateProjectile {
         kind: ProjectileKind,
         position: Vec3,
@@ -711,6 +756,11 @@ pub enum GameEvent {
         /// Actor who damaged target actor, can be Handle::NONE if damage came from environment
         /// or not from any actor.
         who: Handle<Actor>,
-        amount: f32
-    }
+        amount: f32,
+    },
+    CreateEffect {
+        kind: EffectKind,
+        position: Vec3,
+    },
+    SpawnPlayer,
 }

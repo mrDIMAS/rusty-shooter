@@ -78,7 +78,10 @@ pub struct Bot {
     dying_machine: Machine,
     last_health: f32,
     restoration_time: f32,
-    dead_state: Handle<State>
+    dead_state: Handle<State>,
+    aim_state: Handle<State>,
+    shoot_interval: f32,
+    shots_made: usize
 }
 
 impl AsCharacter for Bot {
@@ -107,7 +110,10 @@ impl Default for Bot {
             dying_machine: Default::default(),
             last_health: 0.0,
             restoration_time: 0.0,
-            dead_state: Handle::NONE
+            dead_state: Handle::NONE,
+            aim_state: Handle::NONE,
+            shoot_interval: 0.0,
+            shots_made: 0,
         }
     }
 }
@@ -195,9 +201,23 @@ impl LevelEntity for Bot {
                 .evaluate_pose(animations, context.time.delta)
                 .apply(graph);
 
-            if distance > threshold && can_aim && false {
+            self.shoot_interval -= context.time.delta;
+
+            if distance > threshold && can_aim && self.can_shoot() {
                 if let Some(weapon) = self.character.weapons.get(self.character.current_weapon as usize) {
-                    self.character.sender.as_ref().unwrap().send(GameEvent::ShootWeapon { weapon: *weapon, initial_velocity: Vec3::ZERO }).unwrap();
+                    self.character
+                        .sender
+                        .as_ref()
+                        .unwrap()
+                        .send(GameEvent::ShootWeapon {
+                            weapon: *weapon,
+                            initial_velocity: Vec3::ZERO
+                        }).unwrap();
+                    self.shots_made += 1;
+                    if self.shots_made >= 4 {
+                        self.shots_made = 0;
+                        self.shoot_interval = 2.0;
+                    }
                 }
             }
 
@@ -270,7 +290,7 @@ impl Bot {
                     walk_speed: 0.3,
                     scale: 0.0085,
                     weapon_scale: 2.6,
-                    health: 1000.0,
+                    health: 100.0,
                 };
                 &DEFINITION
             }
@@ -293,7 +313,7 @@ impl Bot {
                     walk_speed: 0.3,
                     scale: 0.0085,
                     weapon_scale: 2.5,
-                    health: 1000.0,
+                    health: 100.0,
                 };
                 &DEFINITION
             }
@@ -316,7 +336,7 @@ impl Bot {
                     walk_speed: 0.3,
                     scale: 0.0085,
                     weapon_scale: 2.5,
-                    health: 1000.0,
+                    health: 100.0,
                 };
                 &DEFINITION
             }
@@ -400,6 +420,7 @@ impl Bot {
         };
 
         let hit_reaction_animation;
+        let aim_state;
         let combat_machine = {
             let aim_animation = load_animation(resource_manager, definition.aim_animation, model, scene)?;
             let whip_animation = load_animation(resource_manager, definition.whip_animation, model, scene)?;
@@ -424,7 +445,7 @@ impl Bot {
             let hit_reaction_state = machine.add_state(State::new("HitReaction", hit_reaction_node));
 
             let aim_node = machine.add_node(machine::PoseNode::make_play_animation(aim_animation));
-            let aim_state = machine.add_state(State::new("Aim", aim_node));
+            aim_state = machine.add_state(State::new("Aim", aim_node));
 
             let whip_node = machine.add_node(machine::PoseNode::make_play_animation(whip_animation));
             let whip_state = machine.add_state(State::new("Whip", whip_node));
@@ -465,9 +486,7 @@ impl Bot {
                 pivot,
                 body,
                 weapon_pivot,
-               // health: definition.health,
-                health: 10.0,
-                armor: 10.0,
+                health: definition.health,
                 sender: Some(sender),
                 ..Default::default()
             },
@@ -480,12 +499,17 @@ impl Bot {
             combat_machine,
             dying_machine,
             dead_state,
+            aim_state,
             ..Default::default()
         })
     }
 
     pub fn can_be_removed(&self) -> bool {
         self.dying_machine.active_state() == self.dead_state
+    }
+
+    pub fn can_shoot(&self) -> bool {
+        self.combat_machine.active_state() == self.aim_state && self.shoot_interval <= 0.0
     }
 
     pub fn set_target(&mut self, target: Vec3) {
@@ -521,6 +545,8 @@ impl Visit for Bot {
         self.combat_machine.visit("AimMachine", visitor)?;
         self.hit_reaction_animation.visit("HitReactionAnimation", visitor)?;
         self.restoration_time.visit("RestorationTime", visitor)?;
+        self.dead_state.visit("DeadState", visitor)?;
+        self.aim_state.visit("AimState", visitor)?;
 
         visitor.leave_region()
     }

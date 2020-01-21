@@ -2,7 +2,6 @@ use rg3d::{
     scene::{
         node::Node,
         Scene,
-        SceneInterfaceMut,
     },
     core::{
         pool::Handle,
@@ -17,14 +16,11 @@ use rg3d::{
 use crate::{
     weapon::Weapon,
     level::CleanUp,
-    HandleFromSelf,
-    actor::Actor,
     level::GameEvent
 };
 use std::sync::mpsc::Sender;
 
 pub struct Character {
-    pub self_handle: Handle<Actor>,
     pub pivot: Handle<Node>,
     pub body: Handle<RigidBody>,
     pub health: f32,
@@ -35,12 +31,6 @@ pub struct Character {
     pub sender: Option<Sender<GameEvent>>,
 }
 
-impl HandleFromSelf<Actor> for Character {
-    fn self_handle(&self) -> Handle<Actor> {
-        self.self_handle
-    }
-}
-
 pub trait AsCharacter {
     fn character(&self) -> &Character;
     fn character_mut(&mut self) -> &mut Character;
@@ -49,7 +39,6 @@ pub trait AsCharacter {
 impl Default for Character {
     fn default() -> Self {
         Self {
-            self_handle: Default::default(),
             pivot: Handle::NONE,
             body: Handle::NONE,
             health: 100.0,
@@ -66,7 +55,6 @@ impl Visit for Character {
     fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
         visitor.enter_region(name)?;
 
-        self.self_handle.visit("SelfHandle", visitor)?;
         self.pivot.visit("Pivot", visitor)?;
         self.body.visit("Body", visitor)?;
         self.health.visit("Health", visitor)?;
@@ -82,8 +70,7 @@ impl Visit for Character {
 impl CleanUp for Character {
     fn clean_up(&mut self, scene: &mut Scene) {
         scene.remove_node(self.pivot);
-        let SceneInterfaceMut { physics, .. } = scene.interface_mut();
-        physics.remove_body(self.body);
+        scene.interface_mut().physics.remove_body(self.body);
     }
 }
 
@@ -135,20 +122,6 @@ impl Character {
             }
         } else {
             self.health -= amount;
-        }
-
-        if self.health <= 0.0 {
-            if let Some(sender) = self.sender.as_ref() {
-                // Drop all weapons when dying.
-                for weapon in self.weapons.iter() {
-                    let _ = sender.send(GameEvent::DropWeapon {
-                        weapon: *weapon,
-                        position: Default::default(),
-                        adjust_height: true,
-                    });
-                }
-                self.weapons.clear();
-            }
         }
     }
 

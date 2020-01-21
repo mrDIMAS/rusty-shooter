@@ -753,7 +753,7 @@ impl Menu {
                         .set_height(new_size.height as f32);
                 }
                 WindowEvent::MouseWheel { delta, .. } => {
-                    if let MouseScrollDelta::LineDelta(x, y) = delta {
+                    if let MouseScrollDelta::LineDelta(_, y) = delta {
                         if *y != 0.0 {
                             control_button = if *y >= 0.0 {
                                 Some(ControlButton::WheelUp)

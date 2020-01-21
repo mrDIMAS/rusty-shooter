@@ -71,6 +71,9 @@ use std::{
     cell::RefCell,
 };
 use rg3d::utils::translate_event;
+use crate::level::GameEvent;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc;
 
 pub struct Game {
     menu: Menu,
@@ -83,7 +86,9 @@ pub struct Game {
     music: Handle<SoundSource>,
     running: bool,
     control_scheme: Rc<RefCell<ControlScheme>>,
-    time: GameTime
+    time: GameTime,
+    events_receiver: Receiver<GameEvent>,
+    events_sender: Sender<GameEvent>
 }
 
 pub trait HandleFromSelf<T> {
@@ -299,11 +304,13 @@ impl Game {
         let fixed_fps = 60.0;
         let fixed_timestep = 1.0 / fixed_fps;
 
-        let mut time = GameTime {
+        let time = GameTime {
             clock: Instant::now(),
             elapsed: 0.0,
             delta: fixed_timestep,
         };
+
+        let (tx, rx) = mpsc::channel();
 
         let mut game = Game {
             hud: Hud::new(&mut engine.user_interface, &mut engine.resource_manager, frame_size),
@@ -316,7 +323,9 @@ impl Game {
             debug_string: String::new(),
             last_tick_time: time::Instant::now(),
             music,
-            time
+            time,
+            events_receiver: rx,
+            events_sender: tx
         };
 
         game.create_debug_ui();
@@ -388,12 +397,14 @@ impl Game {
     }
 
     pub fn load_game(&mut self) {
+        println!("Attempting load a save...");
         match Visitor::load_binary(Path::new("save.bin")) {
             Ok(mut visitor) => {
                 // Clean up.
                 self.destroy_level();
 
                 // Load engine state first
+                println!("Trying to load engine state...");
                 match self.engine.visit("Engine", &mut visitor) {
                     Ok(_) => {
                         println!("Engine state successfully loaded!");
@@ -408,6 +419,8 @@ impl Game {
 
                                 // Set control scheme for player.
                                 if let Some(level) = &mut self.level {
+                                    level.set_events_sender(self.events_sender.clone());
+                                    level.control_scheme = Some(self.control_scheme.clone());
                                     let player = level.get_player();
                                     if let Actor::Player(player) = level.get_actors_mut().get_mut(player) {
                                         player.set_control_scheme(self.control_scheme.clone());
@@ -426,17 +439,19 @@ impl Game {
                 println!("failed to load a save, reason: {}", e);
             }
         }
+
     }
 
     fn destroy_level(&mut self) {
         if let Some(ref mut level) = self.level.take() {
             level.destroy(&mut self.engine);
+            println!("Current level destroyed!");
         }
     }
 
     pub fn start_new_game(&mut self) {
         self.destroy_level();
-        self.level = Some(Level::new(&mut self.engine, self.control_scheme.clone()));
+        self.level = Some(Level::new(&mut self.engine, self.control_scheme.clone(), self.events_sender.clone()));
         self.set_menu_visible(false);
     }
 
@@ -509,6 +524,12 @@ impl Game {
                     let current_weapon = level.get_weapons().get(current_weapon);
                     self.hud.set_ammo(ui, current_weapon.get_ammo());
                 }
+            }
+        }
+
+        while let Ok(event) = self.events_receiver.try_recv() {
+            if let Some(ref mut level) = self.level {
+                level.handle_game_event(&mut self.engine, &event, time);
             }
         }
     }

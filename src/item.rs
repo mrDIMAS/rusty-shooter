@@ -3,7 +3,7 @@ use rg3d::{
         pool::{
             Handle,
             Pool,
-            PoolPairIterator
+            PoolPairIterator,
         },
         visitor::{Visit, Visitor, VisitResult},
         math::vec3::Vec3,
@@ -19,17 +19,31 @@ use rg3d::{
         node::Node,
         transform::TransformBuilder,
         graph::Graph,
-    }
+    },
 };
-use std::path::Path;
-use crate::{GameTime, effects};
+use std::{
+    path::Path,
+    sync::mpsc::Sender,
+};
+use crate::{
+    GameTime,
+    level::GameEvent,
+    effects::EffectKind,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum ItemKind {
-    Medkit = 0,
-    Plasma = 1,
-    Ak47Ammo762 = 2,
-    M4Ammo556 = 3,
+    Medkit,
+
+    // Ammo
+    Plasma,
+    Ak47Ammo,
+    M4Ammo,
+
+    // Weapons
+    PlasmaGun,
+    Ak47,
+    M4,
 }
 
 impl ItemKind {
@@ -37,8 +51,11 @@ impl ItemKind {
         match id {
             0 => Ok(ItemKind::Medkit),
             1 => Ok(ItemKind::Plasma),
-            2 => Ok(ItemKind::Ak47Ammo762),
-            3 => Ok(ItemKind::M4Ammo556),
+            2 => Ok(ItemKind::Ak47Ammo),
+            3 => Ok(ItemKind::M4Ammo),
+            4 => Ok(ItemKind::PlasmaGun),
+            5 => Ok(ItemKind::Ak47),
+            6 => Ok(ItemKind::M4),
             _ => Err(format!("Unknown item kind {}", id))
         }
     }
@@ -47,8 +64,11 @@ impl ItemKind {
         match self {
             ItemKind::Medkit => 0,
             ItemKind::Plasma => 1,
-            ItemKind::Ak47Ammo762 => 2,
-            ItemKind::M4Ammo556 => 3,
+            ItemKind::Ak47Ammo => 2,
+            ItemKind::M4Ammo => 3,
+            ItemKind::PlasmaGun => 4,
+            ItemKind::Ak47 => 5,
+            ItemKind::M4 => 6,
         }
     }
 }
@@ -63,6 +83,8 @@ pub struct Item {
     reactivation_timer: f32,
     active: bool,
     definition: &'static ItemDefinition,
+    sender: Option<Sender<GameEvent>>,
+    lifetime: Option<f32>,
 }
 
 impl Default for Item {
@@ -76,7 +98,9 @@ impl Default for Item {
             offset_factor: 0.0,
             reactivation_timer: 0.0,
             active: true,
-            definition: Self::get_definition(ItemKind::Medkit)
+            definition: Self::get_definition(ItemKind::Medkit),
+            sender: None,
+            lifetime: None,
         }
     }
 }
@@ -97,7 +121,7 @@ impl Item {
                     reactivation_interval: 20.0,
                 };
                 &DEFINITION
-            },
+            }
             ItemKind::Plasma => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
                     model: "data/models/yellow_box.FBX",
@@ -105,23 +129,47 @@ impl Item {
                     reactivation_interval: 15.0,
                 };
                 &DEFINITION
-            },
-            ItemKind::Ak47Ammo762 => {
+            }
+            ItemKind::Ak47Ammo => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
                     model: "data/models/box_medium.FBX",
                     scale: 0.30,
                     reactivation_interval: 14.0,
                 };
                 &DEFINITION
-            },
-            ItemKind::M4Ammo556 => {
+            }
+            ItemKind::M4Ammo => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
                     model: "data/models/box_small.FBX",
                     scale: 0.30,
                     reactivation_interval: 13.0,
                 };
                 &DEFINITION
-            },
+            }
+            ItemKind::PlasmaGun => {
+                static DEFINITION: ItemDefinition = ItemDefinition {
+                    model: "data/models/plasma_rifle.fbx",
+                    scale: 3.0,
+                    reactivation_interval: 30.0,
+                };
+                &DEFINITION
+            }
+            ItemKind::Ak47 => {
+                static DEFINITION: ItemDefinition = ItemDefinition {
+                    model: "data/models/ak47.FBX",
+                    scale: 3.0,
+                    reactivation_interval: 30.0,
+                };
+                &DEFINITION
+            }
+            ItemKind::M4 => {
+                static DEFINITION: ItemDefinition = ItemDefinition {
+                    model: "data/models/m4.FBX",
+                    scale: 3.0,
+                    reactivation_interval: 30.0,
+                };
+                &DEFINITION
+            }
         }
     }
 
@@ -130,6 +178,7 @@ impl Item {
         position: Vec3,
         scene: &mut Scene,
         resource_manager: &mut ResourceManager,
+        sender: Sender<GameEvent>,
     ) -> Self {
         let definition = Self::get_definition(kind);
 
@@ -137,7 +186,7 @@ impl Item {
             .unwrap()
             .lock()
             .unwrap()
-            .instantiate_geometry( scene);
+            .instantiate_geometry(scene);
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
 
@@ -154,6 +203,7 @@ impl Item {
             pivot,
             kind,
             model,
+            sender: Some(sender),
             ..Default::default()
         }
     }
@@ -166,14 +216,11 @@ impl Item {
         graph.get(self.pivot).base().get_global_position()
     }
 
-    pub fn update(&mut self,
-                  graph: &mut Graph,
-                  resource_manager: &mut ResourceManager,
-                  time: GameTime
-    ) {
+    pub fn update(&mut self, graph: &mut Graph, time: GameTime) {
         self.offset_factor += 1.2 * time.delta;
 
-        self.dest_offset = Vec3::new(0.0, 0.085 * self.offset_factor.sin(), 0.0);
+        let amp = 0.085;
+        self.dest_offset = Vec3::new(0.0, amp + amp * self.offset_factor.sin(), 0.0);
         self.offset.follow(&self.dest_offset, 0.2);
 
         let position = graph.get(self.pivot).base().get_global_position();
@@ -186,7 +233,11 @@ impl Item {
             self.reactivation_timer -= time.delta;
             if self.reactivation_timer <= 0.0 {
                 self.active = true;
-                effects::create_item_appear(graph, resource_manager, position);
+
+                self.sender.as_ref().unwrap().send(GameEvent::CreateEffect {
+                    kind: EffectKind::ItemAppear,
+                    position,
+                }).unwrap();
             }
         }
     }
@@ -202,6 +253,21 @@ impl Item {
 
     pub fn is_picked_up(&self) -> bool {
         !self.active
+    }
+
+    fn cleanup(&self, graph: &mut Graph) {
+        graph.remove_node(self.pivot)
+    }
+
+    fn can_be_removed(&self) -> bool {
+        match self.lifetime {
+            None => false,
+            Some(time) => time <= 0.0 || !self.active,
+        }
+    }
+
+    pub fn set_lifetime(&mut self, lifetime: Option<f32>) {
+        self.lifetime = lifetime;
     }
 }
 
@@ -223,6 +289,7 @@ impl Visit for Item {
         self.dest_offset.visit("DestOffset", visitor)?;
         self.reactivation_timer.visit("ReactivationTimer", visitor)?;
         self.active.visit("Active", visitor)?;
+        self.lifetime.visit("Lifetime", visitor)?;
 
         visitor.leave_region()
     }
@@ -267,15 +334,19 @@ impl ItemContainer {
         self.pool.pair_iter()
     }
 
-    pub fn update(&mut self,
-                  scene: &mut Scene,
-                  resource_manager: &mut ResourceManager,
-                  time: GameTime
-    ) {
+    pub fn update(&mut self, scene: &mut Scene, time: GameTime) {
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
 
         for item in self.pool.iter_mut() {
-            item.update(graph, resource_manager, time);
+            item.update(graph, time);
         }
+
+        // Remove temporary items.
+        for item in self.pool.iter() {
+            if item.can_be_removed() {
+                item.cleanup(graph);
+            }
+        }
+        self.pool.retain(|i| !i.can_be_removed())
     }
 }

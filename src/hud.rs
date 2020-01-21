@@ -1,6 +1,7 @@
 use std::{
     path::Path,
     sync::{Arc, Mutex},
+    collections::VecDeque
 };
 use rg3d::{
     core::{
@@ -41,8 +42,10 @@ pub struct Hud {
     health: Handle<UINode>,
     armor: Handle<UINode>,
     ammo: Handle<UINode>,
+    message: Handle<UINode>,
+    message_queue: VecDeque<String>,
+    last_message_time: f32
 }
-
 
 impl Hud {
     pub fn new(ui: &mut UserInterface, resource_manager: &mut ResourceManager, frame_size: (u32, u32)) -> Self {
@@ -55,7 +58,7 @@ impl Hud {
         let health;
         let armor;
         let ammo;
-
+        let message;
         let root = GridBuilder::new(WidgetBuilder::new()
             .with_width(frame_size.0 as f32)
             .with_height(frame_size.1 as f32)
@@ -153,7 +156,25 @@ impl Hud {
                     armor
                 }))
                 .with_orientation(Orientation::Horizontal)
-                .build(ui)))
+                .build(ui))
+            .with_child({
+                message = TextBuilder::new(WidgetBuilder::new()
+                    .on_row(0)
+                    .on_column(0)
+                    .with_vertical_alignment(VerticalAlignment::Center)
+                    .with_horizontal_alignment(HorizontalAlignment::Left)
+                    .with_margin(Thickness {
+                        left: 45.0,
+                        top: 30.0,
+                        right: 0.0,
+                        bottom: 0.0
+                    })
+                    .with_height(40.0)
+                    .with_width(170.0))
+                    .with_text("FOOBAR")
+                    .build(ui);
+                message
+            }))
             .add_column(Column::stretch())
             .add_column(Column::stretch())
             .add_column(Column::stretch())
@@ -165,6 +186,9 @@ impl Hud {
             health,
             armor,
             ammo,
+            message,
+            last_message_time: 0.0,
+            message_queue: Default::default()
         }
     }
 
@@ -199,6 +223,11 @@ impl Hud {
             });
     }
 
+    pub fn add_message<P: AsRef<str>>(&mut self, message: P) {
+        self.message_queue
+            .push_back(message.as_ref().to_owned())
+    }
+
     pub fn process_input_event(&mut self, engine: &mut Engine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             if let WindowEvent::Resized(new_size) = event {
@@ -213,5 +242,9 @@ impl Hud {
                     .set_height(new_size.height as f32);
             }
         }
+    }
+
+    pub fn update(&mut self, ui: &mut UserInterface) {
+
     }
 }

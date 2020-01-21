@@ -9,7 +9,7 @@ use rg3d::{
         graph::Graph,
         base::{BaseBuilder, AsBase},
         light::{LightBuilder, LightKind, PointLight},
-        transform::TransformBuilder
+        transform::TransformBuilder,
     },
     physics::{
         convex_shape::{ConvexShape, SphereShape},
@@ -18,17 +18,16 @@ use rg3d::{
     },
     core::{
         visitor::{Visit, VisitResult, Visitor},
-        pool::{Handle, Pool, PoolIterator},
+        pool::{Handle, Pool, PoolIterator, PoolIteratorMut},
         color::Color,
         math::{vec3::Vec3, ray::Ray},
     },
 };
 use crate::{
     GameTime,
-    effects,
     actor::{
         ActorContainer,
-        Actor
+        Actor,
     },
     CollisionGroups,
     character::AsCharacter,
@@ -37,10 +36,14 @@ use crate::{
         WeaponContainer,
     },
     level::CleanUp,
-    HandleFromSelf,
+    level::GameEvent,
 };
-use std::path::Path;
+use std::{
+    path::Path,
+    sync::mpsc::Sender,
+};
 use rand::Rng;
+use crate::effects::EffectKind;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum ProjectileKind {
@@ -74,7 +77,6 @@ pub struct Projectile {
     /// interaction with environment handled with ray cast.
     body: Handle<RigidBody>,
     dir: Vec3,
-    initial_pos: Vec3,
     lifetime: f32,
     rotation_angle: f32,
     /// Handle of weapons from which projectile was fired.
@@ -84,6 +86,7 @@ pub struct Projectile {
     /// continuous intersection detection from fast moving projectiles.
     last_position: Vec3,
     definition: &'static ProjectileDefinition,
+    pub sender: Option<Sender<GameEvent>>,
 }
 
 impl Default for Projectile {
@@ -95,11 +98,11 @@ impl Default for Projectile {
             body: Default::default(),
             lifetime: 0.0,
             rotation_angle: 0.0,
-            initial_pos: Vec3::ZERO,
             owner: Default::default(),
             initial_velocity: Default::default(),
             last_position: Default::default(),
             definition: Self::get_definition(ProjectileKind::Plasma),
+            sender: None,
         }
     }
 }
@@ -127,7 +130,7 @@ impl Projectile {
             }
             ProjectileKind::Bullet => {
                 static DEFINITION: ProjectileDefinition = ProjectileDefinition {
-                    damage: 20.0,
+                    damage: 5.0,
                     speed: 0.75,
                     lifetime: 10.0,
                     is_kinematic: true,
@@ -143,7 +146,8 @@ impl Projectile {
                dir: Vec3,
                position: Vec3,
                owner: Handle<Weapon>,
-               initial_velocity: Vec3) -> Self {
+               initial_velocity: Vec3,
+               sender: Sender<GameEvent>) -> Self {
         let definition = Self::get_definition(kind);
 
         let SceneInterfaceMut { graph, node_rigid_body_map, physics, .. } = scene.interface_mut();
@@ -202,10 +206,10 @@ impl Projectile {
             dir: dir.normalized().unwrap_or(Vec3::UP),
             kind,
             model,
-            initial_pos: position,
             last_position: position,
             owner,
             definition,
+            sender: Some(sender),
             ..Default::default()
         }
     }
@@ -218,12 +222,7 @@ impl Projectile {
         self.lifetime = 0.0;
     }
 
-    pub fn update(&mut self,
-                  scene: &mut Scene,
-                  resource_manager: &mut ResourceManager,
-                  actors: &mut ActorContainer,
-                  weapons: &WeaponContainer,
-                  time: GameTime) {
+    pub fn update(&mut self, scene: &mut Scene, actors: &ActorContainer, weapons: &WeaponContainer, time: GameTime) {
         let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
 
         // Fetch current position of projectile.
@@ -244,12 +243,12 @@ impl Projectile {
                 // List of hits sorted by distance from ray origin.
                 'hit_loop: for hit in result.iter() {
                     if let HitKind::Body(body) = hit.kind {
-                        for actor in actors.iter_mut() {
+                        for (actor_handle, actor) in actors.pair_iter() {
                             if actor.character().get_body() == body {
                                 let weapon = weapons.get(self.owner);
                                 // Ignore intersections with owners of weapon.
-                                if weapon.get_owner() != actor.self_handle() {
-                                    hit_actors.push(actor.self_handle());
+                                if weapon.get_owner() != actor_handle {
+                                    hit_actors.push(actor_handle);
 
                                     self.kill();
                                     effect_position = Some(hit.position);
@@ -276,12 +275,12 @@ impl Projectile {
                     let mut owner_contact = false;
 
                     // Check if we got contact with any actor and damage it then.
-                    for actor in actors.iter_mut() {
+                    for (actor_handle, actor) in actors.pair_iter() {
                         if contact.body == actor.character().get_body() {
                             // Prevent self-damage.
                             let weapon = weapons.get(self.owner);
-                            if weapon.get_owner() != actor.self_handle() {
-                                hit_actors.push(actor.self_handle());
+                            if weapon.get_owner() != actor_handle {
+                                hit_actors.push(actor_handle);
                             } else {
                                 // Make sure that projectile won't die on contact with owner.
                                 owner_contact = true;
@@ -318,7 +317,10 @@ impl Projectile {
         self.lifetime -= time.delta;
 
         if self.lifetime <= 0.0 {
-            effects::create_bullet_impact(graph, resource_manager, effect_position.unwrap_or(self.get_position(graph)));
+            self.sender.as_ref().unwrap().send(GameEvent::CreateEffect {
+                kind: EffectKind::BulletImpact,
+                position: effect_position.unwrap_or(self.get_position(graph)),
+            }).unwrap();
         }
 
         // List of hit actors can contain same actor multiple times in a row because this list could
@@ -326,14 +328,20 @@ impl Projectile {
         // to not damage actor twice or more times with one projectile.
         hit_actors.dedup_by(|a, b| *a == *b);
         for actor in hit_actors {
-            actors.get_mut(actor).character_mut().damage(self.definition.damage);
+            self.sender.as_ref().unwrap().send(GameEvent::DamageActor {
+                actor,
+                who: Default::default(),
+                amount: self.definition.damage,
+            }).unwrap();
         }
 
         self.last_position = position;
     }
 
     pub fn get_position(&self, graph: &Graph) -> Vec3 {
-        graph.get(self.model).base().get_global_position()
+        graph.get(self.model)
+            .base()
+            .get_global_position()
     }
 }
 
@@ -392,14 +400,13 @@ impl ProjectileContainer {
         self.pool.iter()
     }
 
-    pub fn update(&mut self,
-                  scene: &mut Scene,
-                  resource_manager: &mut ResourceManager,
-                  actors: &mut ActorContainer,
-                  weapons: &WeaponContainer,
-                  time: GameTime) {
+    pub fn iter_mut(&mut self) -> PoolIteratorMut<Projectile> {
+        self.pool.iter_mut()
+    }
+
+    pub fn update(&mut self, scene: &mut Scene, actors: &ActorContainer, weapons: &WeaponContainer, time: GameTime) {
         for projectile in self.pool.iter_mut() {
-            projectile.update(scene, resource_manager, actors, weapons, time);
+            projectile.update(scene, actors, weapons, time);
             if projectile.is_dead() {
                 projectile.clean_up(scene);
             }

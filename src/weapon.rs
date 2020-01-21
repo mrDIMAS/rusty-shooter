@@ -28,7 +28,6 @@ use rg3d::{
     core::{
         pool::{
             Pool,
-            PoolIterator,
             PoolIteratorMut,
             Handle,
         },
@@ -280,7 +279,7 @@ impl Weapon {
         self.owner = owner;
     }
 
-    pub fn try_shoot(&mut self, scene: &mut Scene, time: GameTime, weapon_velocity: Vec3) -> bool {
+    pub fn try_shoot(&mut self, scene: &mut Scene, time: GameTime) -> bool {
         if self.ammo != 0 && time.elapsed - self.last_shot_time >= 0.1 {
             self.ammo -= 1;
 
@@ -326,8 +325,8 @@ impl WeaponContainer {
         self.pool.spawn(weapon)
     }
 
-    pub fn iter(&self) -> PoolIterator<Weapon> {
-        self.pool.iter()
+    pub fn free(&mut self, weapon: Handle<Weapon>) {
+        self.pool.free(weapon)
     }
 
     pub fn iter_mut(&mut self) -> PoolIteratorMut<Weapon> {

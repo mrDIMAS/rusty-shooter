@@ -36,6 +36,10 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [x] HUD - is done, it shows armor, ammo, and health.
 - [x] Bot whip attack - bots can punch you in the face you stand too close to them.
 - [x] Bots animations - more or less done, bots are fully animated and has configured animation machines. This can change if there will be a need for more animations.
+- [x] Sparks when projectile hit surface.
+- [x] Ability to pickup dropped weapons.
+- [x] Drop weapons when actor die.
+- [x] Give player some weapon on respawn.
 - [ ] Level editor - some simple level editor would be nice, for now I'll continue use ancient 3ds max 2012. Game items are placed on level using dummies which then are substituded with real items, this works but very uncomfortable because it is not WYSIWYG editor.
 - [ ] Restyle UI - it is boring gray right now. Main menu also should have some sort of background, not just black void.
 - [ ] Loading screen - currently game just hangs for 8+ seconds until it load a level, this should be done async.
@@ -49,7 +53,7 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [ ] Leader board - game mode specific leader board should be added.
 - [ ] Pathfinding - there should be a way to specify navmesh that will be used for navigation. Some crates that can help there - https://crates.io/crates/navmesh - need to check that. 
 - [ ] Match options.
-- [ ] Hit marks on surfaces - there is no "visual proof" that projectile has hit surface (well there is some shitty "fog", but this was added for tests and should be replaced with something more suitable)
+- [ ] Hit marks on surfaces - there is no "visual proof" that projectile has hit surface
 - [ ] `Deathmatch` game mode - easiest game mode to implement.
 - [ ] `Capture the flag` game mode - similar to Q3 game mode is nice to have.
 - [ ] `Team deathmatch` game mode - again similar to Q3.
@@ -60,4 +64,3 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [ ] Lightning gun.
 - [ ] Machine gun.
 - [ ] Player's ability to punch enemies in face by weapon.
-- [ ] Ability to pickup dropped weapons - current actor drops all its weapon when die, but this is useless because weapons will float in the air for eternity.

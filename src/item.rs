@@ -31,7 +31,7 @@ use crate::{
     effects::EffectKind,
 };
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ItemKind {
     Medkit,
 
@@ -328,6 +328,10 @@ impl ItemContainer {
 
     pub fn get_mut(&mut self, item: Handle<Item>) -> &mut Item {
         self.pool.borrow_mut(item)
+    }
+
+    pub fn get(&self, item: Handle<Item>) -> &Item {
+        self.pool.borrow(item)
     }
 
     pub fn pair_iter(&self) -> PoolPairIterator<Item> {

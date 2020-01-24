@@ -531,7 +531,10 @@ impl Game {
             if let Some(ref mut level) = self.level {
                 level.handle_game_event(&mut self.engine, &event, time);
             }
+            self.hud.handle_game_event(&event);
         }
+
+        self.hud.update(&mut self.engine.user_interface, &self.time);
     }
 
     pub fn update_statistics(&mut self, elapsed: f64) {
@@ -592,7 +595,6 @@ impl Game {
     pub fn process_input_event(&mut self, event: &Event<()>) {
         self.process_dispatched_event(event);
 
-        // Some events processed in any case.
         if let Event::DeviceEvent { event, .. } = event {
             if let DeviceEvent::Key(input) = event {
                 if let ElementState::Pressed = input.state {

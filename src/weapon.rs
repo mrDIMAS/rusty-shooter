@@ -41,7 +41,7 @@ use rg3d::{
     },
 };
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum WeaponKind {
     M4,
     Ak47,
@@ -171,8 +171,7 @@ impl Weapon {
             .unwrap()
             .lock()
             .unwrap()
-            .instantiate(scene)
-            .root;
+            .instantiate_geometry(scene);
 
         let SceneInterfaceMut { graph, .. } = scene.interface_mut();
         let laser_dot = graph.add_node(Node::Light(

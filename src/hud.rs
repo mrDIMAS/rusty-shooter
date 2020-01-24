@@ -1,7 +1,7 @@
 use std::{
     path::Path,
     sync::{Arc, Mutex},
-    collections::VecDeque
+    collections::VecDeque,
 };
 use rg3d::{
     core::{
@@ -33,8 +33,12 @@ use rg3d::{
         Visibility,
         text::Text,
         Builder,
-        UINodeContainer
-    }
+        UINodeContainer,
+    },
+};
+use crate::{
+    GameTime,
+    level::GameEvent
 };
 
 pub struct Hud {
@@ -44,7 +48,7 @@ pub struct Hud {
     ammo: Handle<UINode>,
     message: Handle<UINode>,
     message_queue: VecDeque<String>,
-    last_message_time: f32
+    message_timeout: f32,
 }
 
 impl Hud {
@@ -167,10 +171,10 @@ impl Hud {
                         left: 45.0,
                         top: 30.0,
                         right: 0.0,
-                        bottom: 0.0
+                        bottom: 0.0,
                     })
                     .with_height(40.0)
-                    .with_width(170.0))
+                    .with_width(400.0))
                     .with_text("FOOBAR")
                     .build(ui);
                 message
@@ -187,8 +191,8 @@ impl Hud {
             armor,
             ammo,
             message,
-            last_message_time: 0.0,
-            message_queue: Default::default()
+            message_timeout: 0.0,
+            message_queue: Default::default(),
         }
     }
 
@@ -244,7 +248,29 @@ impl Hud {
         }
     }
 
-    pub fn update(&mut self, ui: &mut UserInterface) {
+    pub fn update(&mut self, ui: &mut UserInterface, time: &GameTime) {
+        self.message_timeout -= time.delta;
 
+        if self.message_timeout <= 0.0 {
+            if let Some(message) = self.message_queue.pop_front() {
+                ui.node_mut(self.message)
+                    .downcast_mut::<Text>()
+                    .unwrap()
+                    .set_text(message);
+
+                self.message_timeout = 1.25;
+            } else {
+                ui.node_mut(self.message)
+                    .downcast_mut::<Text>()
+                    .unwrap()
+                    .set_text("");
+            }
+        }
+    }
+
+    pub fn handle_game_event(&mut self, event: &GameEvent) {
+        if let GameEvent::AddNotification { text } = event {
+            self.add_message(text)
+        }
     }
 }

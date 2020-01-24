@@ -1,13 +1,13 @@
 use std::{
     path::Path,
     cell::Cell,
-    sync::mpsc::Sender
+    sync::mpsc::Sender,
 };
 use crate::{
     character::{Character, AsCharacter},
     level::{LevelEntity, CleanUp, LevelUpdateContext},
     actor::Actor,
-    level::GameEvent
+    level::GameEvent,
 };
 use rg3d::{
     core::{
@@ -22,8 +22,8 @@ use rg3d::{
     animation::{
         Animation,
         machine,
-        AnimationPose,
         machine::{Machine, State},
+        machine::PoseNode
     },
     scene::{
         node::Node,
@@ -70,18 +70,14 @@ pub struct Bot {
     model: Handle<Node>,
     character: Character,
     target_actor: Cell<Handle<Actor>>,
-    hit_reaction_animation: Handle<Animation>,
     pub definition: &'static BotDefinition,
-    pose: AnimationPose,
-    locomotion_machine: Machine,
-    combat_machine: Machine,
-    dying_machine: Machine,
+    locomotion_machine: LocomotionMachine,
+    combat_machine: CombatMachine,
+    dying_machine: DyingMachine,
     last_health: f32,
     restoration_time: f32,
-    dead_state: Handle<State>,
-    aim_state: Handle<State>,
     shoot_interval: f32,
-    shots_made: usize
+    shots_made: usize,
 }
 
 impl AsCharacter for Bot {
@@ -102,16 +98,12 @@ impl Default for Bot {
             model: Default::default(),
             target: Default::default(),
             target_actor: Default::default(),
-            hit_reaction_animation: Default::default(),
             definition: Self::get_definition(BotKind::Mutant),
-            pose: Default::default(),
             locomotion_machine: Default::default(),
             combat_machine: Default::default(),
             dying_machine: Default::default(),
             last_health: 0.0,
             restoration_time: 0.0,
-            dead_state: Handle::NONE,
-            aim_state: Handle::NONE,
             shoot_interval: 0.0,
             shots_made: 0,
         }
@@ -144,8 +136,8 @@ impl LevelEntity for Bot {
         let SceneInterfaceMut { graph, physics, animations, .. } = context.scene.interface_mut();
 
         if self.character.is_dead() {
-            self.dying_machine
-                .set_parameter(Self::DYING_TO_DEAD, machine::Parameter::Rule(self.character.is_dead()))
+            self.dying_machine.machine
+                .set_parameter(DYING_TO_DEAD, machine::Parameter::Rule(self.character.is_dead()))
                 .evaluate_pose(animations, context.time.delta)
                 .apply(graph);
         } else {
@@ -172,7 +164,7 @@ impl LevelEntity for Bot {
             }
             let was_damaged = self.character.health < self.last_health;
             if was_damaged {
-                let hit_reaction = animations.get_mut(self.hit_reaction_animation);
+                let hit_reaction = animations.get_mut(self.combat_machine.hit_reaction_animation);
                 if hit_reaction.has_ended() {
                     hit_reaction.rewind();
                 }
@@ -181,23 +173,23 @@ impl LevelEntity for Bot {
             let can_aim = self.restoration_time <= 0.0;
             self.last_health = self.character.health;
 
-            self.locomotion_machine
-                .set_parameter(Self::IDLE_TO_WALK_PARAM, machine::Parameter::Rule(distance > threshold))
-                .set_parameter(Self::WALK_TO_IDLE_PARAM, machine::Parameter::Rule(distance <= threshold))
-                .set_parameter(Self::WALK_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
-                .set_parameter(Self::IDLE_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
-                .set_parameter(Self::JUMP_TO_FALLING_PARAM, machine::Parameter::Rule(!has_ground_contact))
-                .set_parameter(Self::FALLING_TO_IDLE_PARAM, machine::Parameter::Rule(has_ground_contact))
+            self.locomotion_machine.machine
+                .set_parameter(IDLE_TO_WALK_PARAM, machine::Parameter::Rule(distance > threshold))
+                .set_parameter(WALK_TO_IDLE_PARAM, machine::Parameter::Rule(distance <= threshold))
+                .set_parameter(WALK_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
+                .set_parameter(IDLE_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
+                .set_parameter(JUMP_TO_FALLING_PARAM, machine::Parameter::Rule(!has_ground_contact))
+                .set_parameter(FALLING_TO_IDLE_PARAM, machine::Parameter::Rule(has_ground_contact))
                 .evaluate_pose(animations, context.time.delta)
                 .apply(graph);
 
             // Overwrite upper body with combat machine
-            self.combat_machine
-                .set_parameter(Self::WHIP_TO_AIM_PARAM, machine::Parameter::Rule(distance > threshold))
-                .set_parameter(Self::AIM_TO_WHIP_PARAM, machine::Parameter::Rule(distance <= threshold))
-                .set_parameter(Self::WHIP_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
-                .set_parameter(Self::AIM_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
-                .set_parameter(Self::HIT_REACTION_TO_AIM_PARAM, machine::Parameter::Rule(can_aim))
+            self.combat_machine.machine
+                .set_parameter(WHIP_TO_AIM_PARAM, machine::Parameter::Rule(distance > threshold))
+                .set_parameter(AIM_TO_WHIP_PARAM, machine::Parameter::Rule(distance <= threshold))
+                .set_parameter(WHIP_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
+                .set_parameter(AIM_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
+                .set_parameter(HIT_REACTION_TO_AIM_PARAM, machine::Parameter::Rule(can_aim))
                 .evaluate_pose(animations, context.time.delta)
                 .apply(graph);
 
@@ -211,7 +203,7 @@ impl LevelEntity for Bot {
                         .unwrap()
                         .send(GameEvent::ShootWeapon {
                             weapon: *weapon,
-                            initial_velocity: Vec3::ZERO
+                            initial_velocity: Vec3::ZERO,
                         }).unwrap();
                     self.shots_made += 1;
                     if self.shots_made >= 4 {
@@ -226,12 +218,7 @@ impl LevelEntity for Bot {
     }
 }
 
-fn load_animation<P: AsRef<Path>>(
-    resource_manager: &mut ResourceManager,
-    path: P,
-    model: Handle<Node>,
-    scene: &mut Scene
-) -> Result<Handle<Animation>, ()> {
+fn load_animation<P: AsRef<Path>>(resource_manager: &mut ResourceManager, path: P, model: Handle<Node>, scene: &mut Scene) -> Result<Handle<Animation>, ()> {
     Ok(*resource_manager.request_model(path)
         .ok_or(())?
         .lock()
@@ -241,34 +228,226 @@ fn load_animation<P: AsRef<Path>>(
         .ok_or(())?)
 }
 
-fn disable_leg_tracks(
-    animation: &mut Animation,
-    root: Handle<Node>,
-    leg_name: &str,
-    graph: &Graph
-) {
+fn disable_leg_tracks(animation: &mut Animation, root: Handle<Node>, leg_name: &str, graph: &Graph) {
     animation.set_tracks_enabled_from(graph.find_by_name(root, leg_name), false, graph)
 }
 
+// Locomotion machine parameters
+pub const WALK_TO_IDLE_PARAM: &'static str = "WalkToIdle";
+pub const WALK_TO_JUMP_PARAM: &'static str = "WalkToJump";
+pub const IDLE_TO_WALK_PARAM: &'static str = "IdleToWalk";
+pub const IDLE_TO_JUMP_PARAM: &'static str = "IdleToJump";
+pub const JUMP_TO_FALLING_PARAM: &'static str = "JumpToFalling";
+pub const FALLING_TO_IDLE_PARAM: &'static str = "FallingToIdle";
+
+// Combat machine parameters
+pub const AIM_TO_WHIP_PARAM: &'static str = "AimToWhip";
+pub const WHIP_TO_AIM_PARAM: &'static str = "WhipToAim";
+pub const HIT_REACTION_TO_AIM_PARAM: &'static str = "HitReactionToAim";
+pub const AIM_TO_HIT_REACTION_PARAM: &'static str = "AimToHitReaction";
+pub const WHIP_TO_HIT_REACTION_PARAM: &'static str = "WhipToHitReaction";
+
+// Dying machine parameters
+pub const DYING_TO_DEAD: &'static str = "DyingToDead";
+
+struct LocomotionMachine {
+    machine: Machine
+}
+
+impl Default for LocomotionMachine {
+    fn default() -> Self {
+        Self {
+            machine: Default::default()
+        }
+    }
+}
+
+impl Visit for LocomotionMachine {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.machine.visit("Machine", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
+impl LocomotionMachine {
+    fn new(resource_manager: &mut ResourceManager, definition: &BotDefinition, model: Handle<Node>, scene: &mut Scene) -> Result<Self, ()> {
+        let idle_animation = load_animation(resource_manager, definition.idle_animation, model, scene)?;
+        let walk_animation = load_animation(resource_manager, definition.walk_animation, model, scene)?;
+        let jump_animation = load_animation(resource_manager, definition.jump_animation, model, scene)?;
+        let falling_animation = load_animation(resource_manager, definition.falling_animation, model, scene)?;
+
+        let mut machine = Machine::new();
+
+        let jump_node = machine.add_node(machine::PoseNode::make_play_animation(jump_animation));
+        let jump_state = machine.add_state(State::new("Jump", jump_node));
+
+        let falling_node = machine.add_node(machine::PoseNode::make_play_animation(falling_animation));
+        let falling_state = machine.add_state(State::new("Falling", falling_node));
+
+        let walk_node = machine.add_node(machine::PoseNode::make_play_animation(walk_animation));
+        let walk_state = machine.add_state(State::new("Walk", walk_node));
+
+        let idle_node = machine.add_node(machine::PoseNode::make_play_animation(idle_animation));
+        let idle_state = machine.add_state(State::new("Idle", idle_node));
+
+        machine.add_transition(machine::Transition::new("Walk->Idle", walk_state, idle_state, 0.5, WALK_TO_IDLE_PARAM))
+            .add_transition(machine::Transition::new("Walk->Jump", walk_state, jump_state, 0.5, WALK_TO_JUMP_PARAM))
+            .add_transition(machine::Transition::new("Idle->Walk", idle_state, walk_state, 0.5, IDLE_TO_WALK_PARAM))
+            .add_transition(machine::Transition::new("Idle->Jump", idle_state, jump_state, 0.5, IDLE_TO_JUMP_PARAM))
+            .add_transition(machine::Transition::new("Jump->Falling", jump_state, falling_state, 0.5, JUMP_TO_FALLING_PARAM))
+            .add_transition(machine::Transition::new("Falling->Idle", falling_state, idle_state, 0.5, FALLING_TO_IDLE_PARAM));
+
+        machine.set_entry_state(idle_state);
+
+        Ok(Self {
+            machine
+        })
+    }
+}
+
+impl CleanUp for LocomotionMachine {
+    fn clean_up(&mut self, scene: &mut Scene) {
+        clean_machine(&self.machine, scene);
+    }
+}
+
+struct DyingMachine {
+    machine: Machine,
+    dead_state: Handle<State>,
+}
+
+impl Default for DyingMachine {
+    fn default() -> Self {
+        Self {
+            machine: Default::default(),
+            dead_state: Default::default(),
+        }
+    }
+}
+
+impl DyingMachine {
+    fn new(resource_manager: &mut ResourceManager, definition: &BotDefinition, model: Handle<Node>, scene: &mut Scene) -> Result<Self, ()> {
+        let dying_animation = load_animation(resource_manager, definition.dying_animation, model, scene)?;
+        let dead_animation = load_animation(resource_manager, definition.dead_animation, model, scene)?;
+
+        let mut machine = Machine::new();
+
+        let dying_node = machine.add_node(machine::PoseNode::make_play_animation(dying_animation));
+        let dying_state = machine.add_state(State::new("Dying", dying_node));
+
+        let dead_node = machine.add_node(machine::PoseNode::make_play_animation(dead_animation));
+        let dead_state = machine.add_state(State::new("Dead", dead_node));
+
+        machine.set_entry_state(dying_state);
+
+        machine.add_transition(machine::Transition::new("Dying->Dead", dying_state, dead_state, 1.5, DYING_TO_DEAD));
+
+        Ok(Self {
+            machine,
+            dead_state,
+        })
+    }
+}
+
+impl Visit for DyingMachine {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.machine.visit("Machine", visitor)?;
+        self.dead_state.visit("DeadState", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
+impl CleanUp for DyingMachine {
+    fn clean_up(&mut self, scene: &mut Scene) {
+        clean_machine(&self.machine, scene);
+    }
+}
+
+struct CombatMachine {
+    machine: Machine,
+    hit_reaction_animation: Handle<Animation>,
+    aim_state: Handle<State>
+}
+
+impl Default for CombatMachine {
+    fn default() -> Self {
+        Self {
+            machine: Default::default(),
+            hit_reaction_animation: Default::default(),
+            aim_state: Default::default()
+        }
+    }
+}
+
+impl CombatMachine {
+    fn new(resource_manager: &mut ResourceManager, definition: &BotDefinition, model: Handle<Node>, scene: &mut Scene) -> Result<Self, ()> {
+        let aim_animation = load_animation(resource_manager, definition.aim_animation, model, scene)?;
+        let whip_animation = load_animation(resource_manager, definition.whip_animation, model, scene)?;
+        let hit_reaction_animation = load_animation(resource_manager, definition.hit_reaction_animation, model, scene)?;
+
+        let SceneInterfaceMut { graph, animations, .. } = scene.interface_mut();
+
+        // These animations must *not* affect legs, because legs animated using locomotion machine
+        disable_leg_tracks(animations.get_mut(aim_animation), model, definition.left_leg_name, graph);
+        disable_leg_tracks(animations.get_mut(aim_animation), model, definition.right_leg_name, graph);
+
+        disable_leg_tracks(animations.get_mut(whip_animation), model, definition.left_leg_name, graph);
+        disable_leg_tracks(animations.get_mut(whip_animation), model, definition.right_leg_name, graph);
+
+        disable_leg_tracks(animations.get_mut(hit_reaction_animation), model, definition.left_leg_name, graph);
+        disable_leg_tracks(animations.get_mut(hit_reaction_animation), model, definition.right_leg_name, graph);
+        animations.get_mut(hit_reaction_animation).set_loop(false);
+
+        let mut machine = Machine::new();
+
+        let hit_reaction_node = machine.add_node(machine::PoseNode::make_play_animation(hit_reaction_animation));
+        let hit_reaction_state = machine.add_state(State::new("HitReaction", hit_reaction_node));
+
+        let aim_node = machine.add_node(machine::PoseNode::make_play_animation(aim_animation));
+        let aim_state = machine.add_state(State::new("Aim", aim_node));
+
+        let whip_node = machine.add_node(machine::PoseNode::make_play_animation(whip_animation));
+        let whip_state = machine.add_state(State::new("Whip", whip_node));
+
+        machine.add_transition(machine::Transition::new("Aim->Whip", aim_state, whip_state, 0.5, AIM_TO_WHIP_PARAM))
+            .add_transition(machine::Transition::new("Whip->Aim", whip_state, aim_state, 0.5, WHIP_TO_AIM_PARAM))
+            .add_transition(machine::Transition::new("Whip->HitReaction", whip_state, hit_reaction_state, 0.2, WHIP_TO_HIT_REACTION_PARAM))
+            .add_transition(machine::Transition::new("Aim->HitReaction", aim_state, hit_reaction_state, 0.2, AIM_TO_HIT_REACTION_PARAM))
+            .add_transition(machine::Transition::new("HitReaction->Aim", hit_reaction_state, aim_state, 0.5, HIT_REACTION_TO_AIM_PARAM));
+
+        Ok(Self {
+            machine,
+            hit_reaction_animation,
+            aim_state,
+        })
+    }
+}
+
+impl CleanUp for CombatMachine {
+    fn clean_up(&mut self, scene: &mut Scene) {
+        clean_machine(&self.machine, scene)
+    }
+}
+
+impl Visit for CombatMachine {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.machine.visit("Machine", visitor)?;
+        self.hit_reaction_animation.visit("HitReactionAnimation", visitor)?;
+        self.aim_state.visit("AimState", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
 impl Bot {
-    // Locomotion machine parameters
-    pub const WALK_TO_IDLE_PARAM: &'static str = "WalkToIdle";
-    pub const WALK_TO_JUMP_PARAM: &'static str = "WalkToJump";
-    pub const IDLE_TO_WALK_PARAM: &'static str = "IdleToWalk";
-    pub const IDLE_TO_JUMP_PARAM: &'static str = "IdleToJump";
-    pub const JUMP_TO_FALLING_PARAM: &'static str = "JumpToFalling";
-    pub const FALLING_TO_IDLE_PARAM: &'static str = "FallingToIdle";
-
-    // Combat machine parameters
-    pub const AIM_TO_WHIP_PARAM: &'static str = "AimToWhip";
-    pub const WHIP_TO_AIM_PARAM: &'static str = "WhipToAim";
-    pub const HIT_REACTION_TO_AIM_PARAM: &'static str = "HitReactionToAim";
-    pub const AIM_TO_HIT_REACTION_PARAM: &'static str = "AimToHitReaction";
-    pub const WHIP_TO_HIT_REACTION_PARAM: &'static str = "WhipToHitReaction";
-
-    // Dying machine parameters
-    pub const DYING_TO_DEAD: &'static str = "DyingToDead";
-
     pub fn get_definition(kind: BotKind) -> &'static BotDefinition {
         match kind {
             BotKind::Mutant => {
@@ -385,101 +564,9 @@ impl Bot {
         let weapon_pivot = graph.add_node(weapon_pivot);
         graph.link_nodes(weapon_pivot, hand);
 
-        let locomotion_machine = {
-            let idle_animation = load_animation(resource_manager, definition.idle_animation, model, scene)?;
-            let walk_animation = load_animation(resource_manager, definition.walk_animation, model, scene)?;
-            let jump_animation = load_animation(resource_manager, definition.jump_animation, model, scene)?;
-            let falling_animation = load_animation(resource_manager, definition.falling_animation, model, scene)?;
-
-            let mut machine = Machine::new();
-
-            let jump_node = machine.add_node(machine::PoseNode::make_play_animation(jump_animation));
-            let jump_state = machine.add_state(State::new("Jump", jump_node));
-
-            let falling_node = machine.add_node(machine::PoseNode::make_play_animation(falling_animation));
-            let falling_state = machine.add_state(State::new("Falling", falling_node));
-
-            let walk_node = machine.add_node(machine::PoseNode::make_play_animation(walk_animation));
-            let walk_state = machine.add_state(State::new("Walk", walk_node));
-
-            let idle_node = machine.add_node(machine::PoseNode::make_play_animation(idle_animation));
-            let idle_state = machine.add_state(State::new("Idle", idle_node));
-
-            machine.add_transition(machine::Transition::new("Walk->Idle", walk_state, idle_state, 0.5, Self::WALK_TO_IDLE_PARAM))
-                .add_transition(machine::Transition::new("Walk->Jump", walk_state, jump_state, 0.5, Self::WALK_TO_JUMP_PARAM))
-                .add_transition(machine::Transition::new("Idle->Walk", idle_state, walk_state, 0.5, Self::IDLE_TO_WALK_PARAM))
-                .add_transition(machine::Transition::new("Idle->Jump", idle_state, jump_state, 0.5, Self::IDLE_TO_JUMP_PARAM))
-                .add_transition(machine::Transition::new("Jump->Falling", jump_state, falling_state, 0.5, Self::JUMP_TO_FALLING_PARAM))
-                .add_transition(machine::Transition::new("Falling->Idle", falling_state, idle_state, 0.5, Self::FALLING_TO_IDLE_PARAM));
-
-            machine.set_entry_state(idle_state);
-
-            //  machine.debug(true);
-
-            machine
-        };
-
-        let hit_reaction_animation;
-        let aim_state;
-        let combat_machine = {
-            let aim_animation = load_animation(resource_manager, definition.aim_animation, model, scene)?;
-            let whip_animation = load_animation(resource_manager, definition.whip_animation, model, scene)?;
-            hit_reaction_animation = load_animation(resource_manager, definition.hit_reaction_animation, model, scene)?;
-
-            let SceneInterfaceMut { graph, animations, .. } = scene.interface_mut();
-
-            // These animations must *not* affect legs, because legs animated using locomotion machine
-            disable_leg_tracks(animations.get_mut(aim_animation), model, definition.left_leg_name, graph);
-            disable_leg_tracks(animations.get_mut(aim_animation), model, definition.right_leg_name, graph);
-
-            disable_leg_tracks(animations.get_mut(whip_animation), model, definition.left_leg_name, graph);
-            disable_leg_tracks(animations.get_mut(whip_animation), model, definition.right_leg_name, graph);
-
-            disable_leg_tracks(animations.get_mut(hit_reaction_animation), model, definition.left_leg_name, graph);
-            disable_leg_tracks(animations.get_mut(hit_reaction_animation), model, definition.right_leg_name, graph);
-            animations.get_mut(hit_reaction_animation).set_loop(false);
-
-            let mut machine = Machine::new();
-
-            let hit_reaction_node = machine.add_node(machine::PoseNode::make_play_animation(hit_reaction_animation));
-            let hit_reaction_state = machine.add_state(State::new("HitReaction", hit_reaction_node));
-
-            let aim_node = machine.add_node(machine::PoseNode::make_play_animation(aim_animation));
-            aim_state = machine.add_state(State::new("Aim", aim_node));
-
-            let whip_node = machine.add_node(machine::PoseNode::make_play_animation(whip_animation));
-            let whip_state = machine.add_state(State::new("Whip", whip_node));
-
-            machine.add_transition(machine::Transition::new("Aim->Whip", aim_state, whip_state, 0.5, Self::AIM_TO_WHIP_PARAM))
-                .add_transition(machine::Transition::new("Whip->Aim", whip_state, aim_state, 0.5, Self::WHIP_TO_AIM_PARAM))
-                .add_transition(machine::Transition::new("Whip->HitReaction", whip_state, hit_reaction_state, 0.2, Self::WHIP_TO_HIT_REACTION_PARAM))
-                .add_transition(machine::Transition::new("Aim->HitReaction", aim_state, hit_reaction_state, 0.2, Self::AIM_TO_HIT_REACTION_PARAM))
-                .add_transition(machine::Transition::new("HitReaction->Aim", hit_reaction_state, aim_state, 0.5, Self::HIT_REACTION_TO_AIM_PARAM));
-
-           // machine.debug(true);
-
-            machine
-        };
-
-        let dead_state;
-        let dying_machine = {
-            let dying_animation = load_animation(resource_manager, definition.dying_animation, model, scene)?;
-            let dead_animation = load_animation(resource_manager, definition.dead_animation, model, scene)?;
-
-            let mut machine = Machine::new();
-
-            let dying_node = machine.add_node(machine::PoseNode::make_play_animation(dying_animation));
-            let dying_state = machine.add_state(State::new("Dying", dying_node));
-
-            let dead_node = machine.add_node(machine::PoseNode::make_play_animation(dead_animation));
-            dead_state = machine.add_state(State::new("Dead", dead_node));
-
-            machine.set_entry_state(dying_state);
-
-            machine.add_transition(machine::Transition::new("Dying->Dead", dying_state, dead_state, 1.5, Self::DYING_TO_DEAD));
-
-            machine
-        };
+        let locomotion_machine = LocomotionMachine::new(resource_manager, &definition, model, scene)?;
+        let combat_machine = CombatMachine::new(resource_manager, definition, model, scene)?;
+        let dying_machine = DyingMachine::new(resource_manager, definition, model, scene)?;
 
         Ok(Self {
             character: Character {
@@ -488,28 +575,26 @@ impl Bot {
                 weapon_pivot,
                 health: definition.health,
                 sender: Some(sender),
+                name: format!("{:?}", kind),
                 ..Default::default()
             },
             definition,
-            hit_reaction_animation,
             last_health: definition.health,
             model,
             kind,
             locomotion_machine,
             combat_machine,
             dying_machine,
-            dead_state,
-            aim_state,
             ..Default::default()
         })
     }
 
     pub fn can_be_removed(&self) -> bool {
-        self.dying_machine.active_state() == self.dead_state
+        self.dying_machine.machine.active_state() == self.dying_machine.dead_state
     }
 
     pub fn can_shoot(&self) -> bool {
-        self.combat_machine.active_state() == self.aim_state && self.shoot_interval <= 0.0
+        self.combat_machine.machine.active_state() == self.combat_machine.aim_state && self.shoot_interval <= 0.0
     }
 
     pub fn set_target(&mut self, target: Vec3) {
@@ -521,8 +606,19 @@ impl Bot {
     }
 }
 
+fn clean_machine(machine: &Machine, scene: &mut Scene) {
+    for node in machine.nodes() {
+        if let PoseNode::PlayAnimation(node) = node {
+            scene.interface_mut().animations.remove(node.animation);
+        }
+    }
+}
+
 impl CleanUp for Bot {
     fn clean_up(&mut self, scene: &mut Scene) {
+        self.combat_machine.clean_up(scene);
+        self.dying_machine.clean_up(scene);
+        self.locomotion_machine.clean_up(scene);
         self.character.clean_up(scene);
     }
 }
@@ -543,10 +639,7 @@ impl Visit for Bot {
         self.target_actor.visit("TargetActor", visitor)?;
         self.locomotion_machine.visit("LocomotionMachine", visitor)?;
         self.combat_machine.visit("AimMachine", visitor)?;
-        self.hit_reaction_animation.visit("HitReactionAnimation", visitor)?;
         self.restoration_time.visit("RestorationTime", visitor)?;
-        self.dead_state.visit("DeadState", visitor)?;
-        self.aim_state.visit("AimState", visitor)?;
 
         visitor.leave_region()
     }

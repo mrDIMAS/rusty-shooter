@@ -25,7 +25,6 @@ use rg3d::{
     physics::{
         convex_shape::ConvexShape,
         rigid_body::RigidBody,
-        Physics,
         convex_shape::{CapsuleShape, Axis},
     },
 };
@@ -253,6 +252,7 @@ impl Player {
                 body: body_handle,
                 weapon_pivot: weapon_pivot_handle,
                 sender: Some(sender),
+                name: "Player".to_owned(),
                 ..Default::default()
             },
             camera: camera_handle,
@@ -396,14 +396,6 @@ impl Player {
             spatial.set_position(&self.feet_position);
             spatial.generic_mut().play();
         }
-    }
-
-    pub fn set_position(&mut self, physics: &mut Physics, position: Vec3) {
-        physics.borrow_body_mut(self.character.body).set_position(position);
-    }
-
-    pub fn get_position(&self, physics: &Physics) -> Vec3 {
-        physics.borrow_body(self.character.body).get_position()
     }
 
     fn update_listener(&mut self, sound_context: Arc<Mutex<Context>>) {

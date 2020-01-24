@@ -80,7 +80,7 @@ pub struct Projectile {
     lifetime: f32,
     rotation_angle: f32,
     /// Handle of weapons from which projectile was fired.
-    owner: Handle<Weapon>,
+    pub owner: Handle<Weapon>,
     initial_velocity: Vec3,
     /// Position of projectile on the previous frame, it is used to simulate
     /// continuous intersection detection from fast moving projectiles.
@@ -232,7 +232,7 @@ impl Projectile {
             graph.get(self.model).base().get_global_position()
         };
 
-        let mut hit_actors: Vec<Handle<Actor>> = Vec::new();
+        let mut hit_actors: Vec<Hit> = Vec::new();
         let mut effect_position = None;
 
         // Do ray based intersection tests for every kind of projectiles. This will help to handle
@@ -244,11 +244,14 @@ impl Projectile {
                 'hit_loop: for hit in result.iter() {
                     if let HitKind::Body(body) = hit.kind {
                         for (actor_handle, actor) in actors.pair_iter() {
-                            if actor.character().get_body() == body {
+                            if actor.character().get_body() == body && self.owner.is_some() {
                                 let weapon = weapons.get(self.owner);
                                 // Ignore intersections with owners of weapon.
                                 if weapon.get_owner() != actor_handle {
-                                    hit_actors.push(actor_handle);
+                                    hit_actors.push(Hit {
+                                        actor: actor_handle,
+                                        who: weapon.get_owner()
+                                    });
 
                                     self.kill();
                                     effect_position = Some(hit.position);
@@ -276,11 +279,14 @@ impl Projectile {
 
                     // Check if we got contact with any actor and damage it then.
                     for (actor_handle, actor) in actors.pair_iter() {
-                        if contact.body == actor.character().get_body() {
+                        if contact.body == actor.character().get_body() && self.owner.is_some() {
                             // Prevent self-damage.
                             let weapon = weapons.get(self.owner);
                             if weapon.get_owner() != actor_handle {
-                                hit_actors.push(actor_handle);
+                                hit_actors.push(Hit {
+                                    actor: actor_handle,
+                                    who: weapon.get_owner()
+                                });
                             } else {
                                 // Make sure that projectile won't die on contact with owner.
                                 owner_contact = true;
@@ -326,11 +332,11 @@ impl Projectile {
         // List of hit actors can contain same actor multiple times in a row because this list could
         // be filled from ray casting as well as from contact information of rigid body, fix this
         // to not damage actor twice or more times with one projectile.
-        hit_actors.dedup_by(|a, b| *a == *b);
-        for actor in hit_actors {
+        hit_actors.dedup_by(|a, b| a.actor == b.actor);
+        for hit in hit_actors {
             self.sender.as_ref().unwrap().send(GameEvent::DamageActor {
-                actor,
-                who: Default::default(),
+                actor: hit.actor,
+                who: hit.who,
                 amount: self.definition.damage,
             }).unwrap();
         }
@@ -343,6 +349,11 @@ impl Projectile {
             .base()
             .get_global_position()
     }
+}
+
+struct Hit {
+    actor: Handle<Actor>,
+    who: Handle<Actor>
 }
 
 impl CleanUp for Projectile {

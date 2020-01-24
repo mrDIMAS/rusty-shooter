@@ -21,6 +21,7 @@ use crate::{
 use std::sync::mpsc::Sender;
 
 pub struct Character {
+    pub name: String,
     pub pivot: Handle<Node>,
     pub body: Handle<RigidBody>,
     pub health: f32,
@@ -39,6 +40,7 @@ pub trait AsCharacter {
 impl Default for Character {
     fn default() -> Self {
         Self {
+            name: Default::default(),
             pivot: Handle::NONE,
             body: Handle::NONE,
             health: 100.0,
@@ -55,6 +57,7 @@ impl Visit for Character {
     fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
         visitor.enter_region(name)?;
 
+        self.name.visit("Name", visitor)?;
         self.pivot.visit("Pivot", visitor)?;
         self.body.visit("Body", visitor)?;
         self.health.visit("Health", visitor)?;
@@ -91,14 +94,6 @@ impl Character {
 
     pub fn get_health(&self) -> f32 {
         self.health
-    }
-
-    pub fn set_health(&mut self, health: f32) {
-        self.health = health;
-    }
-
-    pub fn set_armor(&mut self, armor: f32) {
-        self.armor = armor;
     }
 
     pub fn get_armor(&self) -> f32 {

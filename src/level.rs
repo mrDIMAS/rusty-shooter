@@ -5,23 +5,36 @@ use std::{
     sync::{
         Mutex,
         Arc,
-        mpsc::{Sender},
+        mpsc::Sender,
     },
     path::PathBuf,
 };
 use rand::Rng;
-use crate::{actor::{ActorContainer, Actor}, weapon::{
-    Weapon,
-    WeaponKind,
-    WeaponContainer,
-}, player::Player, GameTime, bot::{
-    Bot,
-    BotKind,
-}, projectile::{
-    ProjectileContainer,
-    ProjectileKind,
-    Projectile,
-}, character::AsCharacter, jump_pad::{JumpPadContainer, JumpPad}, item::{ItemContainer, Item, ItemKind}, ControlScheme, effects};
+use crate::{
+    actor::{ActorContainer, Actor},
+    weapon::{
+        Weapon,
+        WeaponKind,
+        WeaponContainer,
+    },
+    player::Player,
+    GameTime,
+    bot::{
+        Bot,
+        BotKind,
+    },
+    projectile::{
+        ProjectileContainer,
+        ProjectileKind,
+        Projectile,
+    },
+    character::AsCharacter,
+    jump_pad::{JumpPadContainer, JumpPad},
+    item::{ItemContainer, Item, ItemKind},
+    ControlScheme,
+    effects,
+    effects::EffectKind
+};
 use rg3d::{
     engine::{
         resource_manager::ResourceManager,
@@ -67,7 +80,6 @@ use rg3d::{
         },
     },
 };
-use crate::effects::EffectKind;
 
 pub struct Level {
     scene: Handle<Scene>,
@@ -336,6 +348,12 @@ impl Level {
 
     fn remove_weapon(&mut self, engine: &mut Engine, weapon: Handle<Weapon>) {
         let scene = engine.scenes.get_mut(self.scene);
+        for projectile in self.projectiles.iter_mut() {
+            if projectile.owner == weapon {
+                // Reset owner because handle to weapon will be invalid after weapon freed.
+                projectile.owner = Handle::NONE;
+            }
+        }
         self.weapons.get_mut(weapon).clean_up(scene);
         self.weapons.free(weapon);
     }
@@ -413,7 +431,7 @@ impl Level {
             .unwrap()
             .send(GameEvent::GiveNewWeapon {
                 actor: self.player,
-                kind: WeaponKind::PlasmaRifle
+                kind: WeaponKind::PlasmaRifle,
             })
             .unwrap();
     }
@@ -614,7 +632,14 @@ impl Level {
     pub fn handle_game_event(&mut self, engine: &mut Engine, event: &GameEvent, time: GameTime) {
         match event {
             GameEvent::GiveNewWeapon { actor, kind } => {
-                self.give_new_weapon(engine, *actor, *kind)
+                self.give_new_weapon(engine, *actor, *kind);
+
+                self.events_sender
+                    .as_ref()
+                    .unwrap()
+                    .send(GameEvent::AddNotification {
+                        text: format!("Actor picked up weapon {:?}", kind)
+                    }).unwrap();
             }
             GameEvent::AddBot { kind, position } => {
                 self.add_bot(engine, *kind, *position)
@@ -623,10 +648,18 @@ impl Level {
                 self.remove_actor(engine, *actor)
             }
             GameEvent::GiveItem { actor, kind } => {
-                self.give_item(engine, *actor, *kind)
+                self.give_item(engine, *actor, *kind);
             }
             GameEvent::PickUpItem { actor, item } => {
-                self.pickup_item(engine, *actor, *item)
+                let kind = self.items.get(*item).get_kind();
+                self.pickup_item(engine, *actor, *item);
+
+                self.events_sender
+                    .as_ref()
+                    .unwrap()
+                    .send(GameEvent::AddNotification {
+                        text: format!("Actor picked up item {:?}", kind)
+                    }).unwrap();
             }
             GameEvent::ShootWeapon { weapon, initial_velocity } => {
                 self.shoot_weapon(engine, *weapon, *initial_velocity, time)
@@ -641,10 +674,32 @@ impl Level {
                 self.show_weapon(engine, *weapon, *state)
             }
             GameEvent::SpawnBot { kind } => {
-                self.spawn_bot(engine, *kind)
+                self.spawn_bot(engine, *kind);
+
+                self.events_sender
+                    .as_ref()
+                    .unwrap()
+                    .send(GameEvent::AddNotification {
+                        text: format!("Bot {:?} spawned!", kind)
+                    }).unwrap();
             }
             GameEvent::DamageActor { actor, who, amount } => {
-                self.damage_actor(*actor, *who, *amount)
+                let message =
+                    if who.is_some() {
+                        format!("{} dealt {} damage to {}!", self.actors.get(*who).character().name,
+                                amount, self.actors.get(*actor).character().name)
+                    } else {
+                        format!("{} took {} damage!", self.actors.get(*actor).character().name, amount)
+                    };
+
+                self.events_sender
+                    .as_ref()
+                    .unwrap()
+                    .send(GameEvent::AddNotification {
+                        text: message,
+                    }).unwrap();
+
+                self.damage_actor(*actor, *who, *amount);
             }
             GameEvent::CreateEffect { kind, position } => {
                 let scene = engine.scenes.get_mut(self.scene);
@@ -656,6 +711,9 @@ impl Level {
             }
             GameEvent::SpawnItem { kind, position, adjust_height, lifetime } => {
                 self.spawn_item(engine, *kind, *position, *adjust_height, *lifetime)
+            }
+            GameEvent::AddNotification { .. } => {
+                // Ignore
             }
         }
     }
@@ -730,7 +788,7 @@ pub enum GameEvent {
         kind: ItemKind,
         position: Vec3,
         adjust_height: bool,
-        lifetime: Option<f32>
+        lifetime: Option<f32>,
     },
     CreateProjectile {
         kind: ProjectileKind,
@@ -763,4 +821,8 @@ pub enum GameEvent {
         position: Vec3,
     },
     SpawnPlayer,
+    /// HUD listens such events and puts them into queue.
+    AddNotification {
+        text: String
+    },
 }

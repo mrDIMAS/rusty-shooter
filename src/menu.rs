@@ -2,65 +2,74 @@ use std::{
     path::Path,
     rc::Rc,
     sync::{Mutex, Arc},
+    cell::RefCell
 };
-use std::cell::RefCell;
 use crate::{ControlScheme, ControlButton};
-use rg3d::{resource::{
-    texture::TextureKind,
-}, engine::Engine, event::{WindowEvent, Event, MouseScrollDelta, MouseButton}, monitor::VideoMode, window::Fullscreen, core::{
-    pool::Handle,
-}, gui::{
-    ttf::Font,
-    check_box::CheckBox,
-    UINodeContainer,
-    ControlTemplate,
-    style::StyleBuilder,
-    check_box::CheckBoxBuilder,
-    UserInterface,
-    text_box::TextBoxBuilder,
-    list_box::ListBoxBuilder,
-    UINode,
-    grid::{
-        GridBuilder,
-        Row,
-        Column,
+use rg3d::{
+    resource::{
+        texture::TextureKind,
     },
-    Thickness,
-    VerticalAlignment,
-    window::{
-        WindowBuilder,
-        WindowTitle,
+    engine::Engine, event::{
+        WindowEvent, Event, MouseScrollDelta,
+        MouseButton},
+    monitor::VideoMode, window::Fullscreen,
+    core::{
+        pool::Handle,
     },
-    text::{
-        TextBuilder,
-        Text,
+    gui::{
+        ttf::Font,
+        check_box::CheckBox,
+        UINodeContainer,
+        ControlTemplate,
+        style::StyleBuilder,
+        check_box::CheckBoxBuilder,
+        UserInterface,
+        text_box::TextBoxBuilder,
+        list_box::ListBoxBuilder,
+        UINode,
+        grid::{
+            GridBuilder,
+            Row,
+            Column,
+        },
+        Thickness,
+        VerticalAlignment,
+        window::{
+            WindowBuilder,
+            WindowTitle,
+        },
+        text::{
+            TextBuilder,
+            Text,
+        },
+        scroll_bar::{
+            ScrollBarBuilder,
+            ScrollBar,
+        },
+        button::{
+            ButtonBuilder,
+            Button,
+        },
+        Visibility,
+        event::{
+            UIEvent,
+            UIEventKind,
+        },
+        widget::{
+            WidgetBuilder,
+            Widget,
+        },
+        HorizontalAlignment,
+        Control,
+        Builder,
+        image::ImageBuilder,
+        tab_control::{
+            TabControlBuilder,
+            TabDefinition,
+        },
     },
-    scroll_bar::{
-        ScrollBarBuilder,
-        ScrollBar,
-    },
-    button::{
-        ButtonBuilder,
-        Button,
-    },
-    Visibility,
-    event::{
-        UIEvent,
-        UIEventKind,
-    },
-    widget::{
-        WidgetBuilder,
-        Widget,
-    },
-    HorizontalAlignment,
-    Control,
-    Builder,
-    image::ImageBuilder,
-    tab_control::{
-        TabControlBuilder,
-        TabDefinition,
-    },
-}, utils};
+    utils,
+};
 
 pub struct Menu {
     root: Handle<UINode>,
@@ -92,8 +101,6 @@ pub struct Menu {
     cb_use_hrtf: Handle<UINode>,
     btn_reset_audio_settings: Handle<UINode>,
 }
-
-
 
 impl Menu {
     pub fn new(engine: &mut Engine, control_scheme: Rc<RefCell<ControlScheme>>) -> Self {

@@ -32,21 +32,19 @@ use crate::{
     jump_pad::{JumpPadContainer, JumpPad},
     item::{ItemContainer, Item, ItemKind},
     ControlScheme,
-    effects,
-    effects::EffectKind
+    effects::{
+        self,
+        EffectKind
+    }
 };
 use rg3d::{
-    engine::{
-        resource_manager::ResourceManager,
-        Engine,
-    },
+    engine::Engine,
     resource::{
         texture::TextureKind,
     },
     event::Event,
     scene::{
         Scene,
-        SceneInterfaceMut,
         base::{AsBase, BaseBuilder},
         particle_system::{
             ParticleSystem, Emitter,
@@ -57,7 +55,10 @@ use rg3d::{
         node::Node,
         transform::TransformBuilder,
     },
-    utils,
+    utils::{
+        self,
+        navmesh::Navmesh
+    },
     core::{
         color::Color,
         color_gradient::{ColorGradient, GradientPoint},
@@ -82,15 +83,16 @@ use rg3d::{
 };
 
 pub struct Level {
-    scene: Handle<Scene>,
+    pub scene: Handle<Scene>,
     player: Handle<Actor>,
     projectiles: ProjectileContainer,
-    actors: ActorContainer,
+    pub actors: ActorContainer,
     weapons: WeaponContainer,
     jump_pads: JumpPadContainer,
     items: ItemContainer,
     spawn_points: Vec<SpawnPoint>,
     events_sender: Option<Sender<GameEvent>>,
+    pub navmesh: Option<Navmesh>,
     pub control_scheme: Option<Rc<RefCell<ControlScheme>>>,
 }
 
@@ -106,6 +108,7 @@ impl Default for Level {
             items: ItemContainer::new(),
             spawn_points: Default::default(),
             events_sender: None,
+            navmesh: Default::default(),
             control_scheme: None,
         }
     }
@@ -188,34 +191,39 @@ pub struct LevelUpdateContext<'a> {
     pub time: GameTime,
     pub scene: &'a mut Scene,
     pub sound_context: Arc<Mutex<Context>>,
-    pub resource_manager: &'a mut ResourceManager,
     pub items: &'a ItemContainer,
-    pub weapons: &'a WeaponContainer,
     pub jump_pads: &'a JumpPadContainer,
-    pub spawn_points: &'a [SpawnPoint],
+    pub navmesh: Option<&'a mut Navmesh>,
 }
 
 impl Level {
-    fn load_level(engine: &mut Engine) -> Scene {
+    fn load_level(engine: &mut Engine) -> (Scene, Option<Navmesh>) {
         let mut scene = Scene::new();
+        let mut navmesh = None;
 
         let map_model = engine.resource_manager.request_model(Path::new("data/models/dm6.fbx"));
         if map_model.is_some() {
             // Instantiate map
             let map_root_handle = map_model.unwrap().lock().unwrap().instantiate(&mut scene).root;
-            let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
             // Create collision geometry
-            let polygon_handle = graph.find_by_name(map_root_handle, "Polygon");
+            let polygon_handle = scene.graph.find_by_name(map_root_handle, "Polygon");
             if polygon_handle.is_some() {
-                physics.add_static_geometry(utils::mesh_to_static_geometry(graph.get(polygon_handle).as_mesh()));
+                scene.physics.add_static_geometry(utils::mesh_to_static_geometry(scene.graph.get(polygon_handle).as_mesh()));
             } else {
                 println!("Unable to find Polygon node to build collision shape for level!");
             }
+
+            let navmesh_handle = scene.graph.find_by_name(map_root_handle, "Navmesh");
+            if navmesh_handle.is_some() {
+                let navmesh_node = scene.graph.get_mut(navmesh_handle);
+                navmesh_node.base_mut().set_visibility(false);
+                navmesh = Some(utils::mesh_to_navmesh(navmesh_node.as_mesh()));
+            } else {
+                println!("Unable to find Navmesh node to build navmesh!")
+            }
         }
 
-        let SceneInterfaceMut { graph, .. } = scene.interface_mut();
-
-        graph.add_node(Node::ParticleSystem(
+        scene.graph.add_node(Node::ParticleSystem(
             ParticleSystemBuilder::new(BaseBuilder::new()
                 .with_local_transform(TransformBuilder::new()
                     .with_local_position(Vec3::new(0.0, 1.0, 0.0))
@@ -235,31 +243,28 @@ impl Level {
                 .with_opt_texture(engine.resource_manager.request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8))
                 .build()));
 
-        scene
+        (scene, navmesh)
     }
 
     pub fn new(engine: &mut Engine, control_scheme: Rc<RefCell<ControlScheme>>, sender: Sender<GameEvent>) -> Level {
-        let mut scene = Self::load_level(engine);
-        let mut actors = ActorContainer::new();
-        let mut player = Player::new(engine.sound_context.clone(), &mut engine.resource_manager, &mut scene, sender.clone());
-        player.set_control_scheme(control_scheme.clone());
-        let player = actors.add(Actor::Player(player));
+        let (scene, navmesh) = Self::load_level(engine);
+
         let mut level = Level {
-            weapons: WeaponContainer::new(),
-            actors,
-            player,
+            navmesh,
             scene: engine.scenes.add(scene),
             events_sender: Some(sender.clone()),
             control_scheme: Some(control_scheme),
             ..Default::default()
         };
-        sender.send(GameEvent::GiveNewWeapon { actor: player, kind: WeaponKind::M4 }).unwrap();
-        sender.send(GameEvent::GiveNewWeapon { actor: player, kind: WeaponKind::Ak47 }).unwrap();
-        sender.send(GameEvent::GiveNewWeapon { actor: player, kind: WeaponKind::PlasmaRifle }).unwrap();
-        sender.send(GameEvent::AddBot { kind: BotKind::Maw, position: Vec3::new(0.0, 0.0, -1.0) }).unwrap();
-        sender.send(GameEvent::AddBot { kind: BotKind::Mutant, position: Vec3::new(0.0, 0.0, 1.0) }).unwrap();
-        sender.send(GameEvent::AddBot { kind: BotKind::Parasite, position: Vec3::new(1.0, 0.0, 0.0) }).unwrap();
+
+        level.spawn_player(engine);
+
+        level.add_bot(engine, BotKind::Maw, Vec3::new(0.0, 0.0, -1.0));
+        level.add_bot(engine, BotKind::Mutant, Vec3::new(0.0, 0.0, 1.0));
+        level.add_bot(engine, BotKind::Parasite, Vec3::new(1.0, 0.0, 0.0));
+
         level.analyze(engine);
+
         level
     }
 
@@ -267,20 +272,19 @@ impl Level {
         let mut items = Vec::new();
         let mut spawn_points = Vec::new();
         let scene = engine.scenes.get_mut(self.scene);
-        let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
-        for node in graph.linear_iter() {
+        for node in scene.graph.linear_iter() {
             let position = node.base().get_global_position();
             let name = node.base().get_name();
             if name.starts_with("JumpPad") {
-                let begin = graph.find_by_name_from_root(format!("{}_Begin", name).as_str());
-                let end = graph.find_by_name_from_root(format!("{}_End", name).as_str());
+                let begin = scene.graph.find_by_name_from_root(format!("{}_Begin", name).as_str());
+                let end = scene.graph.find_by_name_from_root(format!("{}_End", name).as_str());
                 if begin.is_some() && end.is_some() {
-                    let begin = graph.get(begin).base().get_global_position();
-                    let end = graph.get(end).base().get_global_position();
+                    let begin = scene.graph.get(begin).base().get_global_position();
+                    let end = scene.graph.get(end).base().get_global_position();
                     let (force, len) = (end - begin).normalized_ex();
                     let force = force.unwrap_or(Vec3::UP).scale(len / 20.0);
                     let shape = utils::mesh_to_static_geometry(node.as_mesh());
-                    let shape = physics.add_static_geometry(shape);
+                    let shape = scene.physics.add_static_geometry(shape);
                     self.jump_pads.add(JumpPad::new(shape, force));
                 };
             } else if name.starts_with("Medkit") {
@@ -331,11 +335,10 @@ impl Level {
 
     fn pick(&self, engine: &mut Engine, from: Vec3, to: Vec3) -> Vec3 {
         let scene = engine.scenes.get_mut(self.scene);
-        let SceneInterfaceMut { physics, .. } = scene.interface_mut();
         if let Some(ray) = Ray::from_two_points(&from, &to) {
             let mut intersections = Vec::new();
             let options = RayCastOptions { ignore_bodies: true, ..Default::default() };
-            physics.ray_cast(&ray, options, &mut intersections);
+            scene.physics.ray_cast(&ray, options, &mut intersections);
             if let Some(pt) = intersections.first() {
                 pt.position
             } else {
@@ -366,8 +369,7 @@ impl Level {
         let actor = self.actors.get_mut(actor);
         let weapon_handle = self.weapons.add(weapon);
         actor.character_mut().add_weapon(weapon_handle);
-        let SceneInterfaceMut { graph, .. } = scene.interface_mut();
-        graph.link_nodes(weapon_model, actor.character().get_weapon_pivot());
+        scene.graph.link_nodes(weapon_model, actor.character().get_weapon_pivot());
     }
 
     fn add_bot(&mut self, engine: &mut Engine, kind: BotKind, position: Vec3) {
@@ -383,7 +385,7 @@ impl Level {
         let character = self.actors.get(actor).character();
 
         // Make sure to remove weapons and drop appropriate items (items will be temporary).
-        let drop_position = character.get_position(scene.interface_mut().physics);
+        let drop_position = character.get_position(&scene.physics);
         let weapons = character.get_weapons()
             .iter()
             .map(|h| *h)
@@ -425,15 +427,11 @@ impl Level {
         self.actors
             .get_mut(self.player)
             .character_mut()
-            .set_position(scene.interface_mut().physics, spawn_position);
-        self.events_sender
-            .as_ref()
-            .unwrap()
-            .send(GameEvent::GiveNewWeapon {
-                actor: self.player,
-                kind: WeaponKind::PlasmaRifle,
-            })
-            .unwrap();
+            .set_position(&mut scene.physics, spawn_position);
+
+        self.give_new_weapon(engine, self.player, WeaponKind::M4);
+        self.give_new_weapon(engine, self.player, WeaponKind::Ak47);
+        self.give_new_weapon(engine, self.player, WeaponKind::PlasmaRifle);
     }
 
     fn give_item(&mut self, engine: &mut Engine, actor: Handle<Actor>, kind: ItemKind) {
@@ -484,8 +482,7 @@ impl Level {
     fn pickup_item(&mut self, engine: &mut Engine, actor: Handle<Actor>, item: Handle<Item>) {
         let item = self.items.get_mut(item);
         let scene = engine.scenes.get_mut(self.scene);
-        let graph = scene.interface().graph;
-        let position = item.position(graph);
+        let position = item.position(&mut scene.graph);
         item.pick_up();
         let kind = item.get_kind();
         self.play_sound(engine, "data/sounds/item_pickup.ogg", position);
@@ -533,29 +530,27 @@ impl Level {
         let scene = engine.scenes.get_mut(self.scene);
         let weapon = self.weapons.get_mut(weapon_handle);
         if weapon.try_shoot(scene, time) {
-            let graph = scene.interface().graph;
             let kind = weapon.definition.projectile;
-            let position = weapon.get_shot_position(graph);
-            let direction = weapon.get_shot_direction(graph);
+            let position = weapon.get_shot_position(&scene.graph);
+            let direction = weapon.get_shot_direction(&scene.graph);
             self.create_projectile(engine, kind, position, direction, initial_velocity, weapon_handle);
         }
     }
 
     fn show_weapon(&mut self, engine: &mut Engine, weapon_handle: Handle<Weapon>, state: bool) {
         let scene = engine.scenes.get_mut(self.scene);
-        self.weapons.get(weapon_handle).set_visibility(state, scene.interface_mut().graph)
+        self.weapons.get(weapon_handle).set_visibility(state, &mut scene.graph)
     }
 
     fn find_suitable_spawn_point(&self, engine: &mut Engine) -> usize {
         // Find spawn point with least amount of enemies nearby.
         let scene = engine.scenes.get(self.scene);
-        let physics = scene.interface().physics;
         let mut index = 0;
         let mut max_distance = std::f32::MAX;
         for (i, pt) in self.spawn_points.iter().enumerate() {
             let mut sum_distance = 0.0;
             for actor in self.actors.iter() {
-                let position = actor.character().get_position(physics);
+                let position = actor.character().get_position(&scene.physics);
                 sum_distance += pt.position.distance(&position);
             }
             if sum_distance > max_distance {
@@ -603,7 +598,7 @@ impl Level {
         let player_position = self.actors
             .get(self.player)
             .character()
-            .get_position(scene.interface().physics);
+            .get_position(&scene.physics);
 
         for actor in self.actors.iter_mut() {
             if let Actor::Bot(bot) = actor {
@@ -619,11 +614,9 @@ impl Level {
             time,
             scene,
             sound_context: engine.sound_context.clone(),
-            resource_manager: &mut engine.resource_manager,
             items: &self.items,
-            weapons: &self.weapons,
             jump_pads: &self.jump_pads,
-            spawn_points: &self.spawn_points,
+            navmesh: self.navmesh.as_mut(),
         };
 
         self.actors.update(&mut context);
@@ -703,8 +696,7 @@ impl Level {
             }
             GameEvent::CreateEffect { kind, position } => {
                 let scene = engine.scenes.get_mut(self.scene);
-                let graph = scene.interface_mut().graph;
-                effects::create(*kind, graph, &mut engine.resource_manager, *position)
+                effects::create(*kind, &mut scene.graph, &mut engine.resource_manager, *position)
             }
             GameEvent::SpawnPlayer => {
                 self.spawn_player(engine)

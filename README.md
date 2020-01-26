@@ -40,6 +40,8 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [x] Ability to pickup dropped weapons.
 - [x] Drop weapons when actor die.
 - [x] Give player some weapon on respawn.
+- [x] Events log - simple text-based event log - it shows all significant events - death of an actor, damage, etc.
+- [x] Pathfinding - based on navmesh.
 - [ ] Level editor - some simple level editor would be nice, for now I'll continue use ancient 3ds max 2012. Game items are placed on level using dummies which then are substituded with real items, this works but very uncomfortable because it is not WYSIWYG editor.
 - [ ] Restyle UI - it is boring gray right now. Main menu also should have some sort of background, not just black void.
 - [ ] Loading screen - currently game just hangs for 8+ seconds until it load a level, this should be done async.
@@ -47,17 +49,15 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [ ] Death zones - places where actor dies immediately should be added (space, death fog, squashed, telefragged, etc).
 - [ ] More bots - there are only three bot kind available, there are a lot of free models on mixamo.com which can be used to add more bots.
 - [ ] More levels - currently there is only one level which is boring as fuck.
-- [ ] AI - bot are very stupid right now and this should be fixed, 
+- [ ] AI - bot are very stupid right now and this should be fixed.
 - [ ] Bots hit reaction - partially done, bots have hit reaction animation but there is still no visual "proof" that is was hit. Some sort of blood splashes should be added as well as hit sound.
 - [ ] Improve sound - many events in game still does not have sound. There are plenty of free sources with sounds, this should be used.
-- [ ] Leader board - game mode specific leader board should be added.
-- [ ] Pathfinding - there should be a way to specify navmesh that will be used for navigation. Some crates that can help there - https://crates.io/crates/navmesh - need to check that. 
+- [ ] Leader board - game mode specific leader board should be added. 
 - [ ] Match options.
 - [ ] Hit marks on surfaces - there is no "visual proof" that projectile has hit surface
 - [ ] `Deathmatch` game mode - easiest game mode to implement.
 - [ ] `Capture the flag` game mode - similar to Q3 game mode is nice to have.
 - [ ] `Team deathmatch` game mode - again similar to Q3.
-- [ ] Events log - simple text-based event log would be cool to implement. It should show all significant events - death of an actor, taken flag, round win, etc.
 - [ ] Explosive decorations - explosive barrels, mines, etc. This will diverse gameplay a bit.
 - [ ] Grenade launcher. 
 - [ ] Rocket launcher.

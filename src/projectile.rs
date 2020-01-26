@@ -4,7 +4,6 @@ use rg3d::{
     scene::{
         sprite::SpriteBuilder,
         Scene,
-        SceneInterfaceMut,
         node::Node,
         graph::Graph,
         base::{BaseBuilder, AsBase},
@@ -150,26 +149,24 @@ impl Projectile {
                sender: Sender<GameEvent>) -> Self {
         let definition = Self::get_definition(kind);
 
-        let SceneInterfaceMut { graph, node_rigid_body_map, physics, .. } = scene.interface_mut();
-
         let (model, body) = {
             match &kind {
                 ProjectileKind::Plasma => {
                     let size = rand::thread_rng().gen_range(0.09, 0.12);
 
                     let color = Color::opaque(0, 162, 232);
-                    let model = graph.add_node(Node::Sprite(SpriteBuilder::new(BaseBuilder::new())
+                    let model = scene.graph.add_node(Node::Sprite(SpriteBuilder::new(BaseBuilder::new())
                         .with_size(size)
                         .with_color(color)
                         .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/light_01.png"), TextureKind::R8))
                         .build()));
 
-                    let light = graph.add_node(Node::Light(LightBuilder::new(
+                    let light = scene.graph.add_node(Node::Light(LightBuilder::new(
                         LightKind::Point(PointLight::new(1.5)), BaseBuilder::new())
                         .with_color(color)
                         .build()));
 
-                    graph.link_nodes(light, model);
+                    scene.graph.link_nodes(light, model);
 
                     let mut body = RigidBody::new(ConvexShape::Sphere(SphereShape::new(size)));
                     body.set_gravity(Vec3::ZERO);
@@ -179,10 +176,10 @@ impl Projectile {
                     body.collision_mask = CollisionGroups::All as u64 & !(CollisionGroups::Projectile as u64);
                     body.collision_flags = CollisionFlags::DISABLE_COLLISION_RESPONSE;
 
-                    (model, physics.add_body(body))
+                    (model, scene.physics.add_body(body))
                 }
                 ProjectileKind::Bullet => {
-                    let model = graph.add_node(Node::Sprite(SpriteBuilder::new(BaseBuilder::new()
+                    let model = scene.graph.add_node(Node::Sprite(SpriteBuilder::new(BaseBuilder::new()
                         .with_local_transform(TransformBuilder::new()
                             .with_local_position(position)
                             .build()))
@@ -196,7 +193,7 @@ impl Projectile {
         };
 
         if model.is_some() && body.is_some() {
-            node_rigid_body_map.insert(model, body);
+            scene.physics_binder.bind(model, body);
         }
 
         Self {
@@ -223,13 +220,11 @@ impl Projectile {
     }
 
     pub fn update(&mut self, scene: &mut Scene, actors: &ActorContainer, weapons: &WeaponContainer, time: GameTime) {
-        let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
-
         // Fetch current position of projectile.
         let position = if self.body.is_some() {
-            physics.borrow_body(self.body).get_position()
+            scene.physics.borrow_body(self.body).get_position()
         } else {
-            graph.get(self.model).base().get_global_position()
+            scene.graph.get(self.model).base().get_global_position()
         };
 
         let mut hit_actors: Vec<Hit> = Vec::new();
@@ -239,7 +234,7 @@ impl Projectile {
         // fast moving projectiles.
         if let Some(ray) = Ray::from_two_points(&self.last_position, &position) {
             let mut result = Vec::new();
-            if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
+            if scene.physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
                 // List of hits sorted by distance from ray origin.
                 'hit_loop: for hit in result.iter() {
                     if let HitKind::Body(body) = hit.kind {
@@ -274,7 +269,7 @@ impl Projectile {
 
             // Special case for projectiles with rigid body.
             if self.body.is_some() {
-                for contact in physics.borrow_body(self.body).get_contacts() {
+                for contact in scene.physics.borrow_body(self.body).get_contacts() {
                     let mut owner_contact = false;
 
                     // Check if we got contact with any actor and damage it then.
@@ -301,17 +296,17 @@ impl Projectile {
                 }
 
                 // Move rigid body explicitly.
-                physics.borrow_body_mut(self.body).offset_by(total_velocity);
+                scene.physics.borrow_body_mut(self.body).offset_by(total_velocity);
             } else {
                 // We have just model - move it.
-                graph.get_mut(self.model)
+                scene.graph.get_mut(self.model)
                     .base_mut()
                     .get_local_transform_mut()
                     .offset(total_velocity);
             }
         }
 
-        if let Node::Sprite(sprite) = graph.get_mut(self.model) {
+        if let Node::Sprite(sprite) =scene. graph.get_mut(self.model) {
             sprite.set_rotation(self.rotation_angle);
             self.rotation_angle += 1.5;
         }
@@ -325,7 +320,7 @@ impl Projectile {
         if self.lifetime <= 0.0 {
             self.sender.as_ref().unwrap().send(GameEvent::CreateEffect {
                 kind: EffectKind::BulletImpact,
-                position: effect_position.unwrap_or(self.get_position(graph)),
+                position: effect_position.unwrap_or(self.get_position(&scene.graph)),
             }).unwrap();
         }
 
@@ -358,13 +353,11 @@ struct Hit {
 
 impl CleanUp for Projectile {
     fn clean_up(&mut self, scene: &mut Scene) {
-        let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
-
         if self.body.is_some() {
-            physics.remove_body(self.body);
+            scene.physics.remove_body(self.body);
         }
         if self.model.is_some() {
-            graph.remove_node(self.model);
+            scene.graph.remove_node(self.model);
         }
     }
 }

@@ -9,7 +9,6 @@ use rg3d::{
         resource_manager::ResourceManager
     },
     scene::{
-        SceneInterfaceMut,
         node::Node,
         Scene,
         base::AsBase,
@@ -121,7 +120,6 @@ impl LevelEntity for Player {
 
         if let Some(current_weapon_handle) = self.character.weapons.get(self.character.current_weapon as usize) {
             let velocity = context.scene
-                .interface_mut()
                 .physics
                 .borrow_body(self.character.body)
                 .get_velocity();
@@ -208,14 +206,12 @@ impl CleanUp for Player {
 
 impl Player {
     pub fn new(sound_context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager, scene: &mut Scene, sender: Sender<GameEvent>) -> Player {
-        let SceneInterfaceMut { graph, physics, node_rigid_body_map, .. } = scene.interface_mut();
-
-        let camera_handle = graph.add_node(Node::Camera(Default::default()));
+        let camera_handle = scene.graph.add_node(Node::Camera(Default::default()));
 
         let mut camera_pivot = Node::Base(Default::default());
         camera_pivot.base_mut().get_local_transform_mut().set_position(Vec3 { x: 0.0, y: 1.0, z: 0.0 });
-        let camera_pivot_handle = graph.add_node(camera_pivot);
-        graph.link_nodes(camera_handle, camera_pivot_handle);
+        let camera_pivot_handle = scene.graph.add_node(camera_pivot);
+        scene.graph.link_nodes(camera_handle, camera_pivot_handle);
 
         let mut pivot = Node::Base(Default::default());
         pivot.base_mut().get_local_transform_mut().set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
@@ -223,19 +219,19 @@ impl Player {
         let capsule_shape = CapsuleShape::new(0.35, Self::default().stand_body_height, Axis::Y);
         let mut body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
         body.set_friction(Vec3::new(0.2, 0.0, 0.2));
-        let body_handle = physics.add_body(body);
-        let pivot_handle = graph.add_node(pivot);
-        node_rigid_body_map.insert(pivot_handle, body_handle);
-        graph.link_nodes(camera_pivot_handle, pivot_handle);
+        let body_handle = scene.physics.add_body(body);
+        let pivot_handle = scene.graph.add_node(pivot);
+        scene.physics_binder.bind(pivot_handle, body_handle);
+        scene.graph.link_nodes(camera_pivot_handle, pivot_handle);
 
         let mut weapon_base_pivot = Node::Base(Default::default());
         weapon_base_pivot.base_mut().get_local_transform_mut().set_position(Vec3::new(-0.065, -0.052, 0.02));
-        let weapon_base_pivot_handle = graph.add_node(weapon_base_pivot);
-        graph.link_nodes(weapon_base_pivot_handle, camera_handle);
+        let weapon_base_pivot_handle = scene.graph.add_node(weapon_base_pivot);
+        scene.graph.link_nodes(weapon_base_pivot_handle, camera_handle);
 
         let weapon_pivot = Node::Base(Default::default());
-        let weapon_pivot_handle = graph.add_node(weapon_pivot);
-        graph.link_nodes(weapon_pivot_handle, weapon_base_pivot_handle);
+        let weapon_pivot_handle = scene.graph.add_node(weapon_pivot);
+        scene.graph.link_nodes(weapon_pivot_handle, weapon_base_pivot_handle);
 
         let footsteps = {
             [
@@ -298,13 +294,11 @@ impl Player {
     }
 
     fn update_movement(&mut self, context: &mut LevelUpdateContext) {
-        let SceneInterfaceMut { graph, physics, .. } = context.scene.interface_mut();
-
-        let pivot = graph.get(self.character.pivot).base();
+        let pivot = context.scene.graph.get(self.character.pivot).base();
         let look = pivot.get_look_vector();
         let side = pivot.get_side_vector();
 
-        let has_ground_contact = self.character.has_ground_contact(physics);
+        let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
 
         let mut velocity = Vec3::ZERO;
         if self.controller.move_forward {
@@ -322,7 +316,7 @@ impl Player {
 
         let speed_mult = if self.controller.run { self.run_speed_multiplier } else { 1.0 };
 
-        let body = physics.borrow_body_mut(self.character.body);
+        let body = context.scene.physics.borrow_body_mut(self.character.body);
         if let Some(normalized_velocity) = velocity.normalized() {
             body.set_x_velocity(normalized_velocity.x * self.move_speed * speed_mult);
             body.set_z_velocity(normalized_velocity.z * self.move_speed * speed_mult);
@@ -343,7 +337,7 @@ impl Player {
 
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
 
-        let weapon_pivot = graph.get_mut(self.character.weapon_pivot).base_mut();
+        let weapon_pivot = context.scene.graph.get_mut(self.character.weapon_pivot).base_mut();
         weapon_pivot.get_local_transform_mut().set_position(self.weapon_offset);
 
         if self.controller.jump {
@@ -364,7 +358,7 @@ impl Player {
             self.camera_offset = Vec3::ZERO;
         }
 
-        let camera_node = graph.get_mut(self.camera).base_mut();
+        let camera_node = context.scene.graph.get_mut(self.camera).base_mut();
         camera_node.get_local_transform_mut().set_position(self.camera_offset);
 
         self.head_position = camera_node.get_global_position();
@@ -382,10 +376,10 @@ impl Player {
             self.pitch = self.dest_pitch;
         }
 
-        let pivot_transform = graph.get_mut(self.character.pivot).base_mut().get_local_transform_mut();
+        let pivot_transform = context.scene.graph.get_mut(self.character.pivot).base_mut().get_local_transform_mut();
         pivot_transform.set_rotation(Quat::from_axis_angle(Vec3::UP, self.yaw.to_radians()));
 
-        let camera_pivot_transform = graph.get_mut(self.camera_pivot).base_mut().get_local_transform_mut();
+        let camera_pivot_transform = context.scene.graph.get_mut(self.camera_pivot).base_mut().get_local_transform_mut();
         camera_pivot_transform.set_rotation(Quat::from_axis_angle(Vec3::RIGHT, self.pitch.to_radians()));
     }
 

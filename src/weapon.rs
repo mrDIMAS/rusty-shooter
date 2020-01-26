@@ -14,7 +14,6 @@ use rg3d::{
     physics::{RayCastOptions, Physics},
     engine::resource_manager::ResourceManager,
     scene::{
-        SceneInterfaceMut,
         node::Node,
         Scene,
         graph::Graph,
@@ -173,14 +172,13 @@ impl Weapon {
             .unwrap()
             .instantiate_geometry(scene);
 
-        let SceneInterfaceMut { graph, .. } = scene.interface_mut();
-        let laser_dot = graph.add_node(Node::Light(
+        let laser_dot = scene.graph.add_node(Node::Light(
             LightBuilder::new(LightKind::Point(PointLight::new(0.5)), BaseBuilder::new())
                 .with_color(Color::opaque(255, 0, 0))
                 .cast_shadows(false)
                 .build()));
 
-        let shot_point = graph.find_by_name(model, "Weapon:ShotPoint");
+        let shot_point = scene.graph.find_by_name(model, "Weapon:ShotPoint");
 
         if shot_point.is_none() {
             println!("Shot point not found!");
@@ -212,13 +210,11 @@ impl Weapon {
     }
 
     pub fn update(&mut self, scene: &mut Scene) {
-        let SceneInterfaceMut { graph, physics, .. } = scene.interface_mut();
-
         self.offset.follow(&self.dest_offset, 0.2);
 
-        self.update_laser_sight(graph, physics);
+        self.update_laser_sight(&mut scene.graph, &scene.physics);
 
-        let node = graph.get_mut(self.model);
+        let node = scene.graph.get_mut(self.model);
         node.base_mut().get_local_transform_mut().set_position(self.offset);
         self.shot_position = node.base().get_global_position();
     }
@@ -285,7 +281,7 @@ impl Weapon {
             self.offset = Vec3::new(0.0, 0.0, -0.05);
             self.last_shot_time = time.elapsed;
 
-            let position = self.get_shot_position(scene.interface().graph);
+            let position = self.get_shot_position(&scene.graph);
 
             if let Some(sender) = self.sender.as_ref() {
                 sender.send(GameEvent::PlaySound {
@@ -303,9 +299,8 @@ impl Weapon {
 
 impl CleanUp for Weapon {
     fn clean_up(&mut self, scene: &mut Scene) {
-        let SceneInterfaceMut { graph, .. } = scene.interface_mut();
-        graph.remove_node(self.model);
-        graph.remove_node(self.laser_dot);
+        scene.graph.remove_node(self.model);
+        scene.graph.remove_node(self.laser_dot);
     }
 }
 

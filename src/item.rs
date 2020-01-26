@@ -15,7 +15,6 @@ use rg3d::{
             AsBase,
         },
         Scene,
-        SceneInterfaceMut,
         node::Node,
         transform::TransformBuilder,
         graph::Graph,
@@ -188,16 +187,14 @@ impl Item {
             .unwrap()
             .instantiate_geometry(scene);
 
-        let SceneInterfaceMut { graph, .. } = scene.interface_mut();
-
-        let pivot = graph.add_node(Node::Base(BaseBuilder::new()
+        let pivot = scene.graph.add_node(Node::Base(BaseBuilder::new()
             .with_local_transform(TransformBuilder::new()
                 .with_local_position(position)
                 .with_local_scale(Vec3::new(definition.scale, definition.scale, definition.scale))
                 .build())
             .build()));
 
-        graph.link_nodes(model, pivot);
+        scene.graph.link_nodes(model, pivot);
 
         Self {
             pivot,
@@ -339,16 +336,14 @@ impl ItemContainer {
     }
 
     pub fn update(&mut self, scene: &mut Scene, time: GameTime) {
-        let SceneInterfaceMut { graph, .. } = scene.interface_mut();
-
         for item in self.pool.iter_mut() {
-            item.update(graph, time);
+            item.update(&mut scene.graph, time);
         }
 
         // Remove temporary items.
         for item in self.pool.iter() {
             if item.can_be_removed() {
-                item.cleanup(graph);
+                item.cleanup(&mut scene.graph);
             }
         }
         self.pool.retain(|i| !i.can_be_removed())

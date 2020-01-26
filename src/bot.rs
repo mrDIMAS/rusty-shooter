@@ -13,7 +13,8 @@ use rg3d::{
     core::{
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
-        math::{vec3::Vec3, quat::Quat},
+        math::{vec3::Vec3, quat::Quat, self},
+        color::Color,
     },
     physics::{
         rigid_body::RigidBody,
@@ -21,20 +22,23 @@ use rg3d::{
     },
     animation::{
         Animation,
-        machine,
-        machine::{Machine, State},
-        machine::PoseNode
+        machine::{
+            self,
+            Machine,
+            State,
+            PoseNode,
+        },
     },
     scene::{
         node::Node,
         Scene,
-        SceneInterfaceMut,
         base::{AsBase, BaseBuilder},
         transform::TransformBuilder,
         graph::Graph,
     },
     engine::resource_manager::ResourceManager,
 };
+use rg3d::renderer::debug_renderer::{self, DebugRenderer};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum BotKind {
@@ -78,6 +82,10 @@ pub struct Bot {
     restoration_time: f32,
     shoot_interval: f32,
     shots_made: usize,
+    path: Vec<Vec3>,
+    move_target: Vec3,
+    last_target_point: usize,
+    current_path_point: usize,
 }
 
 impl AsCharacter for Bot {
@@ -106,6 +114,10 @@ impl Default for Bot {
             restoration_time: 0.0,
             shoot_interval: 0.0,
             shots_made: 0,
+            path: Default::default(),
+            move_target: Default::default(),
+            last_target_point: 0,
+            current_path_point: 0,
         }
     }
 }
@@ -133,38 +145,51 @@ pub struct BotDefinition {
 
 impl LevelEntity for Bot {
     fn update(&mut self, context: &mut LevelUpdateContext) {
-        let SceneInterfaceMut { graph, physics, animations, .. } = context.scene.interface_mut();
-
         if self.character.is_dead() {
             self.dying_machine.machine
                 .set_parameter(DYING_TO_DEAD, machine::Parameter::Rule(self.character.is_dead()))
-                .evaluate_pose(animations, context.time.delta)
-                .apply(graph);
+                .evaluate_pose(&context.scene.animations, context.time.delta)
+                .apply(&mut context.scene.graph);
         } else {
             let threshold = 2.0;
-            let has_ground_contact = self.character.has_ground_contact(physics);
-            let body = physics.borrow_body_mut(self.character.body);
-            let dir = self.target - body.get_position();
-            let distance = dir.len();
+            let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
+            let body = context.scene.physics.borrow_body_mut(self.character.body);
+            let look_dir = self.target - body.get_position();
+            let distance = look_dir.len();
 
-            if let Some(dir) = dir.normalized() {
-                if distance > threshold {
-                    body.move_by(dir.scale(self.definition.walk_speed * context.time.delta));
+            let position =  body.get_position();
+
+            if let Some(path_point) = self.path.get(self.current_path_point) {
+                self.move_target = *path_point;
+                if self.move_target.distance(&position) < 1.0 {
+                    if self.current_path_point < self.path.len() - 1 {
+                        self.current_path_point += 1;
+                    }
+                }
+            }
+
+            if let Some(look_dir) = look_dir.normalized() {
+                if distance > threshold && has_ground_contact {
+                    if let Some(move_dir) = (self.move_target - position).normalized() {
+                        let vel = move_dir.scale(self.definition.walk_speed * context.time.delta);
+                        body.set_x_velocity(vel.x);
+                        body.set_z_velocity(vel.z);
+                    }
                 }
 
-                let pivot = graph.get_mut(self.character.pivot);
+                let pivot = context.scene.graph.get_mut(self.character.pivot);
                 let transform = pivot.base_mut().get_local_transform_mut();
-                let angle = dir.x.atan2(dir.z);
+                let angle = look_dir.x.atan2(look_dir.z);
                 transform.set_rotation(Quat::from_axis_angle(Vec3::UP, angle))
             }
 
-            let need_jump = dir.y >= 0.3 && has_ground_contact;
+            let need_jump = look_dir.y >= 0.3 && has_ground_contact && distance < 2.0;
             if need_jump {
                 body.set_y_velocity(0.08);
             }
             let was_damaged = self.character.health < self.last_health;
             if was_damaged {
-                let hit_reaction = animations.get_mut(self.combat_machine.hit_reaction_animation);
+                let hit_reaction = context.scene.animations.get_mut(self.combat_machine.hit_reaction_animation);
                 if hit_reaction.has_ended() {
                     hit_reaction.rewind();
                 }
@@ -180,8 +205,8 @@ impl LevelEntity for Bot {
                 .set_parameter(IDLE_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
                 .set_parameter(JUMP_TO_FALLING_PARAM, machine::Parameter::Rule(!has_ground_contact))
                 .set_parameter(FALLING_TO_IDLE_PARAM, machine::Parameter::Rule(has_ground_contact))
-                .evaluate_pose(animations, context.time.delta)
-                .apply(graph);
+                .evaluate_pose(&context.scene.animations, context.time.delta)
+                .apply(&mut context.scene.graph);
 
             // Overwrite upper body with combat machine
             self.combat_machine.machine
@@ -190,8 +215,8 @@ impl LevelEntity for Bot {
                 .set_parameter(WHIP_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
                 .set_parameter(AIM_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
                 .set_parameter(HIT_REACTION_TO_AIM_PARAM, machine::Parameter::Rule(can_aim))
-                .evaluate_pose(animations, context.time.delta)
-                .apply(graph);
+                .evaluate_pose(&context.scene.animations, context.time.delta)
+                .apply(&mut context.scene.graph);
 
             self.shoot_interval -= context.time.delta;
 
@@ -209,6 +234,23 @@ impl LevelEntity for Bot {
                     if self.shots_made >= 4 {
                         self.shots_made = 0;
                         self.shoot_interval = 2.0;
+                    }
+                }
+            }
+
+            if let Some(navmesh) = context.navmesh.as_mut() {
+                let from = body.get_position() - Vec3::new(0.0, 1.0, 0.0);
+                let to = self.target - Vec3::new(0.0, 1.0, 0.0);
+                if let Some(from_index) = navmesh.query_closest(from) {
+                    if let Some(to_index) = navmesh.query_closest(to) {
+                        if to_index != self.last_target_point {
+                            self.last_target_point = to_index;
+                            self.current_path_point = 0;
+                            // Rebuild path if target path vertex has changed.
+                            if let Ok(result) = navmesh.build_path(from_index, to_index, &mut self.path) {
+                                self.path.reverse();
+                            }
+                        }
                     }
                 }
             }
@@ -372,7 +414,7 @@ impl CleanUp for DyingMachine {
 struct CombatMachine {
     machine: Machine,
     hit_reaction_animation: Handle<Animation>,
-    aim_state: Handle<State>
+    aim_state: Handle<State>,
 }
 
 impl Default for CombatMachine {
@@ -380,7 +422,7 @@ impl Default for CombatMachine {
         Self {
             machine: Default::default(),
             hit_reaction_animation: Default::default(),
-            aim_state: Default::default()
+            aim_state: Default::default(),
         }
     }
 }
@@ -391,18 +433,16 @@ impl CombatMachine {
         let whip_animation = load_animation(resource_manager, definition.whip_animation, model, scene)?;
         let hit_reaction_animation = load_animation(resource_manager, definition.hit_reaction_animation, model, scene)?;
 
-        let SceneInterfaceMut { graph, animations, .. } = scene.interface_mut();
-
         // These animations must *not* affect legs, because legs animated using locomotion machine
-        disable_leg_tracks(animations.get_mut(aim_animation), model, definition.left_leg_name, graph);
-        disable_leg_tracks(animations.get_mut(aim_animation), model, definition.right_leg_name, graph);
+        disable_leg_tracks(scene.animations.get_mut(aim_animation), model, definition.left_leg_name, &mut scene.graph);
+        disable_leg_tracks(scene.animations.get_mut(aim_animation), model, definition.right_leg_name, &mut scene.graph);
 
-        disable_leg_tracks(animations.get_mut(whip_animation), model, definition.left_leg_name, graph);
-        disable_leg_tracks(animations.get_mut(whip_animation), model, definition.right_leg_name, graph);
+        disable_leg_tracks(scene.animations.get_mut(whip_animation), model, definition.left_leg_name, &mut scene.graph);
+        disable_leg_tracks(scene.animations.get_mut(whip_animation), model, definition.right_leg_name, &mut scene.graph);
 
-        disable_leg_tracks(animations.get_mut(hit_reaction_animation), model, definition.left_leg_name, graph);
-        disable_leg_tracks(animations.get_mut(hit_reaction_animation), model, definition.right_leg_name, graph);
-        animations.get_mut(hit_reaction_animation).set_loop(false);
+        disable_leg_tracks(scene.animations.get_mut(hit_reaction_animation), model, definition.left_leg_name, &mut scene.graph);
+        disable_leg_tracks(scene.animations.get_mut(hit_reaction_animation), model, definition.right_leg_name, &mut scene.graph);
+        scene.animations.get_mut(hit_reaction_animation).set_loop(false);
 
         let mut machine = Machine::new();
 
@@ -466,7 +506,7 @@ impl Bot {
                     weapon_hand_name: "Mutant:RightHand",
                     left_leg_name: "Mutant:LeftUpLeg",
                     right_leg_name: "Mutant:RightUpLeg",
-                    walk_speed: 0.3,
+                    walk_speed: 5.0,
                     scale: 0.0085,
                     weapon_scale: 2.6,
                     health: 100.0,
@@ -489,7 +529,7 @@ impl Bot {
                     weapon_hand_name: "RightHand",
                     left_leg_name: "LeftUpLeg",
                     right_leg_name: "RightUpLeg",
-                    walk_speed: 0.3,
+                    walk_speed: 5.0,
                     scale: 0.0085,
                     weapon_scale: 2.5,
                     health: 100.0,
@@ -512,7 +552,7 @@ impl Bot {
                     weapon_hand_name: "RightHand",
                     left_leg_name: "LeftUpLeg",
                     right_leg_name: "RightUpLeg",
-                    walk_speed: 0.3,
+                    walk_speed: 5.0,
                     scale: 0.0085,
                     weapon_scale: 2.5,
                     health: 100.0,
@@ -534,23 +574,23 @@ impl Bot {
             .instantiate_geometry(scene);
 
         let (pivot, body) = {
-            let SceneInterfaceMut { graph, physics, node_rigid_body_map, .. } = scene.interface_mut();
-            let pivot = graph.add_node(Node::Base(Default::default()));
-            graph.link_nodes(model, pivot);
-            let transform = graph.get_mut(model).base_mut().get_local_transform_mut();
+            let pivot = scene.graph.add_node(Node::Base(Default::default()));
+            scene.graph.link_nodes(model, pivot);
+            let transform = scene.graph.get_mut(model).base_mut().get_local_transform_mut();
             transform.set_position(Vec3::new(0.0, -body_height * 0.5, 0.0));
             transform.set_scale(Vec3::new(definition.scale, definition.scale, definition.scale));
 
             let capsule_shape = CapsuleShape::new(0.35, body_height, Axis::Y);
             let mut capsule_body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
+            capsule_body.set_friction(Vec3::new(0.2, 0.0, 0.2));
             capsule_body.set_position(position);
-            let body = physics.add_body(capsule_body);
-            node_rigid_body_map.insert(pivot, body);
+            let body = scene.physics.add_body(capsule_body);
+            scene.physics_binder.bind(pivot, body);
 
             (pivot, body)
         };
 
-        let hand = scene.interface().graph.find_by_name(model, definition.weapon_hand_name);
+        let hand = scene.graph.find_by_name(model, definition.weapon_hand_name);
         let wpn_scale = definition.weapon_scale * (1.0 / definition.scale);
         let weapon_pivot = Node::Base(BaseBuilder::new()
             .with_local_transform(TransformBuilder::new()
@@ -560,9 +600,8 @@ impl Bot {
                         Quat::from_axis_angle(Vec3::UP, -std::f32::consts::FRAC_PI_2))
                 .build())
             .build());
-        let graph = scene.interface_mut().graph;
-        let weapon_pivot = graph.add_node(weapon_pivot);
-        graph.link_nodes(weapon_pivot, hand);
+        let weapon_pivot = scene.graph.add_node(weapon_pivot);
+        scene.graph.link_nodes(weapon_pivot, hand);
 
         let locomotion_machine = LocomotionMachine::new(resource_manager, &definition, model, scene)?;
         let combat_machine = CombatMachine::new(resource_manager, definition, model, scene)?;
@@ -604,12 +643,24 @@ impl Bot {
     pub fn set_target_actor(&mut self, actor: Handle<Actor>) {
         self.target_actor.set(actor);
     }
+
+    pub fn debug_draw(&self, debug_renderer: &mut DebugRenderer) {
+        for pts in self.path.windows(2) {
+            let a = pts[0];
+            let b = pts[1];
+            debug_renderer.add_line(debug_renderer::Line {
+                begin: a,
+                end: b,
+                color: Color::from_rgba(255, 0, 0, 255),
+            });
+        }
+    }
 }
 
 fn clean_machine(machine: &Machine, scene: &mut Scene) {
     for node in machine.nodes() {
         if let PoseNode::PlayAnimation(node) = node {
-            scene.interface_mut().animations.remove(node.animation);
+            scene.animations.remove(node.animation);
         }
     }
 }

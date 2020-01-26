@@ -27,7 +27,6 @@ use rg3d::{
         },
     },
     scene::{
-        SceneInterfaceMut,
         base::AsBase,
     },
 };
@@ -145,9 +144,8 @@ impl ActorContainer {
 
             if !is_dead {
                 for (item_handle, item) in context.items.pair_iter() {
-                    let SceneInterfaceMut { graph, physics, .. } = context.scene.interface_mut();
-                    let pivot = graph.get_mut(item.get_pivot());
-                    let body = physics.borrow_body(character.get_body());
+                    let pivot = context.scene.graph.get_mut(item.get_pivot());
+                    let body = context.scene.physics.borrow_body(character.get_body());
                     let distance = (pivot.base().get_global_position() - body.get_position()).len();
                     if distance < 1.25 && !item.is_picked_up() {
                         character.sender
@@ -163,8 +161,7 @@ impl ActorContainer {
 
             // Actors can jump on jump pads.
             for jump_pad in context.jump_pads.iter() {
-                let physics = context.scene.interface_mut().physics;
-                let body = physics.borrow_body_mut(character.get_body());
+                let body = context.scene.physics.borrow_body_mut(character.get_body());
                 let mut push = false;
                 for contact in body.get_contacts() {
                     if contact.static_geom == jump_pad.get_shape() {

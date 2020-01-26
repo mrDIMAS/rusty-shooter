@@ -55,9 +55,7 @@ use rg3d::{
     },
     event::{DeviceEvent, WindowEvent, ElementState, VirtualKeyCode, Event},
     event_loop::{EventLoop, ControlFlow},
-    engine::{
-        Engine,
-    },
+    engine::Engine,
 };
 use std::{
     rc::Rc,
@@ -74,6 +72,10 @@ use rg3d::utils::translate_event;
 use crate::level::GameEvent;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::mpsc;
+use rg3d::renderer::debug_renderer;
+use rg3d::core::math::PositionProvider;
+use rg3d::scene::base::AsBase;
+use rg3d::core::math::vec3::Vec3;
 
 pub struct Game {
     menu: Menu,
@@ -88,7 +90,7 @@ pub struct Game {
     control_scheme: Rc<RefCell<ControlScheme>>,
     time: GameTime,
     events_receiver: Receiver<GameEvent>,
-    events_sender: Sender<GameEvent>
+    events_sender: Sender<GameEvent>,
 }
 
 pub trait HandleFromSelf<T> {
@@ -325,7 +327,7 @@ impl Game {
             music,
             time,
             events_receiver: rx,
-            events_sender: tx
+            events_sender: tx,
         };
 
         game.create_debug_ui();
@@ -356,6 +358,12 @@ impl Game {
                     match event {
                         WindowEvent::RedrawRequested => {
                             game.update_statistics(game.time.elapsed);
+
+                            // <<<<< ENABLE THIS TO SHOW NAVMESH >>>>>
+                            if false {
+                                game.debug_render();
+                            }
+
                             // Render at max speed
                             game.engine.render().unwrap();
                             // Make sure to cap update rate to 60 FPS.
@@ -371,6 +379,31 @@ impl Game {
                 _ => *control_flow = ControlFlow::Poll,
             }
         });
+    }
+
+    fn debug_render(&mut self) {
+        if let Some(level) = self.level.as_mut() {
+            let debug_renderer = &mut self.engine.renderer.debug_renderer;
+            debug_renderer.clear_lines();
+            let player = level.get_player();
+            if let Some(navmesh) = level.navmesh.as_mut() {
+                for pt in navmesh.vertices() {
+                    for neighbour in pt.neighbours() {
+                        debug_renderer.add_line(debug_renderer::Line {
+                            begin: pt.position(),
+                            end: navmesh.vertices()[*neighbour].position(),
+                            color: Default::default(),
+                        });
+                    }
+                }
+
+                for actor in level.actors.iter() {
+                    if let Actor::Bot(bot) = actor {
+                        bot.debug_draw(debug_renderer);
+                    }
+                }
+            }
+        }
     }
 
     pub fn create_debug_ui(&mut self) {
@@ -439,7 +472,6 @@ impl Game {
                 println!("failed to load a save, reason: {}", e);
             }
         }
-
     }
 
     fn destroy_level(&mut self) {

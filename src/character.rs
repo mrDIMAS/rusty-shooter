@@ -73,7 +73,7 @@ impl Visit for Character {
 impl CleanUp for Character {
     fn clean_up(&mut self, scene: &mut Scene) {
         scene.remove_node(self.pivot);
-        scene.interface_mut().physics.remove_body(self.body);
+        scene.physics.remove_body(self.body);
     }
 }
 

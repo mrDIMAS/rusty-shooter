@@ -245,7 +245,7 @@ impl Projectile {
                                 if weapon.get_owner() != actor_handle {
                                     hit_actors.push(Hit {
                                         actor: actor_handle,
-                                        who: weapon.get_owner()
+                                        who: weapon.get_owner(),
                                     });
 
                                     self.kill();
@@ -280,7 +280,7 @@ impl Projectile {
                             if weapon.get_owner() != actor_handle {
                                 hit_actors.push(Hit {
                                     actor: actor_handle,
-                                    who: weapon.get_owner()
+                                    who: weapon.get_owner(),
                                 });
                             } else {
                                 // Make sure that projectile won't die on contact with owner.
@@ -306,7 +306,7 @@ impl Projectile {
             }
         }
 
-        if let Node::Sprite(sprite) =scene. graph.get_mut(self.model) {
+        if let Node::Sprite(sprite) = scene.graph.get_mut(self.model) {
             sprite.set_rotation(self.rotation_angle);
             self.rotation_angle += 1.5;
         }
@@ -348,7 +348,7 @@ impl Projectile {
 
 struct Hit {
     actor: Handle<Actor>,
-    who: Handle<Actor>
+    who: Handle<Actor>,
 }
 
 impl CleanUp for Projectile {

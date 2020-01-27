@@ -42,6 +42,7 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [x] Give player some weapon on respawn.
 - [x] Events log - simple text-based event log - it shows all significant events - death of an actor, damage, etc.
 - [x] Pathfinding - based on navmesh.
+- [x] Vision frustum for bots - bots can "see" only in front of them.
 - [ ] Level editor - some simple level editor would be nice, for now I'll continue use ancient 3ds max 2012. Game items are placed on level using dummies which then are substituded with real items, this works but very uncomfortable because it is not WYSIWYG editor.
 - [ ] Restyle UI - it is boring gray right now. Main menu also should have some sort of background, not just black void.
 - [ ] Loading screen - currently game just hangs for 8+ seconds until it load a level, this should be done async.

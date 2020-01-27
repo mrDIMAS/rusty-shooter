@@ -19,12 +19,36 @@ mod item;
 
 use crate::{
     character::AsCharacter,
-    level::{Level, CylinderEmitter},
+    level::{
+        Level,
+        CylinderEmitter,
+        GameEvent
+    },
     menu::Menu,
     hud::Hud,
     actor::Actor,
 };
+use std::{
+    sync::mpsc::{
+        Receiver,
+        Sender,
+        self,
+    },
+    rc::Rc,
+    fs::File,
+    path::Path,
+    time::{
+        Instant,
+        self,
+        Duration
+    },
+    io::Write,
+    thread,
+    cell::RefCell,
+};
 use rg3d::{
+    renderer::debug_renderer,
+    utils::translate_event,
     core::{
         pool::Handle,
         visitor::{
@@ -33,6 +57,7 @@ use rg3d::{
             Visit,
         },
         color::Color,
+        math::PositionProvider
     },
     sound::{
         source::{
@@ -57,25 +82,6 @@ use rg3d::{
     event_loop::{EventLoop, ControlFlow},
     engine::Engine,
 };
-use std::{
-    rc::Rc,
-    fs::File,
-    path::Path,
-    time::Instant,
-    io::Write,
-    time,
-    thread,
-    time::Duration,
-    cell::RefCell,
-};
-use rg3d::utils::translate_event;
-use crate::level::GameEvent;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::mpsc;
-use rg3d::renderer::debug_renderer;
-use rg3d::core::math::PositionProvider;
-use rg3d::scene::base::AsBase;
-use rg3d::core::math::vec3::Vec3;
 
 pub struct Game {
     menu: Menu,
@@ -359,7 +365,7 @@ impl Game {
                         WindowEvent::RedrawRequested => {
                             game.update_statistics(game.time.elapsed);
 
-                            // <<<<< ENABLE THIS TO SHOW NAVMESH >>>>>
+                            // <<<<< ENABLE THIS TO SHOW DEBUG GEOMETRY >>>>>
                             if false {
                                 game.debug_render();
                             }
@@ -385,7 +391,6 @@ impl Game {
         if let Some(level) = self.level.as_mut() {
             let debug_renderer = &mut self.engine.renderer.debug_renderer;
             debug_renderer.clear_lines();
-            let player = level.get_player();
             if let Some(navmesh) = level.navmesh.as_mut() {
                 for pt in navmesh.vertices() {
                     for neighbour in pt.neighbours() {

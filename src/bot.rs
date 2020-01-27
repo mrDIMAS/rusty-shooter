@@ -5,15 +5,19 @@ use std::{
 };
 use crate::{
     character::{Character, AsCharacter},
-    level::{LevelEntity, CleanUp, LevelUpdateContext},
+    level::{
+        LevelEntity,
+        CleanUp,
+        LevelUpdateContext,
+        GameEvent
+    },
     actor::Actor,
-    level::GameEvent,
 };
 use rg3d::{
     core::{
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
-        math::{vec3::Vec3, quat::Quat, self},
+        math::{vec3::Vec3, mat4::Mat4, quat::Quat, frustum::Frustum},
         color::Color,
     },
     physics::{
@@ -37,8 +41,8 @@ use rg3d::{
         graph::Graph,
     },
     engine::resource_manager::ResourceManager,
+    renderer::debug_renderer::{self, DebugRenderer}
 };
-use rg3d::renderer::debug_renderer::{self, DebugRenderer};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum BotKind {
@@ -86,6 +90,7 @@ pub struct Bot {
     move_target: Vec3,
     last_target_point: usize,
     current_path_point: usize,
+    frustum: Frustum
 }
 
 impl AsCharacter for Bot {
@@ -118,6 +123,7 @@ impl Default for Bot {
             move_target: Default::default(),
             last_target_point: 0,
             current_path_point: 0,
+            frustum: Default::default()
         }
     }
 }
@@ -168,10 +174,25 @@ impl LevelEntity for Bot {
                 }
             }
 
+            let head_pos = position + Vec3::new(0.0, 0.8, 0.0);
+            let up = context.scene.graph.get(self.model).base().get_up_vector();
+            let look_at = head_pos + context.scene.graph.get(self.model).base().get_look_vector();
+            let view_matrix = Mat4::look_at(head_pos, look_at, up).unwrap_or_default();
+            let projection_matrix = Mat4::perspective(60.0f32.to_radians(), 16.0 / 9.0, 0.1, 7.0);
+            let view_projection_matrix = projection_matrix * view_matrix;
+            self.frustum = Frustum::from(view_projection_matrix).unwrap();
+
             if let Some(look_dir) = look_dir.normalized() {
-                if distance > threshold && has_ground_contact {
-                    if let Some(move_dir) = (self.move_target - position).normalized() {
-                        let vel = move_dir.scale(self.definition.walk_speed * context.time.delta);
+                if distance > threshold {
+                    if has_ground_contact {
+                        if let Some(move_dir) = (self.move_target - position).normalized() {
+                            let vel = move_dir.scale(self.definition.walk_speed * context.time.delta);
+                            body.set_x_velocity(vel.x);
+                            body.set_z_velocity(vel.z);
+                        }
+                    } else {
+                        // A bit of air control. This helps jump of ledges when there is jump pad below bot.
+                        let vel = look_dir.scale(self.definition.walk_speed * context.time.delta);
                         body.set_x_velocity(vel.x);
                         body.set_z_velocity(vel.z);
                     }
@@ -247,7 +268,7 @@ impl LevelEntity for Bot {
                             self.last_target_point = to_index;
                             self.current_path_point = 0;
                             // Rebuild path if target path vertex has changed.
-                            if let Ok(result) = navmesh.build_path(from_index, to_index, &mut self.path) {
+                            if let Ok(_) = navmesh.build_path(from_index, to_index, &mut self.path) {
                                 self.path.reverse();
                             }
                         }
@@ -442,7 +463,7 @@ impl CombatMachine {
 
         disable_leg_tracks(scene.animations.get_mut(hit_reaction_animation), model, definition.left_leg_name, &mut scene.graph);
         disable_leg_tracks(scene.animations.get_mut(hit_reaction_animation), model, definition.right_leg_name, &mut scene.graph);
-        scene.animations.get_mut(hit_reaction_animation).set_loop(false);
+        scene.animations.get_mut(hit_reaction_animation).set_loop(false).set_speed(2.0);
 
         let mut machine = Machine::new();
 
@@ -654,6 +675,8 @@ impl Bot {
                 color: Color::from_rgba(255, 0, 0, 255),
             });
         }
+
+        debug_renderer.draw_frustum(&self.frustum, Color::from_rgba(0, 200, 0, 255));
     }
 }
 

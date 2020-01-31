@@ -5,9 +5,9 @@ authors = ["Dmitry Stepanov <d1maxa@yandex.ru>"]
 edition = "2018"
 license = "MIT"
 
-[profile.release]
-lto = false
-
 [dependencies]
 rg3d = { path = "../rg3d", version = "0.7.0" }
 rand = "0.7.0"
+
+[patch.crates-io]
+winit = { git = "https://github.com/rust-windowing/winit" }

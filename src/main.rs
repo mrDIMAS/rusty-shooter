@@ -258,9 +258,9 @@ impl Game {
 
         let primary_monitor = events_loop.primary_monitor();
         let mut monitor_dimensions = primary_monitor.size();
-        monitor_dimensions.height *= 0.7;
-        monitor_dimensions.width *= 0.7;
-        let client_size = monitor_dimensions.to_logical(primary_monitor.hidpi_factor());
+        monitor_dimensions.height = (monitor_dimensions.height as f32 * 0.7) as u32;
+        monitor_dimensions.width = (monitor_dimensions.width as f32 * 0.7) as u32;
+        let client_size = monitor_dimensions.to_logical::<f32>(primary_monitor.scale_factor());
 
         let window_builder = rg3d::window::WindowBuilder::new()
             .with_title("Rusty Shooter")
@@ -340,7 +340,7 @@ impl Game {
             game.process_input_event(&event);
 
             match event {
-                Event::EventsCleared => {
+                Event::MainEventsCleared => {
                     let mut dt = game.time.clock.elapsed().as_secs_f64() - game.time.elapsed;
                     while dt >= fixed_timestep as f64 {
                         dt -= fixed_timestep as f64;
@@ -358,21 +358,21 @@ impl Game {
                     }
                     game.engine.get_window().request_redraw();
                 }
+                Event::RedrawRequested(_) => {
+                    game.update_statistics(game.time.elapsed);
+
+                    // <<<<< ENABLE THIS TO SHOW DEBUG GEOMETRY >>>>>
+                    if false {
+                        game.debug_render();
+                    }
+
+                    // Render at max speed
+                    game.engine.render().unwrap();
+                    // Make sure to cap update rate to 60 FPS.
+                    game.limit_fps(fixed_fps as f64);
+                }
                 Event::WindowEvent { event, .. } => {
                     match event {
-                        WindowEvent::RedrawRequested => {
-                            game.update_statistics(game.time.elapsed);
-
-                            // <<<<< ENABLE THIS TO SHOW DEBUG GEOMETRY >>>>>
-                            if false {
-                                game.debug_render();
-                            }
-
-                            // Render at max speed
-                            game.engine.render().unwrap();
-                            // Make sure to cap update rate to 60 FPS.
-                            game.limit_fps(fixed_fps as f64);
-                        }
                         WindowEvent::CloseRequested => {
                             game.destroy_level();
                             *control_flow = ControlFlow::Exit

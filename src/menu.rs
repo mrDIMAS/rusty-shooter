@@ -107,8 +107,8 @@ impl Menu {
         let video_modes: Vec<VideoMode> = engine.get_window()
             .primary_monitor()
             .video_modes()
-            .filter(|vm| vm.size().width > 800.0 &&
-                vm.size().height > 600.0 && vm.bit_depth() == 32)
+            .filter(|vm| vm.size().width > 800 &&
+                vm.size().height > 600 && vm.bit_depth() == 32)
             .collect();
 
         let frame_size = engine.renderer.get_frame_size();

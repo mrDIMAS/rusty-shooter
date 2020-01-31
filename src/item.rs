@@ -147,7 +147,7 @@ impl Item {
             }
             ItemKind::PlasmaGun => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
-                    model: "data/models/plasma_rifle.fbx",
+                    model: "data/models/plasma_rifle.FBX",
                     scale: 3.0,
                     reactivation_interval: 30.0,
                 };

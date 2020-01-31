@@ -47,7 +47,6 @@ use std::{
     cell::RefCell,
 };
 use rg3d::{
-    renderer::debug_renderer,
     utils::translate_event,
     core::{
         pool::Handle,
@@ -57,7 +56,6 @@ use rg3d::{
             Visit,
         },
         color::Color,
-        math::PositionProvider
     },
     sound::{
         source::{
@@ -388,26 +386,10 @@ impl Game {
     }
 
     fn debug_render(&mut self) {
-        if let Some(level) = self.level.as_mut() {
-            let debug_renderer = &mut self.engine.renderer.debug_renderer;
-            debug_renderer.clear_lines();
-            if let Some(navmesh) = level.navmesh.as_mut() {
-                for pt in navmesh.vertices() {
-                    for neighbour in pt.neighbours() {
-                        debug_renderer.add_line(debug_renderer::Line {
-                            begin: pt.position(),
-                            end: navmesh.vertices()[*neighbour].position(),
-                            color: Default::default(),
-                        });
-                    }
-                }
+        self.engine.renderer.debug_renderer.clear_lines();
 
-                for actor in level.actors.iter() {
-                    if let Actor::Bot(bot) = actor {
-                        bot.debug_draw(debug_renderer);
-                    }
-                }
-            }
+        if let Some(level) = self.level.as_mut() {
+            level.debug_draw(&mut self.engine);
         }
     }
 

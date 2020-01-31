@@ -17,7 +17,7 @@ use rg3d::{
     },
     core::{
         visitor::{Visit, VisitResult, Visitor},
-        pool::{Handle, Pool, PoolIterator, PoolIteratorMut},
+        pool::{Handle, Pool, PoolIteratorMut},
         color::Color,
         math::{vec3::Vec3, ray::Ray},
     },
@@ -227,7 +227,7 @@ impl Projectile {
             scene.graph.get(self.model).base().get_global_position()
         };
 
-        let mut hit_actors: Vec<Hit> = Vec::new();
+        let mut hits: Vec<Hit> = Vec::new();
         let mut effect_position = None;
 
         // Do ray based intersection tests for every kind of projectiles. This will help to handle
@@ -243,7 +243,7 @@ impl Projectile {
                                 let weapon = weapons.get(self.owner);
                                 // Ignore intersections with owners of weapon.
                                 if weapon.get_owner() != actor_handle {
-                                    hit_actors.push(Hit {
+                                    hits.push(Hit {
                                         actor: actor_handle,
                                         who: weapon.get_owner(),
                                     });
@@ -278,7 +278,7 @@ impl Projectile {
                             // Prevent self-damage.
                             let weapon = weapons.get(self.owner);
                             if weapon.get_owner() != actor_handle {
-                                hit_actors.push(Hit {
+                                hits.push(Hit {
                                     actor: actor_handle,
                                     who: weapon.get_owner(),
                                 });
@@ -327,8 +327,8 @@ impl Projectile {
         // List of hit actors can contain same actor multiple times in a row because this list could
         // be filled from ray casting as well as from contact information of rigid body, fix this
         // to not damage actor twice or more times with one projectile.
-        hit_actors.dedup_by(|a, b| a.actor == b.actor);
-        for hit in hit_actors {
+        hits.dedup_by(|a, b| a.actor == b.actor);
+        for hit in hits {
             self.sender.as_ref().unwrap().send(GameEvent::DamageActor {
                 actor: hit.actor,
                 who: hit.who,
@@ -398,10 +398,6 @@ impl ProjectileContainer {
 
     pub fn add(&mut self, projectile: Projectile) -> Handle<Projectile> {
         self.pool.spawn(projectile)
-    }
-
-    pub fn iter(&self) -> PoolIterator<Projectile> {
-        self.pool.iter()
     }
 
     pub fn iter_mut(&mut self) -> PoolIteratorMut<Projectile> {

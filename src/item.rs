@@ -327,8 +327,8 @@ impl ItemContainer {
         self.pool.borrow_mut(item)
     }
 
-    pub fn get(&self, item: Handle<Item>) -> &Item {
-        self.pool.borrow(item)
+    pub fn contains(&self, item: Handle<Item>) -> bool {
+        self.pool.is_valid_handle(item)
     }
 
     pub fn pair_iter(&self) -> PoolPairIterator<Item> {

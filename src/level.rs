@@ -34,8 +34,8 @@ use crate::{
     ControlScheme,
     effects::{
         self,
-        EffectKind
-    }
+        EffectKind,
+    },
 };
 use rg3d::{
     engine::Engine,
@@ -57,7 +57,7 @@ use rg3d::{
     },
     utils::{
         self,
-        navmesh::Navmesh
+        navmesh::Navmesh,
     },
     core::{
         color::Color,
@@ -68,8 +68,11 @@ use rg3d::{
             VisitResult,
             Visitor,
         },
-        math::vec3::*,
-        math::ray::Ray,
+        math::{
+            vec3::*,
+            ray::Ray,
+            aabb::AxisAlignedBoundingBox,
+        },
     },
     physics::RayCastOptions,
     sound::{
@@ -81,6 +84,8 @@ use rg3d::{
         },
     },
 };
+use rg3d::renderer::debug_renderer;
+use crate::rg3d::core::math::PositionProvider;
 
 pub struct Level {
     pub scene: Handle<Scene>,
@@ -94,6 +99,7 @@ pub struct Level {
     events_sender: Option<Sender<GameEvent>>,
     pub navmesh: Option<Navmesh>,
     pub control_scheme: Option<Rc<RefCell<ControlScheme>>>,
+    death_zones: Vec<DeathZone>,
 }
 
 impl Default for Level {
@@ -110,6 +116,7 @@ impl Default for Level {
             events_sender: None,
             navmesh: Default::default(),
             control_scheme: None,
+            death_zones: Default::default(),
         }
     }
 }
@@ -133,6 +140,7 @@ impl Visit for Level {
         self.weapons.visit("Weapons", visitor)?;
         self.jump_pads.visit("JumpPads", visitor)?;
         self.spawn_points.visit("SpawnPoints", visitor)?;
+        self.death_zones.visit("DeathZones", visitor)?;
 
         visitor.leave_region()
     }
@@ -184,6 +192,28 @@ impl Emit for CylinderEmitter {
         let x = r * theta.cos();
         let y = r * theta.sin();
         particle.position = Vec3::new(x, y, z);
+    }
+}
+
+pub struct DeathZone {
+    bounds: AxisAlignedBoundingBox
+}
+
+impl Visit for DeathZone {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.bounds.visit("Bounds", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
+impl Default for DeathZone {
+    fn default() -> Self {
+        Self {
+            bounds: Default::default()
+        }
     }
 }
 
@@ -271,8 +301,9 @@ impl Level {
     pub fn analyze(&mut self, engine: &mut Engine) {
         let mut items = Vec::new();
         let mut spawn_points = Vec::new();
+        let mut death_zones = Vec::new();
         let scene = engine.scenes.get_mut(self.scene);
-        for node in scene.graph.linear_iter() {
+        for (handle, node) in scene.graph.pair_iter() {
             let position = node.base().get_global_position();
             let name = node.base().get_name();
             if name.starts_with("JumpPad") {
@@ -297,10 +328,19 @@ impl Level {
                 items.push((ItemKind::Plasma, position));
             } else if name.starts_with("SpawnPoint") {
                 spawn_points.push(node.base().get_global_position())
+            } else if name.starts_with("DeathZone") {
+                if let Node::Mesh(mesh) = node {
+                    death_zones.push(handle);
+                }
             }
         }
         for (kind, position) in items {
             self.items.add(Item::new(kind, position, scene, &mut engine.resource_manager, self.events_sender.as_ref().unwrap().clone()));
+        }
+        for handle in death_zones {
+            let node = scene.graph.get_mut(handle);
+            node.base_mut().set_visibility(false);
+            self.death_zones.push(DeathZone { bounds: node.as_mesh().calculate_world_bounding_box() });
         }
         self.spawn_points = spawn_points.into_iter().map(|p| SpawnPoint { position: p }).collect();
     }
@@ -362,53 +402,65 @@ impl Level {
     }
 
     fn give_new_weapon(&mut self, engine: &mut Engine, actor: Handle<Actor>, kind: WeaponKind) {
-        let scene = engine.scenes.get_mut(self.scene);
-        let mut weapon = Weapon::new(kind, &mut engine.resource_manager, scene, self.events_sender.as_ref().unwrap().clone());
-        weapon.set_owner(actor);
-        let weapon_model = weapon.get_model();
-        let actor = self.actors.get_mut(actor);
-        let weapon_handle = self.weapons.add(weapon);
-        actor.character_mut().add_weapon(weapon_handle);
-        scene.graph.link_nodes(weapon_model, actor.character().get_weapon_pivot());
+        if self.actors.contains(actor) {
+            let scene = engine.scenes.get_mut(self.scene);
+            let mut weapon = Weapon::new(kind, &mut engine.resource_manager, scene, self.events_sender.as_ref().unwrap().clone());
+            weapon.set_owner(actor);
+            let weapon_model = weapon.get_model();
+            let actor = self.actors.get_mut(actor);
+            let weapon_handle = self.weapons.add(weapon);
+            actor.character_mut().add_weapon(weapon_handle);
+            scene.graph.link_nodes(weapon_model, actor.character().get_weapon_pivot());
+
+            self.events_sender
+                .as_ref()
+                .unwrap()
+                .send(GameEvent::AddNotification {
+                    text: format!("Actor picked up weapon {:?}", kind)
+                }).unwrap();
+        }
     }
 
     fn add_bot(&mut self, engine: &mut Engine, kind: BotKind, position: Vec3) {
         let scene = engine.scenes.get_mut(self.scene);
-        let bot = Actor::Bot(Bot::new(kind, &mut engine.resource_manager, scene, position, self.events_sender.as_ref().unwrap().clone()).unwrap());
-        let bot = self.actors.add(bot);
+        let mut bot = Bot::new(kind, &mut engine.resource_manager, scene, position, self.events_sender.as_ref().unwrap().clone()).unwrap();
+        bot.set_target_actor(self.player); // TODO: This is temporary until there is no automatic target selection.
+        let bot = self.actors.add(Actor::Bot(bot));
         self.events_sender.as_ref().unwrap().send(GameEvent::GiveNewWeapon { actor: bot, kind: WeaponKind::Ak47 }).unwrap();
         println!("Bot {:?} was added!", kind);
     }
 
     fn remove_actor(&mut self, engine: &mut Engine, actor: Handle<Actor>) {
-        let scene = engine.scenes.get_mut(self.scene);
-        let character = self.actors.get(actor).character();
+        if self.actors.contains(actor) {
+            let scene = engine.scenes.get_mut(self.scene);
+            let character = self.actors.get(actor).character();
 
-        // Make sure to remove weapons and drop appropriate items (items will be temporary).
-        let drop_position = character.get_position(&scene.physics);
-        let weapons = character.get_weapons()
-            .iter()
-            .map(|h| *h)
-            .collect::<Vec<Handle<Weapon>>>();
-        for weapon in weapons {
-            let item_kind = match self.weapons.get(weapon).get_kind() {
-                WeaponKind::M4 => ItemKind::M4,
-                WeaponKind::Ak47 => ItemKind::Ak47,
-                WeaponKind::PlasmaRifle => ItemKind::PlasmaGun,
-            };
-            self.spawn_item(engine, item_kind, drop_position, true, Some(20.0));
-            self.remove_weapon(engine, weapon);
-        }
+            // Make sure to remove weapons and drop appropriate items (items will be temporary).
+            let drop_position = character.get_position(&scene.physics);
+            let weapons = character.get_weapons()
+                .iter()
+                .map(|h| *h)
+                .collect::<Vec<Handle<Weapon>>>();
+            for weapon in weapons {
+                let item_kind = match self.weapons.get(weapon).get_kind() {
+                    WeaponKind::M4 => ItemKind::M4,
+                    WeaponKind::Ak47 => ItemKind::Ak47,
+                    WeaponKind::PlasmaRifle => ItemKind::PlasmaGun,
+                };
+                self.spawn_item(engine, item_kind, drop_position, true, Some(20.0));
+                self.remove_weapon(engine, weapon);
+            }
 
-        let scene = engine.scenes.get_mut(self.scene);
-        self.actors
-            .get_mut(actor)
-            .character_mut()
-            .clean_up(scene);
-        self.actors.free(actor);
+            let scene = engine.scenes.get_mut(self.scene);
+            self.actors
+                .get_mut(actor)
+                .character_mut()
+                .clean_up(scene);
+            self.actors.free(actor);
 
-        if self.player == actor {
-            self.player = Handle::NONE;
+            if self.player == actor {
+                self.player = Handle::NONE;
+            }
         }
     }
 
@@ -435,44 +487,46 @@ impl Level {
     }
 
     fn give_item(&mut self, engine: &mut Engine, actor: Handle<Actor>, kind: ItemKind) {
-        let character = self.actors.get_mut(actor).character_mut();
-        match kind {
-            ItemKind::Medkit => character.heal(20.0),
-            ItemKind::Ak47 | ItemKind::PlasmaGun | ItemKind::M4 => {
-                let weapon_kind = match kind {
-                    ItemKind::Ak47 => WeaponKind::Ak47,
-                    ItemKind::PlasmaGun => WeaponKind::PlasmaRifle,
-                    ItemKind::M4 => WeaponKind::M4,
-                    _ => unreachable!()
-                };
+        if self.actors.contains(actor) {
+            let character = self.actors.get_mut(actor).character_mut();
+            match kind {
+                ItemKind::Medkit => character.heal(20.0),
+                ItemKind::Ak47 | ItemKind::PlasmaGun | ItemKind::M4 => {
+                    let weapon_kind = match kind {
+                        ItemKind::Ak47 => WeaponKind::Ak47,
+                        ItemKind::PlasmaGun => WeaponKind::PlasmaRifle,
+                        ItemKind::M4 => WeaponKind::M4,
+                        _ => unreachable!()
+                    };
 
-                let mut found = false;
-                for weapon_handle in character.get_weapons() {
-                    let weapon = self.weapons.get_mut(*weapon_handle);
-                    // If actor already has weapon of given kind, then just add ammo to it.
-                    if weapon.get_kind() == weapon_kind {
-                        found = true;
-                        weapon.add_ammo(30);
-                        break;
+                    let mut found = false;
+                    for weapon_handle in character.get_weapons() {
+                        let weapon = self.weapons.get_mut(*weapon_handle);
+                        // If actor already has weapon of given kind, then just add ammo to it.
+                        if weapon.get_kind() == weapon_kind {
+                            found = true;
+                            weapon.add_ammo(30);
+                            break;
+                        }
+                    }
+                    // Finally if actor does not have such weapon, give new one to him.
+                    if !found {
+                        self.give_new_weapon(engine, actor, weapon_kind);
                     }
                 }
-                // Finally if actor does not have such weapon, give new one to him.
-                if !found {
-                    self.give_new_weapon(engine, actor, weapon_kind);
-                }
-            }
-            ItemKind::Plasma | ItemKind::Ak47Ammo | ItemKind::M4Ammo => {
-                for weapon in character.get_weapons() {
-                    let weapon = self.weapons.get_mut(*weapon);
-                    let (weapon_kind, ammo) = match kind {
-                        ItemKind::Plasma => (WeaponKind::PlasmaRifle, 20),
-                        ItemKind::Ak47Ammo => (WeaponKind::Ak47, 30),
-                        ItemKind::M4Ammo => (WeaponKind::M4, 25),
-                        _ => continue,
-                    };
-                    if weapon.get_kind() == weapon_kind {
-                        weapon.add_ammo(ammo);
-                        break;
+                ItemKind::Plasma | ItemKind::Ak47Ammo | ItemKind::M4Ammo => {
+                    for weapon in character.get_weapons() {
+                        let weapon = self.weapons.get_mut(*weapon);
+                        let (weapon_kind, ammo) = match kind {
+                            ItemKind::Plasma => (WeaponKind::PlasmaRifle, 20),
+                            ItemKind::Ak47Ammo => (WeaponKind::Ak47, 30),
+                            ItemKind::M4Ammo => (WeaponKind::M4, 25),
+                            _ => continue,
+                        };
+                        if weapon.get_kind() == weapon_kind {
+                            weapon.add_ammo(ammo);
+                            break;
+                        }
                     }
                 }
             }
@@ -480,13 +534,23 @@ impl Level {
     }
 
     fn pickup_item(&mut self, engine: &mut Engine, actor: Handle<Actor>, item: Handle<Item>) {
-        let item = self.items.get_mut(item);
-        let scene = engine.scenes.get_mut(self.scene);
-        let position = item.position(&mut scene.graph);
-        item.pick_up();
-        let kind = item.get_kind();
-        self.play_sound(engine, "data/sounds/item_pickup.ogg", position);
-        self.give_item(engine, actor, kind);
+        if self.actors.contains(actor) && self.items.contains(item) {
+            let item = self.items.get_mut(item);
+
+            self.events_sender
+                .as_ref()
+                .unwrap()
+                .send(GameEvent::AddNotification {
+                    text: format!("Actor picked up item {:?}", item.get_kind())
+                }).unwrap();
+
+            let scene = engine.scenes.get_mut(self.scene);
+            let position = item.position(&mut scene.graph);
+            item.pick_up();
+            let kind = item.get_kind();
+            self.play_sound(engine, "data/sounds/item_pickup.ogg", position);
+            self.give_item(engine, actor, kind);
+        }
     }
 
     fn create_projectile(&mut self,
@@ -527,13 +591,15 @@ impl Level {
     }
 
     fn shoot_weapon(&mut self, engine: &mut Engine, weapon_handle: Handle<Weapon>, initial_velocity: Vec3, time: GameTime) {
-        let scene = engine.scenes.get_mut(self.scene);
-        let weapon = self.weapons.get_mut(weapon_handle);
-        if weapon.try_shoot(scene, time) {
-            let kind = weapon.definition.projectile;
-            let position = weapon.get_shot_position(&scene.graph);
-            let direction = weapon.get_shot_direction(&scene.graph);
-            self.create_projectile(engine, kind, position, direction, initial_velocity, weapon_handle);
+        if self.weapons.contains(weapon_handle) {
+            let scene = engine.scenes.get_mut(self.scene);
+            let weapon = self.weapons.get_mut(weapon_handle);
+            if weapon.try_shoot(scene, time) {
+                let kind = weapon.definition.projectile;
+                let position = weapon.get_shot_position(&scene.graph);
+                let direction = weapon.get_shot_direction(&scene.graph);
+                self.create_projectile(engine, kind, position, direction, initial_velocity, weapon_handle);
+            }
         }
     }
 
@@ -567,14 +633,38 @@ impl Level {
             .get(index)
             .map_or(Vec3::ZERO, |pt| pt.position);
         self.add_bot(engine, kind, spawn_position);
+
+        self.events_sender
+            .as_ref()
+            .unwrap()
+            .send(GameEvent::AddNotification {
+                text: format!("Bot {:?} spawned!", kind)
+            }).unwrap();
     }
 
     fn damage_actor(&mut self, actor: Handle<Actor>, who: Handle<Actor>, amount: f32) {
-        let actor = self.actors.get_mut(actor);
-        actor.character_mut().damage(amount);
-        if let Actor::Bot(bot) = actor {
-            if who.is_some() {
-                bot.set_target_actor(who)
+        if self.actors.contains(actor) && (who.is_none() || who.is_some() && self.actors.contains(who)) {
+            let message =
+                if who.is_some() {
+                    format!("{} dealt {} damage to {}!", self.actors.get(who).character().name,
+                            amount, self.actors.get(actor).character().name)
+                } else {
+                    format!("{} took {} damage!", self.actors.get(actor).character().name, amount)
+                };
+
+            self.events_sender
+                .as_ref()
+                .unwrap()
+                .send(GameEvent::AddNotification {
+                    text: message,
+                }).unwrap();
+
+            let actor = self.actors.get_mut(actor);
+            actor.character_mut().damage(amount);
+            if let Actor::Bot(bot) = actor {
+                if who.is_some() {
+                    bot.set_target_actor(who)
+                }
             }
         }
     }
@@ -600,9 +690,20 @@ impl Level {
             .character()
             .get_position(&scene.physics);
 
-        for actor in self.actors.iter_mut() {
+        for (handle, actor) in self.actors.pair_iter_mut() {
+            // TODO: Replace with automatic target selection.
             if let Actor::Bot(bot) = actor {
                 bot.set_target(player_position);
+            }
+
+            for death_zone in self.death_zones.iter() {
+                if death_zone.bounds.is_contains_point(actor.character().get_position(&scene.physics)) {
+                    self.events_sender
+                        .as_ref()
+                        .unwrap()
+                        .send(GameEvent::RespawnActor { actor: handle })
+                        .unwrap();
+                }
             }
         }
 
@@ -622,17 +723,30 @@ impl Level {
         self.actors.update(&mut context);
     }
 
+    pub fn respawn_actor(&mut self, engine: &mut Engine, actor: Handle<Actor>) {
+        if self.actors.contains(actor) {
+            let kind = match self.actors.get(actor) {
+                Actor::Bot(bot) => Some(bot.definition.kind),
+                Actor::Player(_) => None,
+            };
+
+            self.remove_actor(engine, actor);
+
+            match kind {
+                Some(bot) => {
+                    // Spawn bot of same kind, we don't care of preserving state of bot
+                    // after death. Leader board still will correctly count score.
+                    self.spawn_bot(engine, bot)
+                }
+                None => self.spawn_player(engine)
+            }
+        }
+    }
+
     pub fn handle_game_event(&mut self, engine: &mut Engine, event: &GameEvent, time: GameTime) {
         match event {
             GameEvent::GiveNewWeapon { actor, kind } => {
                 self.give_new_weapon(engine, *actor, *kind);
-
-                self.events_sender
-                    .as_ref()
-                    .unwrap()
-                    .send(GameEvent::AddNotification {
-                        text: format!("Actor picked up weapon {:?}", kind)
-                    }).unwrap();
             }
             GameEvent::AddBot { kind, position } => {
                 self.add_bot(engine, *kind, *position)
@@ -644,15 +758,7 @@ impl Level {
                 self.give_item(engine, *actor, *kind);
             }
             GameEvent::PickUpItem { actor, item } => {
-                let kind = self.items.get(*item).get_kind();
                 self.pickup_item(engine, *actor, *item);
-
-                self.events_sender
-                    .as_ref()
-                    .unwrap()
-                    .send(GameEvent::AddNotification {
-                        text: format!("Actor picked up item {:?}", kind)
-                    }).unwrap();
             }
             GameEvent::ShootWeapon { weapon, initial_velocity } => {
                 self.shoot_weapon(engine, *weapon, *initial_velocity, time)
@@ -668,30 +774,8 @@ impl Level {
             }
             GameEvent::SpawnBot { kind } => {
                 self.spawn_bot(engine, *kind);
-
-                self.events_sender
-                    .as_ref()
-                    .unwrap()
-                    .send(GameEvent::AddNotification {
-                        text: format!("Bot {:?} spawned!", kind)
-                    }).unwrap();
             }
             GameEvent::DamageActor { actor, who, amount } => {
-                let message =
-                    if who.is_some() {
-                        format!("{} dealt {} damage to {}!", self.actors.get(*who).character().name,
-                                amount, self.actors.get(*actor).character().name)
-                    } else {
-                        format!("{} took {} damage!", self.actors.get(*actor).character().name, amount)
-                    };
-
-                self.events_sender
-                    .as_ref()
-                    .unwrap()
-                    .send(GameEvent::AddNotification {
-                        text: message,
-                    }).unwrap();
-
                 self.damage_actor(*actor, *who, *amount);
             }
             GameEvent::CreateEffect { kind, position } => {
@@ -706,6 +790,9 @@ impl Level {
             }
             GameEvent::AddNotification { .. } => {
                 // Ignore
+            }
+            GameEvent::RespawnActor { actor } => {
+                self.respawn_actor(engine, *actor)
             }
         }
     }
@@ -722,6 +809,34 @@ impl Level {
         }
         for projectile in self.projectiles.iter_mut() {
             projectile.sender = Some(sender.clone());
+        }
+    }
+
+    pub fn debug_draw(&self, engine: &mut Engine) {
+        let debug_renderer = &mut engine.renderer.debug_renderer;
+
+        if let Some(navmesh) = self.navmesh.as_ref() {
+            for pt in navmesh.vertices() {
+                for neighbour in pt.neighbours() {
+                    debug_renderer.add_line(debug_renderer::Line {
+                        begin: pt.position(),
+                        end: navmesh.vertices()[*neighbour].position(),
+                        color: Default::default(),
+                    });
+                }
+            }
+
+            for actor in self.actors.iter() {
+                if let Actor::Bot(bot) = actor {
+                    bot.debug_draw(debug_renderer);
+                }
+            }
+        }
+
+        let scene = engine.scenes.get(self.scene);
+
+        for death_zone in self.death_zones.iter() {
+            debug_renderer.draw_aabb(&death_zone.bounds, Color::opaque(0, 0, 200));
         }
     }
 }
@@ -748,6 +863,7 @@ impl Visit for SpawnPoint {
     }
 }
 
+#[allow(dead_code)]
 pub enum GameEvent {
     GiveNewWeapon {
         actor: Handle<Actor>,
@@ -816,5 +932,8 @@ pub enum GameEvent {
     /// HUD listens such events and puts them into queue.
     AddNotification {
         text: String
+    },
+    RespawnActor {
+        actor: Handle<Actor>
     },
 }

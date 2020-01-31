@@ -319,6 +319,10 @@ impl WeaponContainer {
         self.pool.spawn(weapon)
     }
 
+    pub fn contains(&self, weapon: Handle<Weapon>) -> bool {
+        self.pool.is_valid_handle(weapon)
+    }
+
     pub fn free(&mut self, weapon: Handle<Weapon>) {
         self.pool.free(weapon)
     }

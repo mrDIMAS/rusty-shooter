@@ -18,7 +18,8 @@ use rg3d::{
             Pool,
             PoolIterator,
             PoolIteratorMut,
-            PoolPairIterator
+            PoolPairIterator,
+            PoolPairIteratorMut
         },
         visitor::{
             Visit,
@@ -126,6 +127,10 @@ impl ActorContainer {
         self.pool.borrow(actor)
     }
 
+    pub fn contains(&self, actor: Handle<Actor>) -> bool {
+        self.pool.is_valid_handle(actor)
+    }
+
     pub fn get_mut(&mut self, actor: Handle<Actor>) -> &mut Actor {
         self.pool.borrow_mut(actor)
     }
@@ -176,20 +181,13 @@ impl ActorContainer {
 
             if actor.can_be_removed() {
                 // Abuse the fact that actor has sender and use it to send event.
-                if let Some(sender) = actor.character().sender.clone().as_ref() {
-                    sender.send(GameEvent::RemoveActor { actor: handle }).unwrap();
-
-                    match actor {
-                        Actor::Bot(bot) => {
-                            // Spawn bot of same kind, we don't care of preserving state of bot
-                            // after death. Leader board still will correctly count score.
-                            sender.send(GameEvent::SpawnBot { kind: bot.definition.kind }).unwrap()
-                        },
-                        Actor::Player(_) => {
-                            sender.send(GameEvent::SpawnPlayer).unwrap()
-                        },
-                    }
-                }
+                actor.character()
+                    .sender
+                    .clone()
+                    .as_ref()
+                    .unwrap()
+                    .send(GameEvent::RespawnActor { actor: handle })
+                    .unwrap();
             }
         }
     }
@@ -200,6 +198,10 @@ impl ActorContainer {
 
     pub fn pair_iter(&self) -> PoolPairIterator<Actor> {
         self.pool.pair_iter()
+    }
+
+    pub fn pair_iter_mut(&mut self) -> PoolPairIteratorMut<Actor> {
+        self.pool.pair_iter_mut()
     }
 
     pub fn iter_mut(&mut self) -> PoolIteratorMut<Actor> {

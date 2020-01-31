@@ -9,7 +9,7 @@ use crate::{
         LevelEntity,
         CleanUp,
         LevelUpdateContext,
-        GameEvent
+        GameEvent,
     },
     actor::Actor,
 };
@@ -41,8 +41,10 @@ use rg3d::{
         graph::Graph,
     },
     engine::resource_manager::ResourceManager,
-    renderer::debug_renderer::{self, DebugRenderer}
+    renderer::debug_renderer::{self, DebugRenderer},
+    animation::AnimationSignal,
 };
+use rand::Rng;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum BotKind {
@@ -90,7 +92,7 @@ pub struct Bot {
     move_target: Vec3,
     last_target_point: usize,
     current_path_point: usize,
-    frustum: Frustum
+    frustum: Frustum,
 }
 
 impl AsCharacter for Bot {
@@ -123,7 +125,7 @@ impl Default for Bot {
             move_target: Default::default(),
             last_target_point: 0,
             current_path_point: 0,
-            frustum: Default::default()
+            frustum: Default::default(),
         }
     }
 }
@@ -163,7 +165,7 @@ impl LevelEntity for Bot {
             let look_dir = self.target - body.get_position();
             let distance = look_dir.len();
 
-            let position =  body.get_position();
+            let position = body.get_position();
 
             if let Some(path_point) = self.path.get(self.current_path_point) {
                 self.move_target = *path_point;
@@ -259,6 +261,47 @@ impl LevelEntity for Bot {
                 }
             }
 
+            // Apply damage to target from melee attack
+            while let Some(event) = context.scene.animations.get_mut(self.combat_machine.whip_animation).pop_event() {
+                if event.signal_id == CombatMachine::HIT_SIGNAL && distance < threshold {
+                    if self.target_actor.get().is_some() {
+                        self.character
+                            .sender
+                            .as_ref()
+                            .unwrap()
+                            .send(GameEvent::DamageActor {
+                                actor: self.target_actor.get(),
+                                who: Default::default(),
+                                amount: 20.0,
+                            })
+                            .unwrap();
+                    }
+                }
+            }
+
+            // Emit step sounds from walking animation.
+            if self.locomotion_machine.is_walking() {
+                while let Some(event) = context.scene.animations.get_mut(self.locomotion_machine.walk_animation).pop_event() {
+                    if event.signal_id == LocomotionMachine::STEP_SIGNAL && has_ground_contact {
+                        let footsteps = [
+                            "data/sounds/footsteps/FootStep_shoe_stone_step1.wav",
+                            "data/sounds/footsteps/FootStep_shoe_stone_step2.wav",
+                            "data/sounds/footsteps/FootStep_shoe_stone_step3.wav",
+                            "data/sounds/footsteps/FootStep_shoe_stone_step4.wav"
+                        ];
+                        self.character
+                            .sender
+                            .as_ref()
+                            .unwrap()
+                            .send(GameEvent::PlaySound {
+                                path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())].into(),
+                                position,
+                            })
+                            .unwrap();
+                    }
+                }
+            }
+
             if let Some(navmesh) = context.navmesh.as_mut() {
                 let from = body.get_position() - Vec3::new(0.0, 1.0, 0.0);
                 let to = self.target - Vec3::new(0.0, 1.0, 0.0);
@@ -314,13 +357,17 @@ pub const WHIP_TO_HIT_REACTION_PARAM: &'static str = "WhipToHitReaction";
 pub const DYING_TO_DEAD: &'static str = "DyingToDead";
 
 struct LocomotionMachine {
-    machine: Machine
+    machine: Machine,
+    walk_animation: Handle<Animation>,
+    walk_state: Handle<State>,
 }
 
 impl Default for LocomotionMachine {
     fn default() -> Self {
         Self {
-            machine: Default::default()
+            machine: Default::default(),
+            walk_animation: Default::default(),
+            walk_state: Default::default(),
         }
     }
 }
@@ -330,15 +377,25 @@ impl Visit for LocomotionMachine {
         visitor.enter_region(name)?;
 
         self.machine.visit("Machine", visitor)?;
+        self.walk_animation.visit("WalkAnimation", visitor)?;
+        self.walk_state.visit("WalkState", visitor)?;
 
         visitor.leave_region()
     }
 }
 
 impl LocomotionMachine {
+    pub const STEP_SIGNAL: u64 = 1;
+
     fn new(resource_manager: &mut ResourceManager, definition: &BotDefinition, model: Handle<Node>, scene: &mut Scene) -> Result<Self, ()> {
         let idle_animation = load_animation(resource_manager, definition.idle_animation, model, scene)?;
+
         let walk_animation = load_animation(resource_manager, definition.walk_animation, model, scene)?;
+        scene.animations
+            .get_mut(walk_animation)
+            .add_signal(AnimationSignal::new(Self::STEP_SIGNAL, 0.4))
+            .add_signal(AnimationSignal::new(Self::STEP_SIGNAL, 0.8));
+
         let jump_animation = load_animation(resource_manager, definition.jump_animation, model, scene)?;
         let falling_animation = load_animation(resource_manager, definition.falling_animation, model, scene)?;
 
@@ -366,8 +423,16 @@ impl LocomotionMachine {
         machine.set_entry_state(idle_state);
 
         Ok(Self {
-            machine
+            walk_animation,
+            walk_state,
+            machine,
         })
+    }
+
+    pub fn is_walking(&self) -> bool {
+        let active_transition = self.machine.active_transition();
+        self.machine.active_state() == self.walk_state ||
+            (active_transition.is_some() && self.machine.transitions().borrow(active_transition).dest() == self.walk_state)
     }
 }
 
@@ -435,6 +500,7 @@ impl CleanUp for DyingMachine {
 struct CombatMachine {
     machine: Machine,
     hit_reaction_animation: Handle<Animation>,
+    whip_animation: Handle<Animation>,
     aim_state: Handle<State>,
 }
 
@@ -443,16 +509,28 @@ impl Default for CombatMachine {
         Self {
             machine: Default::default(),
             hit_reaction_animation: Default::default(),
+            whip_animation: Default::default(),
             aim_state: Default::default(),
         }
     }
 }
 
 impl CombatMachine {
+    pub const HIT_SIGNAL: u64 = 1;
+
     fn new(resource_manager: &mut ResourceManager, definition: &BotDefinition, model: Handle<Node>, scene: &mut Scene) -> Result<Self, ()> {
         let aim_animation = load_animation(resource_manager, definition.aim_animation, model, scene)?;
+
         let whip_animation = load_animation(resource_manager, definition.whip_animation, model, scene)?;
+        scene.animations
+            .get_mut(whip_animation)
+            .add_signal(AnimationSignal::new(Self::HIT_SIGNAL, 0.9));
+
         let hit_reaction_animation = load_animation(resource_manager, definition.hit_reaction_animation, model, scene)?;
+        scene.animations
+            .get_mut(hit_reaction_animation)
+            .set_loop(false)
+            .set_speed(2.0);
 
         // These animations must *not* affect legs, because legs animated using locomotion machine
         disable_leg_tracks(scene.animations.get_mut(aim_animation), model, definition.left_leg_name, &mut scene.graph);
@@ -463,7 +541,6 @@ impl CombatMachine {
 
         disable_leg_tracks(scene.animations.get_mut(hit_reaction_animation), model, definition.left_leg_name, &mut scene.graph);
         disable_leg_tracks(scene.animations.get_mut(hit_reaction_animation), model, definition.right_leg_name, &mut scene.graph);
-        scene.animations.get_mut(hit_reaction_animation).set_loop(false).set_speed(2.0);
 
         let mut machine = Machine::new();
 
@@ -485,6 +562,7 @@ impl CombatMachine {
         Ok(Self {
             machine,
             hit_reaction_animation,
+            whip_animation,
             aim_state,
         })
     }
@@ -502,6 +580,7 @@ impl Visit for CombatMachine {
 
         self.machine.visit("Machine", visitor)?;
         self.hit_reaction_animation.visit("HitReactionAnimation", visitor)?;
+        self.whip_animation.visit("WhipAnimation", visitor)?;
         self.aim_state.visit("AimState", visitor)?;
 
         visitor.leave_region()

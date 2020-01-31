@@ -43,14 +43,15 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [x] Events log - simple text-based event log - it shows all significant events - death of an actor, damage, etc.
 - [x] Pathfinding - based on navmesh.
 - [x] Vision frustum for bots - bots can "see" only in front of them.
+- [x] Bot footstep sound
+- [x] Death zones - places where actor dies immediately (space, death fog, squashed, telefragged, etc) is added 
 - [ ] Level editor - some simple level editor would be nice, for now I'll continue use ancient 3ds max 2012. Game items are placed on level using dummies which then are substituded with real items, this works but very uncomfortable because it is not WYSIWYG editor.
 - [ ] Restyle UI - it is boring gray right now. Main menu also should have some sort of background, not just black void.
 - [ ] Loading screen - currently game just hangs for 8+ seconds until it load a level, this should be done async.
 - [ ] Environment interaction - its implemented partially - any actor can use jump pads, pick up items. 
-- [ ] Death zones - places where actor dies immediately should be added (space, death fog, squashed, telefragged, etc).
 - [ ] More bots - there are only three bot kind available, there are a lot of free models on mixamo.com which can be used to add more bots.
 - [ ] More levels - currently there is only one level which is boring as fuck.
-- [ ] AI - bot are very stupid right now and this should be fixed.
+- [ ] AI - bots are very stupid right now and this should be fixed.
 - [ ] Bots hit reaction - partially done, bots have hit reaction animation but there is still no visual "proof" that is was hit. Some sort of blood splashes should be added as well as hit sound.
 - [ ] Improve sound - many events in game still does not have sound. There are plenty of free sources with sounds, this should be used.
 - [ ] Leader board - game mode specific leader board should be added. 

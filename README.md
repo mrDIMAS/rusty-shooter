@@ -37,6 +37,9 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [x] Projectiles. More should be added.
 	- [x] Bullet
 	- [x] Plasma ball
+	- [ ] Rocket
+	- [ ] Grenade
+	- [ ] Nail
 - [x] Level - shitty version of legendary q3dm6 level is implemented. Good enough for tests, bad gameplay wise.
 - [x] Jump pads - works similar as in Quake 3: actor touches jump pad, it shoots you in specified position.
 - [x] Items. List should be extended when new weapons or items are added.
@@ -61,6 +64,7 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 		- [x] Reset to defaults
 		- [x] Mouse smoothing
 		- [x] Camera shaking
+		- [ ] Unique key binding
 	- [x] Graphics
 		- [x] Resolution
 		- [ ] Fullscreen - checkbox is not doing anything

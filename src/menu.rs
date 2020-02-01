@@ -146,6 +146,7 @@ impl Menu {
         let mut scroll_bar_template = ControlTemplate::new();
         ScrollBarBuilder::new(WidgetBuilder::new()
             .with_style(common_style.clone()))
+            .show_value(true)
             .with_indicator(ImageBuilder::new(WidgetBuilder::new())
                 .with_opt_texture(utils::into_any_arc(engine.resource_manager.request_texture("data/ui/circle.png", TextureKind::RGBA8)))
                 .build(&mut scroll_bar_template))

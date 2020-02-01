@@ -2,16 +2,22 @@ use std::{
     path::Path,
     rc::Rc,
     sync::{Mutex, Arc},
-    cell::RefCell
+    cell::RefCell,
 };
-use crate::{ControlScheme, ControlButton};
+use crate::{
+    control_scheme::{
+        ControlScheme,
+        ControlButton,
+    }
+};
 use rg3d::{
     resource::{
         texture::TextureKind,
     },
     engine::Engine, event::{
         WindowEvent, Event, MouseScrollDelta,
-        MouseButton},
+        MouseButton
+    },
     monitor::VideoMode, window::Fullscreen,
     core::{
         pool::Handle,

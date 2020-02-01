@@ -31,13 +31,14 @@ use crate::{
     character::AsCharacter,
     jump_pad::{JumpPadContainer, JumpPad},
     item::{ItemContainer, Item, ItemKind},
-    ControlScheme,
+    control_scheme::ControlScheme,
     effects::{
         self,
         EffectKind,
     },
 };
 use rg3d::{
+    core::math::PositionProvider,
     engine::Engine,
     resource::{
         texture::TextureKind,
@@ -83,9 +84,8 @@ use rg3d::{
             Status,
         },
     },
+    renderer::debug_renderer,
 };
-use rg3d::renderer::debug_renderer;
-use crate::rg3d::core::math::PositionProvider;
 
 pub struct Level {
     pub scene: Handle<Scene>,
@@ -329,7 +329,7 @@ impl Level {
             } else if name.starts_with("SpawnPoint") {
                 spawn_points.push(node.base().get_global_position())
             } else if name.starts_with("DeathZone") {
-                if let Node::Mesh(mesh) = node {
+                if let Node::Mesh(_) = node {
                     death_zones.push(handle);
                 }
             }
@@ -470,8 +470,7 @@ impl Level {
             .get(index)
             .map_or(Vec3::ZERO, |pt| pt.position);
         let scene = engine.scenes.get_mut(self.scene);
-        let resource_manager = &mut engine.resource_manager;
-        let mut player = Player::new(engine.sound_context.clone(), resource_manager, scene, self.events_sender.as_ref().unwrap().clone());
+        let mut player = Player::new(scene, self.events_sender.as_ref().unwrap().clone());
         if let Some(control_scheme) = self.control_scheme.as_ref() {
             player.set_control_scheme(control_scheme.clone());
         }
@@ -832,8 +831,6 @@ impl Level {
                 }
             }
         }
-
-        let scene = engine.scenes.get(self.scene);
 
         for death_zone in self.death_zones.iter() {
             debug_renderer.draw_aabb(&death_zone.bounds, Color::opaque(0, 0, 200));

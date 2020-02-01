@@ -21,19 +21,64 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 
 ## Plan
 
-- [x] Player movement - player can walk, run, jump, crouch. Crouch is a bugged - it does not check if you have enough space to stand up and may push you off level.
-- [x] Weapons - implemented: AK47, M4, Plasma. List should be extended when new weapons are added.
-- [x] Projectiles - only 2 for now - Bullet and Plasma ball. More should be added.
+- [x] Player movement
+	- [x] Walk
+	- [x] Jump
+	- [x] Crouch - it does not check if you have enough space to stand up and may push you off level. Also when standing up character jumps.
+	- [x] Run
+- [ ] Weapons
+	- [x] AK47
+	- [x] M4
+	- [x] Plasma
+	- [ ] Grenade launcher. 
+	- [ ] Rocket launcher.
+	- [ ] Lightning gun.
+	- [ ] Machine gun.
+- [x] Projectiles. More should be added.
+	- [x] Bullet
+	- [x] Plasma ball
 - [x] Level - shitty version of legendary q3dm6 level is implemented. Good enough for tests, bad gameplay wise.
 - [x] Jump pads - works similar as in Quake 3: actor touches jump pad, it shoots you in specified position.
-- [x] Items  - implemented: health pack, AK47 ammo, Plasma ammo, M4 ammo. List should be extended when new weapons or items are added.
+- [x] Items. List should be extended when new weapons or items are added.
+	- [x] Health pack
+	- [x] AK47 ammo
+	- [x] Plasma ammo
+	- [x] M4 ammo
 - [x] Respawn - player and bots will respawn after death. Still need to think a way of how this will work with game modes.
 - [x] Spawn points - done, actors will respawn on points with least amount of enemies nearby.
 - [x] Stupid bots - dumb bots that follows you in a straight line are done. Next iteration needed.
-- [x] Main menu - five buttons in main menu are fully functional.
-- [x] Options - controls, graphics and sound settings are done.
+- [x] Main menu
+	- [x] New game
+	- [x] Save game
+	- [x] Load game
+	- [x] Options
+	- [x] Quit
+- [x] Options
+	- [x] Controls
+		- [x] Common key bindings
+		- [x] Mouse sensitivity
+		- [x] Mouse inversion
+		- [x] Reset to defaults
+		- [x] Mouse smoothing
+		- [x] Camera shaking
+	- [x] Graphics
+		- [x] Resolution
+		- [ ] Fullscreen - checkbox is not doing anything
+		- [x] Spot shadows
+		- [x] Soft spot shadows
+		- [x] Spot shadows distance
+		- [x] Point shadows
+		- [x] Soft point shadows
+		- [x] Point shadows distance
+	- [x] Sound
+		- [x] Sound volume
+		- [x] Music volume
+		- [x] HRTF		
 - [x] Save/load - game state can be saved/loaded at any time.
-- [x] HUD - is done, it shows armor, ammo, and health.
+- [x] HUD
+	- [x] Ammo
+	- [x] Health
+	- [x] Armor
 - [x] Bot whip attack - bots can punch you in the face you stand too close to them.
 - [x] Bots animations - more or less done, bots are fully animated and has configured animation machines. This can change if there will be a need for more animations.
 - [x] Sparks when projectile hit surface.
@@ -43,7 +88,6 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [x] Events log - simple text-based event log - it shows all significant events - death of an actor, damage, etc.
 - [x] Pathfinding - based on navmesh.
 - [x] Vision frustum for bots - bots can "see" only in front of them.
-- [x] Bot footstep sound
 - [x] Death zones - places where actor dies immediately (space, death fog, squashed, telefragged, etc) is added 
 - [ ] Level editor - some simple level editor would be nice, for now I'll continue use ancient 3ds max 2012. Game items are placed on level using dummies which then are substituded with real items, this works but very uncomfortable because it is not WYSIWYG editor.
 - [ ] Restyle UI - it is boring gray right now. Main menu also should have some sort of background, not just black void.
@@ -54,15 +98,44 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [ ] AI - bots are very stupid right now and this should be fixed.
 - [ ] Bots hit reaction - partially done, bots have hit reaction animation but there is still no visual "proof" that is was hit. Some sort of blood splashes should be added as well as hit sound.
 - [ ] Improve sound - many events in game still does not have sound. There are plenty of free sources with sounds, this should be used.
+	- [x] Step sounds
+	- [x] Shot sounds
+	- [x] Music
+	- [x] Item pickup	
 - [ ] Leader board - game mode specific leader board should be added. 
-- [ ] Match options.
+	- [ ] Bind to specific key
+	- [ ] Deathmatch
+		- [ ] Table of Name, Kills, Death, K/D Ratio
+	- [ ] Team death match
+		- [ ] Header with team score: Red Team Frags - Blue Team Frags
+		- [ ] Table of Name, Kills, Death, K/D Ratio
+	- [ ] Capture the flag
+		- [ ] Header with team score: Red Team Flags - Blue Team Flags
+		- [ ] Table of Name, Kills, Death, K/D Ratio		
+- [ ] Match options
+	- [ ] Time limit
+	- [ ] Match type
+	- [ ] Map
+	- [ ] Deathmatch
+		- [ ] Frag limit
+	- [ ] Team deathmatch
+		- [ ] Frag limit
+	- [ ] Capture the flag
+		- [ ] Flag limit
 - [ ] Hit marks on surfaces - there is no "visual proof" that projectile has hit surface
 - [ ] `Deathmatch` game mode - easiest game mode to implement.
+	- [ ] Count kills per actor
+	- [ ] Game ends when an actor hits frag or time limit	
+	- [ ] If timelimit hit, but there are more than one actor with same score - game continues.
 - [ ] `Capture the flag` game mode - similar to Q3 game mode is nice to have.
+	- [ ] Count flags per team
+	- [ ] Game ends when team hits flag limit or time limit
+	- [ ] If timelimit hit, but flag score is even - game continues.
 - [ ] `Team deathmatch` game mode - again similar to Q3.
-- [ ] Explosive decorations - explosive barrels, mines, etc. This will diverse gameplay a bit.
-- [ ] Grenade launcher. 
-- [ ] Rocket launcher.
-- [ ] Lightning gun.
-- [ ] Machine gun.
+	- [ ] Count frags per team
+	- [ ] Game ends when team hits frag limit or time limit
+	- [ ] If timelimit hit, but frag score is even - game continues.
+- [ ] Explosive decorations, this will diverse gameplay a bit.
+	- [ ] Barrels
+	- [ ] Mine
 - [ ] Player's ability to punch enemies in face by weapon.

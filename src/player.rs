@@ -5,22 +5,12 @@ use rg3d::{
         math::{vec3::Vec3, quat::Quat, mat3::Mat3},
     },
     event::{DeviceEvent, Event, MouseScrollDelta, ElementState},
-    engine::{
-        resource_manager::ResourceManager
-    },
     scene::{
         node::Node,
         Scene,
         base::AsBase,
     },
-    sound::{
-        source::{
-            SoundSource,
-            spatial::SpatialSourceBuilder,
-            generic::GenericSourceBuilder,
-        },
-        context::Context,
-    },
+    sound::context::Context,
     physics::{
         convex_shape::ConvexShape,
         rigid_body::RigidBody,
@@ -37,16 +27,22 @@ use crate::{
         LevelUpdateContext,
         LevelEntity,
         CleanUp,
-    }, ControlScheme, ControlButton,
+    },
+    control_scheme::{
+        ControlScheme,
+        ControlButton
+    },
+    level::GameEvent,
 };
 use std::{
     rc::Rc,
-    path::Path,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc,
+        Mutex,
+        mpsc::Sender,
+    },
     cell::RefCell,
 };
-use std::sync::mpsc::Sender;
-use crate::level::GameEvent;
 
 pub struct Controller {
     move_forward: bool,
@@ -89,7 +85,6 @@ pub struct Player {
     move_speed: f32,
     camera_offset: Vec3,
     camera_dest_offset: Vec3,
-    footsteps: Vec<Handle<SoundSource>>,
     path_len: f32,
     feet_position: Vec3,
     head_position: Vec3,
@@ -127,13 +122,28 @@ impl LevelEntity for Player {
             if self.controller.shoot {
                 self.character.sender.as_ref().unwrap().send(GameEvent::ShootWeapon {
                     weapon: *current_weapon_handle,
-                    initial_velocity: velocity
+                    initial_velocity: velocity,
                 }).unwrap();
             }
         }
 
         if self.path_len > 2.0 {
-            self.emit_footstep_sound(context.sound_context.clone());
+            let footsteps = [
+                "data/sounds/footsteps/FootStep_shoe_stone_step1.wav",
+                "data/sounds/footsteps/FootStep_shoe_stone_step2.wav",
+                "data/sounds/footsteps/FootStep_shoe_stone_step3.wav",
+                "data/sounds/footsteps/FootStep_shoe_stone_step4.wav"
+            ];
+            self.character
+                .sender
+                .as_ref()
+                .unwrap()
+                .send(GameEvent::PlaySound {
+                    path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())].into(),
+                    position: self.character.get_position(&context.scene.physics),
+                })
+                .unwrap();
+
             self.path_len = 0.0;
         }
 
@@ -148,7 +158,7 @@ impl Default for Player {
             camera: Default::default(),
             camera_pivot: Default::default(),
             controller: Controller::default(),
-            stand_body_height: 0.85,
+            stand_body_height: 1.0,
             dest_pitch: 0.0,
             dest_yaw: 0.0,
             move_speed: 0.058,
@@ -158,7 +168,6 @@ impl Default for Player {
             pitch: 0.0,
             camera_dest_offset: Vec3::ZERO,
             camera_offset: Vec3::ZERO,
-            footsteps: Vec::new(),
             path_len: 0.0,
             feet_position: Vec3::ZERO,
             head_position: Vec3::ZERO,
@@ -192,7 +201,6 @@ impl Visit for Player {
         self.move_speed.visit("MoveSpeed", visitor)?;
         self.camera_offset.visit("CameraOffset", visitor)?;
         self.camera_dest_offset.visit("CameraDestOffset", visitor)?;
-        self.footsteps.visit("Footsteps", visitor)?;
 
         visitor.leave_region()
     }
@@ -205,18 +213,19 @@ impl CleanUp for Player {
 }
 
 impl Player {
-    pub fn new(sound_context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager, scene: &mut Scene, sender: Sender<GameEvent>) -> Player {
+    pub fn new(scene: &mut Scene, sender: Sender<GameEvent>) -> Player {
         let camera_handle = scene.graph.add_node(Node::Camera(Default::default()));
 
+        let height = Self::default().stand_body_height;
         let mut camera_pivot = Node::Base(Default::default());
-        camera_pivot.base_mut().get_local_transform_mut().set_position(Vec3 { x: 0.0, y: 1.0, z: 0.0 });
+        camera_pivot.base_mut().get_local_transform_mut().set_position(Vec3 { x: 0.0, y: height - 0.15, z: 0.0 });
         let camera_pivot_handle = scene.graph.add_node(camera_pivot);
         scene.graph.link_nodes(camera_handle, camera_pivot_handle);
 
         let mut pivot = Node::Base(Default::default());
         pivot.base_mut().get_local_transform_mut().set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
 
-        let capsule_shape = CapsuleShape::new(0.35, Self::default().stand_body_height, Axis::Y);
+        let capsule_shape = CapsuleShape::new(0.35, height, Axis::Y);
         let mut body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
         body.set_friction(Vec3::new(0.2, 0.0, 0.2));
         let body_handle = scene.physics.add_body(body);
@@ -233,15 +242,6 @@ impl Player {
         let weapon_pivot_handle = scene.graph.add_node(weapon_pivot);
         scene.graph.link_nodes(weapon_pivot_handle, weapon_base_pivot_handle);
 
-        let footsteps = {
-            [
-                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step1.wav"), false).unwrap(),
-                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step2.wav"), false).unwrap(),
-                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step3.wav"), false).unwrap(),
-                resource_manager.request_sound_buffer(Path::new("data/sounds/footsteps/FootStep_shoe_stone_step4.wav"), false).unwrap()
-            ]
-        };
-
         Player {
             character: Character {
                 pivot: pivot_handle,
@@ -253,17 +253,6 @@ impl Player {
             },
             camera: camera_handle,
             camera_pivot: camera_pivot_handle,
-            footsteps: {
-                let mut sound_context = sound_context.lock().unwrap();
-                footsteps.iter().map(|buf| {
-                    let source = SpatialSourceBuilder::new(
-                        GenericSourceBuilder::new(buf.clone())
-                            .build()
-                            .unwrap())
-                        .build_source();
-                    sound_context.add_source(source)
-                }).collect()
-            },
             ..Default::default()
         }
     }
@@ -314,7 +303,11 @@ impl Player {
             velocity -= side;
         }
 
-        let speed_mult = if self.controller.run { self.run_speed_multiplier } else { 1.0 };
+        let speed_mult = if self.controller.run {
+            self.run_speed_multiplier
+        } else {
+            1.0
+        };
 
         let body = context.scene.physics.borrow_body_mut(self.character.body);
         if let Some(normalized_velocity) = velocity.normalized() {
@@ -383,15 +376,6 @@ impl Player {
         camera_pivot_transform.set_rotation(Quat::from_axis_angle(Vec3::RIGHT, self.pitch.to_radians()));
     }
 
-    fn emit_footstep_sound(&self, sound_context: Arc<Mutex<Context>>) {
-        let mut sound_context = sound_context.lock().unwrap();
-        let handle = self.footsteps[rand::thread_rng().gen_range(0, self.footsteps.len())];
-        if let SoundSource::Spatial(spatial) = sound_context.source_mut(handle) {
-            spatial.set_position(&self.feet_position);
-            spatial.generic_mut().play();
-        }
-    }
-
     fn update_listener(&mut self, sound_context: Arc<Mutex<Context>>) {
         let mut sound_context = sound_context.lock().unwrap();
         let listener = sound_context.listener_mut();
@@ -434,6 +418,13 @@ impl Player {
                         control_button_state = *state;
                     }
 
+                    DeviceEvent::Key(input) => {
+                        if let Some(code) = input.virtual_keycode {
+                            control_button = Some(ControlButton::Key(code));
+                            control_button_state = input.state;
+                        }
+                    }
+
                     DeviceEvent::MouseWheel { delta } => {
                         if let MouseScrollDelta::LineDelta(_, y) = delta {
                             if *y < 0.0 {
@@ -444,12 +435,6 @@ impl Player {
                         }
                     }
 
-                    DeviceEvent::Key(input) => {
-                        if let Some(code) = input.virtual_keycode {
-                            control_button = Some(ControlButton::Key(code));
-                            control_button_state = input.state;
-                        }
-                    }
                     _ => ()
                 }
 

@@ -9,8 +9,8 @@ use crate::{
         LevelEntity,
         CleanUp,
         LevelUpdateContext,
-        GameEvent,
     },
+    message::Message,
     actor::Actor,
 };
 use rg3d::{
@@ -249,7 +249,7 @@ impl LevelEntity for Bot {
                         .sender
                         .as_ref()
                         .unwrap()
-                        .send(GameEvent::ShootWeapon {
+                        .send(Message::ShootWeapon {
                             weapon: *weapon,
                             initial_velocity: Vec3::ZERO,
                         }).unwrap();
@@ -269,7 +269,7 @@ impl LevelEntity for Bot {
                             .sender
                             .as_ref()
                             .unwrap()
-                            .send(GameEvent::DamageActor {
+                            .send(Message::DamageActor {
                                 actor: self.target_actor.get(),
                                 who: Default::default(),
                                 amount: 20.0,
@@ -293,7 +293,7 @@ impl LevelEntity for Bot {
                             .sender
                             .as_ref()
                             .unwrap()
-                            .send(GameEvent::PlaySound {
+                            .send(Message::PlaySound {
                                 path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())].into(),
                                 position,
                             })
@@ -662,7 +662,7 @@ impl Bot {
         }
     }
 
-    pub fn new(kind: BotKind, resource_manager: &mut ResourceManager, scene: &mut Scene, position: Vec3, sender: Sender<GameEvent>) -> Result<Self, ()> {
+    pub fn new(kind: BotKind, resource_manager: &mut ResourceManager, scene: &mut Scene, position: Vec3, sender: Sender<Message>) -> Result<Self, ()> {
         let definition = Self::get_definition(kind);
 
         let body_height = 1.25;
@@ -736,12 +736,14 @@ impl Bot {
         self.combat_machine.machine.active_state() == self.combat_machine.aim_state && self.shoot_interval <= 0.0
     }
 
-    pub fn set_target(&mut self, target: Vec3) {
+    pub fn set_target(&mut self, target: Vec3) -> &mut Self {
         self.target = target;
+        self
     }
 
-    pub fn set_target_actor(&mut self, actor: Handle<Actor>) {
+    pub fn set_target_actor(&mut self, actor: Handle<Actor>) -> &mut Self {
         self.target_actor.set(actor);
+        self
     }
 
     pub fn debug_draw(&self, debug_renderer: &mut DebugRenderer) {

@@ -35,7 +35,7 @@ use crate::{
         WeaponContainer,
     },
     level::CleanUp,
-    level::GameEvent,
+    message::Message,
 };
 use std::{
     path::Path,
@@ -44,7 +44,7 @@ use std::{
 use rand::Rng;
 use crate::effects::EffectKind;
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ProjectileKind {
     Plasma,
     Bullet,
@@ -85,7 +85,7 @@ pub struct Projectile {
     /// continuous intersection detection from fast moving projectiles.
     last_position: Vec3,
     definition: &'static ProjectileDefinition,
-    pub sender: Option<Sender<GameEvent>>,
+    pub sender: Option<Sender<Message>>,
 }
 
 impl Default for Projectile {
@@ -146,7 +146,7 @@ impl Projectile {
                position: Vec3,
                owner: Handle<Weapon>,
                initial_velocity: Vec3,
-               sender: Sender<GameEvent>) -> Self {
+               sender: Sender<Message>) -> Self {
         let definition = Self::get_definition(kind);
 
         let (model, body) = {
@@ -318,7 +318,7 @@ impl Projectile {
         self.lifetime -= time.delta;
 
         if self.lifetime <= 0.0 {
-            self.sender.as_ref().unwrap().send(GameEvent::CreateEffect {
+            self.sender.as_ref().unwrap().send(Message::CreateEffect {
                 kind: EffectKind::BulletImpact,
                 position: effect_position.unwrap_or(self.get_position(&scene.graph)),
             }).unwrap();
@@ -329,7 +329,7 @@ impl Projectile {
         // to not damage actor twice or more times with one projectile.
         hits.dedup_by(|a, b| a.actor == b.actor);
         for hit in hits {
-            self.sender.as_ref().unwrap().send(GameEvent::DamageActor {
+            self.sender.as_ref().unwrap().send(Message::DamageActor {
                 actor: hit.actor,
                 who: hit.who,
                 amount: self.definition.damage,

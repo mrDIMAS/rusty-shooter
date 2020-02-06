@@ -32,7 +32,7 @@ use crate::{
         ControlScheme,
         ControlButton
     },
-    level::GameEvent,
+    message::Message,
 };
 use std::{
     rc::Rc,
@@ -120,7 +120,7 @@ impl LevelEntity for Player {
                 .get_velocity();
 
             if self.controller.shoot {
-                self.character.sender.as_ref().unwrap().send(GameEvent::ShootWeapon {
+                self.character.sender.as_ref().unwrap().send(Message::ShootWeapon {
                     weapon: *current_weapon_handle,
                     initial_velocity: velocity,
                 }).unwrap();
@@ -138,7 +138,7 @@ impl LevelEntity for Player {
                 .sender
                 .as_ref()
                 .unwrap()
-                .send(GameEvent::PlaySound {
+                .send(Message::PlaySound {
                     path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())].into(),
                     position: self.character.get_position(&context.scene.physics),
                 })
@@ -158,7 +158,7 @@ impl Default for Player {
             camera: Default::default(),
             camera_pivot: Default::default(),
             controller: Controller::default(),
-            stand_body_height: 1.0,
+            stand_body_height: 1.05,
             dest_pitch: 0.0,
             dest_yaw: 0.0,
             move_speed: 0.058,
@@ -213,17 +213,22 @@ impl CleanUp for Player {
 }
 
 impl Player {
-    pub fn new(scene: &mut Scene, sender: Sender<GameEvent>) -> Player {
+    pub fn new(scene: &mut Scene, sender: Sender<Message>) -> Player {
         let camera_handle = scene.graph.add_node(Node::Camera(Default::default()));
 
         let height = Self::default().stand_body_height;
         let mut camera_pivot = Node::Base(Default::default());
-        camera_pivot.base_mut().get_local_transform_mut().set_position(Vec3 { x: 0.0, y: height - 0.15, z: 0.0 });
+        camera_pivot
+            .base_mut()
+            .get_local_transform_mut()
+            .set_position(Vec3 { x: 0.0, y: height - 0.20, z: 0.0 });
         let camera_pivot_handle = scene.graph.add_node(camera_pivot);
         scene.graph.link_nodes(camera_handle, camera_pivot_handle);
 
         let mut pivot = Node::Base(Default::default());
-        pivot.base_mut().get_local_transform_mut().set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
+        pivot.base_mut()
+            .get_local_transform_mut()
+            .set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
 
         let capsule_shape = CapsuleShape::new(0.35, height, Axis::Y);
         let mut body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
@@ -234,7 +239,10 @@ impl Player {
         scene.graph.link_nodes(camera_pivot_handle, pivot_handle);
 
         let mut weapon_base_pivot = Node::Base(Default::default());
-        weapon_base_pivot.base_mut().get_local_transform_mut().set_position(Vec3::new(-0.065, -0.052, 0.02));
+        weapon_base_pivot
+            .base_mut()
+            .get_local_transform_mut()
+            .set_position(Vec3::new(-0.065, -0.052, 0.02));
         let weapon_base_pivot_handle = scene.graph.add_node(weapon_base_pivot);
         scene.graph.link_nodes(weapon_base_pivot_handle, camera_handle);
 

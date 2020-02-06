@@ -6,7 +6,7 @@ use rg3d::{
     core::{
         pool::Handle,
         math::vec3::Vec3,
-        visitor::{Visit, Visitor, VisitResult},
+        visitor::{Visit, Visitor, VisitResult, VisitError},
     },
     physics::{
         rigid_body::RigidBody,
@@ -16,7 +16,7 @@ use rg3d::{
 use crate::{
     weapon::Weapon,
     level::CleanUp,
-    level::GameEvent
+    message::Message,
 };
 use std::sync::mpsc::Sender;
 
@@ -29,12 +29,46 @@ pub struct Character {
     pub weapons: Vec<Handle<Weapon>>,
     pub current_weapon: u32,
     pub weapon_pivot: Handle<Node>,
-    pub sender: Option<Sender<GameEvent>>,
+    pub sender: Option<Sender<Message>>,
+    pub team: Team
 }
 
 pub trait AsCharacter {
     fn character(&self) -> &Character;
     fn character_mut(&mut self) -> &mut Character;
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum Team {
+    None,
+    Red,
+    Blue
+}
+
+impl Default for Team {
+    fn default() -> Self {
+        Team::None
+    }
+}
+
+impl Visit for Team {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        let mut id = match self {
+            Team::None => 0,
+            Team::Red => 1,
+            Team::Blue => 2,
+        };
+        id.visit(name, visitor)?;
+        if visitor.is_reading() {
+            *self = match id {
+                0 => Team::None,
+                1 => Team::Red,
+                2 => Team::Blue,
+                _ => return Err(VisitError::User(format!("Invalid team id {}", id)))
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Default for Character {
@@ -49,6 +83,7 @@ impl Default for Character {
             current_weapon: 0,
             weapon_pivot: Handle::NONE,
             sender: None,
+            team: Team::None
         }
     }
 }
@@ -65,6 +100,7 @@ impl Visit for Character {
         self.weapons.visit("Weapons", visitor)?;
         self.current_weapon.visit("CurrentWeapon", visitor)?;
         self.weapon_pivot.visit("WeaponPivot", visitor)?;
+        self.team.visit("Team", visitor)?;
 
         visitor.leave_region()
     }
@@ -90,6 +126,18 @@ impl Character {
             }
         }
         false
+    }
+
+    pub fn set_name<P: AsRef<str>>(&mut self, name: P) {
+        self.name = name.as_ref().to_owned();
+    }
+
+    pub fn set_team(&mut self, team: Team) {
+        self.team = team;
+    }
+
+    pub fn team(&self) -> Team {
+        self.team
     }
 
     pub fn get_health(&self) -> f32 {
@@ -143,7 +191,7 @@ impl Character {
     pub fn add_weapon(&mut self, weapon: Handle<Weapon>) {
         if let Some(sender) = self.sender.as_ref() {
             for other_weapon in self.weapons.iter() {
-                sender.send(GameEvent::ShowWeapon {
+                sender.send(Message::ShowWeapon {
                     weapon: *other_weapon,
                     state: false,
                 }).unwrap();
@@ -167,7 +215,7 @@ impl Character {
     fn request_current_weapon_visible(&self, state: bool) {
         if let Some(sender) = self.sender.as_ref() {
             if let Some(current_weapon) = self.weapons.get(self.current_weapon as usize) {
-                sender.send(GameEvent::ShowWeapon {
+                sender.send(Message::ShowWeapon {
                     weapon: *current_weapon,
                     state,
                 }).unwrap()

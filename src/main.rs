@@ -18,14 +18,16 @@ mod jump_pad;
 mod item;
 mod control_scheme;
 mod match_menu;
+mod message;
+mod options_menu;
 
 use crate::{
     character::AsCharacter,
     level::{
         Level,
         CylinderEmitter,
-        GameEvent
     },
+    message::Message,
     menu::Menu,
     hud::Hud,
     actor::Actor,
@@ -43,7 +45,7 @@ use std::{
     time::{
         Instant,
         self,
-        Duration
+        Duration,
     },
     io::Write,
     thread,
@@ -71,7 +73,6 @@ use rg3d::{
         widget::WidgetBuilder,
         UINode,
         text::TextBuilder,
-        event::{UIEvent, UIEventKind},
         text::Text,
         Builder,
         UINodeContainer,
@@ -83,6 +84,7 @@ use rg3d::{
     event_loop::{EventLoop, ControlFlow},
     engine::Engine,
 };
+
 
 pub struct Game {
     menu: Menu,
@@ -96,8 +98,8 @@ pub struct Game {
     running: bool,
     control_scheme: Rc<RefCell<ControlScheme>>,
     time: GameTime,
-    events_receiver: Receiver<GameEvent>,
-    events_sender: Sender<GameEvent>,
+    events_receiver: Receiver<Message>,
+    events_sender: Sender<Message>,
 }
 
 #[derive(Copy, Clone)]
@@ -112,6 +114,135 @@ pub enum CollisionGroups {
     Projectile = 1 << 1,
     Actor = 1 << 2,
     All = std::isize::MAX,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct DeathMatch {
+    pub time_limit_secs: f32,
+    pub frag_limit: u32,
+}
+
+impl Default for DeathMatch {
+    fn default() -> Self {
+        Self {
+            time_limit_secs: Default::default(),
+            frag_limit: 0
+        }
+    }
+}
+
+impl Visit for DeathMatch {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.time_limit_secs.visit("TimeLimit", visitor)?;
+        self.frag_limit.visit("FragLimit", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct TeamDeathMatch {
+    pub time_limit_secs: f32,
+    pub team_frag_limit: u32,
+}
+
+impl Default for TeamDeathMatch {
+    fn default() -> Self {
+        Self {
+            time_limit_secs: Default::default(),
+            team_frag_limit: 0
+        }
+    }
+}
+
+impl Visit for TeamDeathMatch {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.time_limit_secs.visit("TimeLimit", visitor)?;
+        self.team_frag_limit.visit("TeamFragLimit", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct CaptureTheFlag {
+    pub time_limit_secs: f32,
+    pub flag_limit: u32,
+}
+
+impl Default for CaptureTheFlag {
+    fn default() -> Self {
+        Self {
+            time_limit_secs: Default::default(),
+            flag_limit: 0
+        }
+    }
+}
+
+impl Visit for CaptureTheFlag {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.time_limit_secs.visit("TimeLimit", visitor)?;
+        self.flag_limit.visit("FlagLimit", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum MatchOptions {
+    DeathMatch(DeathMatch),
+    TeamDeathMatch(TeamDeathMatch),
+    CaptureTheFlag(CaptureTheFlag),
+}
+
+impl MatchOptions {
+    fn from_id(id: u32) -> Result<Self, String> {
+        match id {
+            0 => Ok(MatchOptions::DeathMatch(Default::default())),
+            1 => Ok(MatchOptions::TeamDeathMatch(Default::default())),
+            2 => Ok(MatchOptions::CaptureTheFlag(Default::default())),
+            _ => Err(format!("Invalid match options {}", id))
+        }
+    }
+
+    fn id(&self) -> u32 {
+        match self {
+            MatchOptions::DeathMatch(_) => 0,
+            MatchOptions::TeamDeathMatch(_) => 1,
+            MatchOptions::CaptureTheFlag(_) => 2,
+        }
+    }
+}
+
+impl Default for MatchOptions {
+    fn default() -> Self {
+        MatchOptions::DeathMatch(Default::default())
+    }
+}
+
+impl Visit for MatchOptions {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        let mut id = self.id();
+        id.visit("Id", visitor)?;
+        if visitor.is_reading() {
+            *self = Self::from_id(id)?;
+        }
+        match self {
+            MatchOptions::DeathMatch(o) => o.visit("Data", visitor)?,
+            MatchOptions::TeamDeathMatch(o) => o.visit("Data", visitor)?,
+            MatchOptions::CaptureTheFlag(o) => o.visit("Data", visitor)?,
+        }
+
+        visitor.leave_region()
+    }
 }
 
 impl Game {
@@ -135,8 +266,6 @@ impl Game {
             .lock()
             .unwrap()
             .set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(rg3d::sound::hrtf::HrtfRenderer::new(hrtf_sphere)));
-
-        let frame_size = engine.renderer.get_frame_size();
 
         if let Ok(mut factory) = CustomEmitterFactory::get() {
             factory.set_callback(Box::new(|kind| {
@@ -181,9 +310,9 @@ impl Game {
         let (tx, rx) = mpsc::channel();
 
         let mut game = Game {
-            hud: Hud::new(&mut engine.user_interface, &mut engine.resource_manager, frame_size),
+            hud: Hud::new(&mut engine),
             running: true,
-            menu: Menu::new(&mut engine, control_scheme.clone()),
+            menu: Menu::new(&mut engine, control_scheme.clone(), tx.clone()),
             control_scheme,
             debug_text: Handle::NONE,
             engine,
@@ -210,7 +339,6 @@ impl Game {
 
                         while let Some(mut ui_event) = game.engine.get_ui_mut().poll_ui_event() {
                             game.menu.handle_ui_event(&mut game.engine, &mut ui_event);
-                            game.process_ui_event(&mut ui_event);
                         }
 
                         game.update(game.time);
@@ -238,6 +366,12 @@ impl Game {
                         WindowEvent::CloseRequested => {
                             game.destroy_level();
                             *control_flow = ControlFlow::Exit
+                        }
+                        WindowEvent::Resized(new_size) => {
+                            game.engine
+                                .renderer
+                                .set_frame_size(new_size.into())
+                                .unwrap();
                         }
                         _ => ()
                     }
@@ -301,7 +435,8 @@ impl Game {
 
                                 // Set control scheme for player.
                                 if let Some(level) = &mut self.level {
-                                    level.set_events_sender(self.events_sender.clone());
+                                    level.set_message_sender(self.events_sender.clone());
+                                    level.build_navmesh(&mut self.engine);
                                     level.control_scheme = Some(self.control_scheme.clone());
                                     let player = level.get_player();
                                     if let Actor::Player(player) = level.get_actors_mut().get_mut(player) {
@@ -330,47 +465,15 @@ impl Game {
         }
     }
 
-    pub fn start_new_game(&mut self) {
+    pub fn start_new_game(&mut self, options: MatchOptions) {
         self.destroy_level();
-        self.level = Some(Level::new(&mut self.engine, self.control_scheme.clone(), self.events_sender.clone()));
+        self.level = Some(Level::new(
+            &mut self.engine,
+            self.control_scheme.clone(),
+            self.events_sender.clone(),
+            options
+        ));
         self.set_menu_visible(false);
-    }
-
-    pub fn process_ui_event(&mut self, event: &mut UIEvent) {
-        match event.kind {
-            UIEventKind::Click => {
-                if event.source() == self.menu.btn_new_game {
-                    self.start_new_game();
-                    event.handled = true;
-                } else if event.source() == self.menu.btn_save_game {
-                    match self.save_game() {
-                        Ok(_) => println!("successfully saved"),
-                        Err(e) => println!("failed to make a save, reason: {}", e),
-                    }
-                    event.handled = true;
-                } else if event.source() == self.menu.btn_load_game {
-                    self.load_game();
-                    event.handled = true;
-                } else if event.source() == self.menu.btn_quit_game {
-                    self.destroy_level();
-                    self.running = false;
-                    event.handled = true;
-                }
-            }
-            UIEventKind::NumericValueChanged { new_value, .. } => {
-                if event.source() == self.menu.sb_music_volume {
-                    self.engine
-                        .sound_context
-                        .lock()
-                        .unwrap()
-                        .source_mut(self.music)
-                        .generic_mut()
-                        .set_gain(new_value);
-                }
-            }
-
-            _ => ()
-        }
     }
 
     pub fn set_menu_visible(&mut self, visible: bool) {
@@ -392,12 +495,12 @@ impl Game {
 
         if let Some(ref mut level) = self.level {
             level.update(&mut self.engine, time);
-
+            let ui = &mut self.engine.user_interface;
+            self.hud.set_time( ui, level.time());
             let player = level.get_player();
             if player.is_some() {
                 // Sync hud with player state.
                 let player = level.get_actors().get(player);
-                let ui = &mut self.engine.user_interface;
                 self.hud.set_health(ui, player.character().get_health());
                 self.hud.set_armor(ui, player.character().get_armor());
                 let current_weapon = player.character().get_current_weapon();
@@ -408,14 +511,50 @@ impl Game {
             }
         }
 
-        while let Ok(event) = self.events_receiver.try_recv() {
-            if let Some(ref mut level) = self.level {
-                level.handle_game_event(&mut self.engine, &event, time);
-            }
-            self.hud.handle_game_event(&event);
-        }
+        self.handle_messages(time);
 
         self.hud.update(&mut self.engine.user_interface, &self.time);
+    }
+
+    fn handle_messages(&mut self, time: GameTime) {
+        while let Ok(message) = self.events_receiver.try_recv() {
+            println!("{:?}", message);
+
+            match &message {
+                Message::StartNewGame { options } => {
+                    self.start_new_game(*options);
+                }
+                Message::SaveGame => {
+                    match self.save_game() {
+                        Ok(_) => println!("successfully saved"),
+                        Err(e) => println!("failed to make a save, reason: {}", e),
+                    }
+                }
+                Message::LoadGame => {
+                    self.load_game();
+                }
+                Message::QuitGame => {
+                    self.destroy_level();
+                    self.running = false;
+                }
+                Message::SetMusicVolume { volume } => {
+                    self.engine
+                        .sound_context
+                        .lock()
+                        .unwrap()
+                        .source_mut(self.music)
+                        .generic_mut()
+                        .set_gain(*volume);
+                }
+                _ => ()
+            }
+
+            if let Some(ref mut level) = self.level {
+                level.handle_message(&mut self.engine, &message, time);
+
+                self.hud.handle_message(&message, &mut self.engine.user_interface, &level.leader_board, &level.options);
+            }
+        }
     }
 
     pub fn update_statistics(&mut self, elapsed: f64) {

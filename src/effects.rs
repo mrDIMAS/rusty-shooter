@@ -17,7 +17,7 @@ use rg3d::{
 };
 use std::path::Path;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum EffectKind {
     BulletImpact,
     ItemAppear,

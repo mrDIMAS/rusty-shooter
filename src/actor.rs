@@ -9,7 +9,7 @@ use crate::{
         LevelUpdateContext,
         LevelEntity,
     },
-    level::GameEvent
+    message::Message,
 };
 use rg3d::{
     core::{
@@ -136,7 +136,11 @@ impl ActorContainer {
     }
 
     pub fn free(&mut self, actor: Handle<Actor>) {
-        self.pool.free(actor)
+        self.pool.free(actor);
+    }
+
+    pub fn count(&self) -> usize {
+        self.pool.alive_count()
     }
 
     pub fn update(&mut self, context: &mut LevelUpdateContext) {
@@ -156,7 +160,7 @@ impl ActorContainer {
                         character.sender
                             .as_ref()
                             .unwrap()
-                            .send(GameEvent::PickUpItem {
+                            .send(Message::PickUpItem {
                                 actor: handle,
                                 item: item_handle,
                             }).unwrap();
@@ -180,13 +184,15 @@ impl ActorContainer {
             }
 
             if actor.can_be_removed() {
-                // Abuse the fact that actor has sender and use it to send event.
+                // Abuse the fact that actor has sender and use it to send message.
                 actor.character()
                     .sender
                     .clone()
                     .as_ref()
                     .unwrap()
-                    .send(GameEvent::RespawnActor { actor: handle })
+                    .send(Message::RespawnActor {
+                        actor: handle
+                    })
                     .unwrap();
             }
         }

@@ -7,7 +7,7 @@ use std::{
         Arc,
         mpsc::Sender,
     },
-    path::PathBuf,
+    collections::HashMap,
 };
 use rand::Rng;
 use crate::{
@@ -16,26 +16,20 @@ use crate::{
         Weapon,
         WeaponKind,
         WeaponContainer,
-    },
-    player::Player,
-    GameTime,
+    }, player::Player, GameTime,
     bot::{
         Bot,
         BotKind,
-    },
-    projectile::{
+    }, projectile::{
         ProjectileContainer,
         ProjectileKind,
         Projectile,
-    },
-    character::AsCharacter,
+    }, character::AsCharacter,
     jump_pad::{JumpPadContainer, JumpPad},
     item::{ItemContainer, Item, ItemKind},
-    control_scheme::ControlScheme,
-    effects::{
-        self,
-        EffectKind,
-    },
+    control_scheme::ControlScheme, effects,
+    message::Message,
+    MatchOptions,
 };
 use rg3d::{
     core::math::PositionProvider,
@@ -86,8 +80,10 @@ use rg3d::{
     },
     renderer::debug_renderer,
 };
+use crate::character::Team;
 
 pub struct Level {
+    map_root: Handle<Node>,
     pub scene: Handle<Scene>,
     player: Handle<Actor>,
     projectiles: ProjectileContainer,
@@ -96,15 +92,129 @@ pub struct Level {
     jump_pads: JumpPadContainer,
     items: ItemContainer,
     spawn_points: Vec<SpawnPoint>,
-    events_sender: Option<Sender<GameEvent>>,
+    sender: Option<Sender<Message>>,
     pub navmesh: Option<Navmesh>,
     pub control_scheme: Option<Rc<RefCell<ControlScheme>>>,
     death_zones: Vec<DeathZone>,
+    pub options: MatchOptions,
+    time: f32,
+    pub leader_board: LeaderBoard,
+}
+
+#[derive(Copy, Clone)]
+pub struct PersonalScore {
+    pub kills: u32,
+    pub deaths: u32,
+}
+
+impl Default for PersonalScore {
+    fn default() -> Self {
+        Self {
+            kills: 0,
+            deaths: 0,
+        }
+    }
+}
+
+impl Visit for PersonalScore {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.kills.visit("Kills", visitor)?;
+        self.deaths.visit("Deaths", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
+pub struct LeaderBoard {
+    personal_score: HashMap<String, PersonalScore>,
+    team_score: HashMap<Team, u32>,
+}
+
+impl LeaderBoard {
+    pub fn get_or_add_actor<P: AsRef<str>>(&mut self, actor_name: P) -> &mut PersonalScore {
+        self.personal_score
+            .entry(actor_name.as_ref().to_owned())
+            .or_insert(Default::default())
+    }
+
+    pub fn remove_actor<P: AsRef<str>>(&mut self, actor_name: P) {
+        self.personal_score.remove(actor_name.as_ref());
+    }
+
+    pub fn add_frag<P: AsRef<str>>(&mut self, actor_name: P) {
+        self.get_or_add_actor(actor_name).kills += 1;
+    }
+
+    pub fn add_death<P: AsRef<str>>(&mut self, actor_name: P) {
+        self.get_or_add_actor(actor_name).deaths += 1;
+    }
+
+    pub fn score_of<P: AsRef<str>>(&self, actor_name: P) -> u32 {
+        match self.personal_score.get(actor_name.as_ref()) {
+            None => 0,
+            Some(value) => value.kills,
+        }
+    }
+
+    pub fn add_team_frag(&mut self, team: Team) {
+        *self.team_score.entry(team).or_insert(0) += 1;
+    }
+
+    pub fn team_score(&self, team: Team) -> u32 {
+        match self.team_score.get(&team) {
+            None => 0,
+            Some(score) => *score,
+        }
+    }
+
+    pub fn highest_personal_score(&self) -> Option<(&str, u32)> {
+        let mut pair = None;
+
+        for (name, score) in self.personal_score.iter() {
+            match pair {
+                None => pair = Some((name.as_str(), score.kills)),
+                Some(ref mut pair) => {
+                    if score.kills > pair.1 {
+                        *pair = (name.as_str(), score.kills)
+                    }
+                }
+            }
+        }
+
+        pair
+    }
+
+    pub fn values(&self) -> &HashMap<String, PersonalScore> {
+        &self.personal_score
+    }
+}
+
+impl Default for LeaderBoard {
+    fn default() -> Self {
+        Self {
+            personal_score: Default::default(),
+            team_score: Default::default(),
+        }
+    }
+}
+
+impl Visit for LeaderBoard {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.personal_score.visit("PersonalScore", visitor)?;
+        self.team_score.visit("TeamScore", visitor)?;
+
+        visitor.leave_region()
+    }
 }
 
 impl Default for Level {
     fn default() -> Self {
         Self {
+            map_root: Default::default(),
             projectiles: ProjectileContainer::new(),
             actors: ActorContainer::new(),
             scene: Handle::NONE,
@@ -113,10 +223,13 @@ impl Default for Level {
             jump_pads: JumpPadContainer::new(),
             items: ItemContainer::new(),
             spawn_points: Default::default(),
-            events_sender: None,
+            sender: None,
             navmesh: Default::default(),
             control_scheme: None,
             death_zones: Default::default(),
+            options: Default::default(),
+            time: 0.0,
+            leader_board: Default::default(),
         }
     }
 }
@@ -134,6 +247,7 @@ impl Visit for Level {
         visitor.enter_region(name)?;
 
         self.scene.visit("Scene", visitor)?;
+        self.map_root.visit("MapRoot", visitor)?;
         self.player.visit("Player", visitor)?;
         self.actors.visit("Actors", visitor)?;
         self.projectiles.visit("Projectiles", visitor)?;
@@ -141,6 +255,9 @@ impl Visit for Level {
         self.jump_pads.visit("JumpPads", visitor)?;
         self.spawn_points.visit("SpawnPoints", visitor)?;
         self.death_zones.visit("DeathZones", visitor)?;
+        self.options.visit("Options", visitor)?;
+        self.time.visit("Time", visitor)?;
+        self.leader_board.visit("LeaderBoard", visitor)?;
 
         visitor.leave_region()
     }
@@ -227,29 +344,25 @@ pub struct LevelUpdateContext<'a> {
 }
 
 impl Level {
-    fn load_level(engine: &mut Engine) -> (Scene, Option<Navmesh>) {
+    pub fn new(
+        engine: &mut Engine,
+        control_scheme: Rc<RefCell<ControlScheme>>,
+        sender: Sender<Message>,
+        options: MatchOptions,
+    ) -> Level {
         let mut scene = Scene::new();
-        let mut navmesh = None;
 
+        let mut map_root_handle = Handle::NONE;
         let map_model = engine.resource_manager.request_model(Path::new("data/models/dm6.fbx"));
         if map_model.is_some() {
             // Instantiate map
-            let map_root_handle = map_model.unwrap().lock().unwrap().instantiate(&mut scene).root;
+            map_root_handle = map_model.unwrap().lock().unwrap().instantiate_geometry(&mut scene);
             // Create collision geometry
             let polygon_handle = scene.graph.find_by_name(map_root_handle, "Polygon");
             if polygon_handle.is_some() {
                 scene.physics.add_static_geometry(utils::mesh_to_static_geometry(scene.graph.get(polygon_handle).as_mesh()));
             } else {
                 println!("Unable to find Polygon node to build collision shape for level!");
-            }
-
-            let navmesh_handle = scene.graph.find_by_name(map_root_handle, "Navmesh");
-            if navmesh_handle.is_some() {
-                let navmesh_node = scene.graph.get_mut(navmesh_handle);
-                navmesh_node.base_mut().set_visibility(false);
-                navmesh = Some(utils::mesh_to_navmesh(navmesh_node.as_mesh()));
-            } else {
-                println!("Unable to find Navmesh node to build navmesh!")
             }
         }
 
@@ -273,29 +386,38 @@ impl Level {
                 .with_opt_texture(engine.resource_manager.request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8))
                 .build()));
 
-        (scene, navmesh)
-    }
-
-    pub fn new(engine: &mut Engine, control_scheme: Rc<RefCell<ControlScheme>>, sender: Sender<GameEvent>) -> Level {
-        let (scene, navmesh) = Self::load_level(engine);
-
         let mut level = Level {
-            navmesh,
             scene: engine.scenes.add(scene),
-            events_sender: Some(sender.clone()),
+            sender: Some(sender.clone()),
             control_scheme: Some(control_scheme),
+            map_root: map_root_handle,
+            options,
             ..Default::default()
         };
 
-        level.spawn_player(engine);
-
-        level.add_bot(engine, BotKind::Maw, Vec3::new(0.0, 0.0, -1.0));
-        level.add_bot(engine, BotKind::Mutant, Vec3::new(0.0, 0.0, 1.0));
-        level.add_bot(engine, BotKind::Parasite, Vec3::new(1.0, 0.0, 0.0));
-
+        level.build_navmesh(engine);
         level.analyze(engine);
 
+        sender.send(Message::SpawnPlayer).unwrap();
+        sender.send(Message::AddBot { kind: BotKind::Maw, position: Vec3::new(0.0, 0.0, -1.0), name: None }).unwrap();
+        sender.send(Message::AddBot { kind: BotKind::Mutant, position: Vec3::new(0.0, 0.0, 1.0), name: None }).unwrap();
+        sender.send(Message::AddBot { kind: BotKind::Parasite, position: Vec3::new(1.0, 0.0, 0.0), name: None }).unwrap();
+
         level
+    }
+
+    pub fn build_navmesh(&mut self, engine: &mut Engine) {
+        if self.navmesh.is_none() {
+            let scene = engine.scenes.get_mut(self.scene);
+            let navmesh_handle = scene.graph.find_by_name(self.map_root, "Navmesh");
+            if navmesh_handle.is_some() {
+                let navmesh_node = scene.graph.get_mut(navmesh_handle);
+                navmesh_node.base_mut().set_visibility(false);
+                self.navmesh = Some(utils::mesh_to_navmesh(navmesh_node.as_mesh()));
+            } else {
+                println!("Unable to find Navmesh node to build navmesh!")
+            }
+        }
     }
 
     pub fn analyze(&mut self, engine: &mut Engine) {
@@ -335,14 +457,21 @@ impl Level {
             }
         }
         for (kind, position) in items {
-            self.items.add(Item::new(kind, position, scene, &mut engine.resource_manager, self.events_sender.as_ref().unwrap().clone()));
+            self.items.add(Item::new(kind, position, scene, &mut engine.resource_manager, self.sender.as_ref().unwrap().clone()));
         }
         for handle in death_zones {
             let node = scene.graph.get_mut(handle);
             node.base_mut().set_visibility(false);
-            self.death_zones.push(DeathZone { bounds: node.as_mesh().calculate_world_bounding_box() });
+            self.death_zones
+                .push(DeathZone {
+                    bounds: node.as_mesh()
+                        .calculate_world_bounding_box()
+                });
         }
-        self.spawn_points = spawn_points.into_iter().map(|p| SpawnPoint { position: p }).collect();
+        self.spawn_points = spawn_points
+            .into_iter()
+            .map(|p| SpawnPoint { position: p })
+            .collect();
     }
 
     pub fn destroy(&mut self, engine: &mut Engine) {
@@ -404,7 +533,7 @@ impl Level {
     fn give_new_weapon(&mut self, engine: &mut Engine, actor: Handle<Actor>, kind: WeaponKind) {
         if self.actors.contains(actor) {
             let scene = engine.scenes.get_mut(self.scene);
-            let mut weapon = Weapon::new(kind, &mut engine.resource_manager, scene, self.events_sender.as_ref().unwrap().clone());
+            let mut weapon = Weapon::new(kind, &mut engine.resource_manager, scene, self.sender.as_ref().unwrap().clone());
             weapon.set_owner(actor);
             let weapon_model = weapon.get_model();
             let actor = self.actors.get_mut(actor);
@@ -412,22 +541,26 @@ impl Level {
             actor.character_mut().add_weapon(weapon_handle);
             scene.graph.link_nodes(weapon_model, actor.character().get_weapon_pivot());
 
-            self.events_sender
+            self.sender
                 .as_ref()
                 .unwrap()
-                .send(GameEvent::AddNotification {
+                .send(Message::AddNotification {
                     text: format!("Actor picked up weapon {:?}", kind)
                 }).unwrap();
         }
     }
 
-    fn add_bot(&mut self, engine: &mut Engine, kind: BotKind, position: Vec3) {
+    fn add_bot(&mut self, engine: &mut Engine, kind: BotKind, position: Vec3, name: Option<String>) -> Handle<Actor> {
         let scene = engine.scenes.get_mut(self.scene);
-        let mut bot = Bot::new(kind, &mut engine.resource_manager, scene, position, self.events_sender.as_ref().unwrap().clone()).unwrap();
-        bot.set_target_actor(self.player); // TODO: This is temporary until there is no automatic target selection.
+        let mut bot = Bot::new(kind, &mut engine.resource_manager, scene, position, self.sender.as_ref().unwrap().clone()).unwrap();
+        let name = name.unwrap_or_else(|| format!("Bot {:?} {}", kind, self.actors.count()));
+        self.leader_board.get_or_add_actor(&name);
+        bot.set_target_actor(self.player)
+            .character_mut()
+            .set_name(name);
         let bot = self.actors.add(Actor::Bot(bot));
-        self.events_sender.as_ref().unwrap().send(GameEvent::GiveNewWeapon { actor: bot, kind: WeaponKind::Ak47 }).unwrap();
-        println!("Bot {:?} was added!", kind);
+        self.give_new_weapon(engine, bot, WeaponKind::Ak47);
+        bot
     }
 
     fn remove_actor(&mut self, engine: &mut Engine, actor: Handle<Actor>) {
@@ -464,13 +597,13 @@ impl Level {
         }
     }
 
-    fn spawn_player(&mut self, engine: &mut Engine) {
+    fn spawn_player(&mut self, engine: &mut Engine) -> Handle<Actor> {
         let index = self.find_suitable_spawn_point(engine);
         let spawn_position = self.spawn_points
             .get(index)
             .map_or(Vec3::ZERO, |pt| pt.position);
         let scene = engine.scenes.get_mut(self.scene);
-        let mut player = Player::new(scene, self.events_sender.as_ref().unwrap().clone());
+        let mut player = Player::new(scene, self.sender.as_ref().unwrap().clone());
         if let Some(control_scheme) = self.control_scheme.as_ref() {
             player.set_control_scheme(control_scheme.clone());
         }
@@ -483,6 +616,7 @@ impl Level {
         self.give_new_weapon(engine, self.player, WeaponKind::M4);
         self.give_new_weapon(engine, self.player, WeaponKind::Ak47);
         self.give_new_weapon(engine, self.player, WeaponKind::PlasmaRifle);
+        self.player
     }
 
     fn give_item(&mut self, engine: &mut Engine, actor: Handle<Actor>, kind: ItemKind) {
@@ -536,10 +670,10 @@ impl Level {
         if self.actors.contains(actor) && self.items.contains(item) {
             let item = self.items.get_mut(item);
 
-            self.events_sender
+            self.sender
                 .as_ref()
                 .unwrap()
-                .send(GameEvent::AddNotification {
+                .send(Message::AddNotification {
                     text: format!("Actor picked up item {:?}", item.get_kind())
                 }).unwrap();
 
@@ -570,7 +704,7 @@ impl Level {
             position,
             owner,
             initial_velocity,
-            self.events_sender.as_ref().unwrap().clone(),
+            self.sender.as_ref().unwrap().clone(),
         );
         self.projectiles.add(projectile);
     }
@@ -610,8 +744,8 @@ impl Level {
     fn find_suitable_spawn_point(&self, engine: &mut Engine) -> usize {
         // Find spawn point with least amount of enemies nearby.
         let scene = engine.scenes.get(self.scene);
-        let mut index = 0;
-        let mut max_distance = std::f32::MAX;
+        let mut index = rand::thread_rng().gen_range(0, self.spawn_points.len());
+        let mut max_distance = -std::f32::MAX;
         for (i, pt) in self.spawn_points.iter().enumerate() {
             let mut sum_distance = 0.0;
             for actor in self.actors.iter() {
@@ -626,43 +760,54 @@ impl Level {
         index
     }
 
-    fn spawn_bot(&mut self, engine: &mut Engine, kind: BotKind) {
+    fn spawn_bot(&mut self, engine: &mut Engine, kind: BotKind, name: Option<String>) -> Handle<Actor> {
         let index = self.find_suitable_spawn_point(engine);
         let spawn_position = self.spawn_points
             .get(index)
             .map_or(Vec3::ZERO, |pt| pt.position);
-        self.add_bot(engine, kind, spawn_position);
 
-        self.events_sender
+        let bot = self.add_bot(engine, kind, spawn_position, name);
+
+        self.sender
             .as_ref()
             .unwrap()
-            .send(GameEvent::AddNotification {
-                text: format!("Bot {:?} spawned!", kind)
+            .send(Message::AddNotification {
+                text: format!("Bot {} spawned!", self.actors.get(bot).character().name)
             }).unwrap();
+
+        bot
     }
 
     fn damage_actor(&mut self, actor: Handle<Actor>, who: Handle<Actor>, amount: f32) {
         if self.actors.contains(actor) && (who.is_none() || who.is_some() && self.actors.contains(who)) {
+            let mut who_name = Default::default();
             let message =
                 if who.is_some() {
-                    format!("{} dealt {} damage to {}!", self.actors.get(who).character().name,
-                            amount, self.actors.get(actor).character().name)
+                    who_name = self.actors.get(who).character().name.clone();
+                    format!("{} dealt {} damage to {}!", who_name, amount, self.actors.get(actor).character().name)
                 } else {
                     format!("{} took {} damage!", self.actors.get(actor).character().name, amount)
                 };
 
-            self.events_sender
+
+            self.sender
                 .as_ref()
                 .unwrap()
-                .send(GameEvent::AddNotification {
+                .send(Message::AddNotification {
                     text: message,
                 }).unwrap();
 
             let actor = self.actors.get_mut(actor);
+            let was_dead = actor.character().is_dead();
             actor.character_mut().damage(amount);
+            if !was_dead && actor.character().is_dead() {
+                if who.is_some() {
+                    self.leader_board.add_frag(who_name)
+                }
+            }
             if let Actor::Bot(bot) = actor {
                 if who.is_some() {
-                    bot.set_target_actor(who)
+                    bot.set_target_actor(who);
                 }
             }
         }
@@ -676,12 +821,18 @@ impl Level {
         };
         let scene = engine.scenes.get_mut(self.scene);
         let resource_manager = &mut engine.resource_manager;
-        let mut item = Item::new(kind, position, scene, resource_manager, self.events_sender.as_ref().unwrap().clone());
+        let mut item = Item::new(kind, position, scene, resource_manager, self.sender.as_ref().unwrap().clone());
         item.set_lifetime(lifetime);
         self.items.add(item);
     }
 
+    pub fn time(&self) -> f32 {
+        self.time
+    }
+
     pub fn update(&mut self, engine: &mut Engine, time: GameTime) {
+        self.time += time.delta;
+
         let scene = engine.scenes.get_mut(self.scene);
 
         let player_position = self.actors
@@ -697,16 +848,16 @@ impl Level {
 
             for death_zone in self.death_zones.iter() {
                 if death_zone.bounds.is_contains_point(actor.character().get_position(&scene.physics)) {
-                    self.events_sender
+                    self.sender
                         .as_ref()
                         .unwrap()
-                        .send(GameEvent::RespawnActor { actor: handle })
+                        .send(Message::RespawnActor { actor: handle })
                         .unwrap();
                 }
             }
         }
 
-        self.weapons.update(scene);
+        self.weapons.update(scene, &self.actors);
         self.projectiles.update(scene, &mut self.actors, &self.weapons, time);
         self.items.update(scene, time);
 
@@ -724,6 +875,8 @@ impl Level {
 
     pub fn respawn_actor(&mut self, engine: &mut Engine, actor: Handle<Actor>) {
         if self.actors.contains(actor) {
+            let name = self.actors.get(actor).character().name.clone();
+
             let kind = match self.actors.get(actor) {
                 Actor::Bot(bot) => Some(bot.definition.kind),
                 Actor::Player(_) => None,
@@ -731,73 +884,73 @@ impl Level {
 
             self.remove_actor(engine, actor);
 
+            self.leader_board.add_death(&name);
+
             match kind {
                 Some(bot) => {
                     // Spawn bot of same kind, we don't care of preserving state of bot
                     // after death. Leader board still will correctly count score.
-                    self.spawn_bot(engine, bot)
+                    self.spawn_bot(engine, bot, Some(name))
                 }
                 None => self.spawn_player(engine)
-            }
+            };
         }
     }
 
-    pub fn handle_game_event(&mut self, engine: &mut Engine, event: &GameEvent, time: GameTime) {
-        match event {
-            GameEvent::GiveNewWeapon { actor, kind } => {
+    pub fn handle_message(&mut self, engine: &mut Engine, message: &Message, time: GameTime) {
+        match message {
+            Message::GiveNewWeapon { actor, kind } => {
                 self.give_new_weapon(engine, *actor, *kind);
             }
-            GameEvent::AddBot { kind, position } => {
-                self.add_bot(engine, *kind, *position)
+            Message::AddBot { kind, position, name } => {
+                self.add_bot(engine, *kind, *position, name.clone());
             }
-            GameEvent::RemoveActor { actor } => {
+            Message::RemoveActor { actor } => {
                 self.remove_actor(engine, *actor)
             }
-            GameEvent::GiveItem { actor, kind } => {
+            Message::GiveItem { actor, kind } => {
                 self.give_item(engine, *actor, *kind);
             }
-            GameEvent::PickUpItem { actor, item } => {
+            Message::PickUpItem { actor, item } => {
                 self.pickup_item(engine, *actor, *item);
             }
-            GameEvent::ShootWeapon { weapon, initial_velocity } => {
+            Message::ShootWeapon { weapon, initial_velocity } => {
                 self.shoot_weapon(engine, *weapon, *initial_velocity, time)
             }
-            GameEvent::CreateProjectile { kind, position, direction, initial_velocity, owner } => {
+            Message::CreateProjectile { kind, position, direction, initial_velocity, owner } => {
                 self.create_projectile(engine, *kind, *position, *direction, *initial_velocity, *owner)
             }
-            GameEvent::PlaySound { path, position } => {
+            Message::PlaySound { path, position } => {
                 self.play_sound(engine, path, *position)
             }
-            GameEvent::ShowWeapon { weapon, state } => {
+            Message::ShowWeapon { weapon, state } => {
                 self.show_weapon(engine, *weapon, *state)
             }
-            GameEvent::SpawnBot { kind } => {
-                self.spawn_bot(engine, *kind);
+            Message::SpawnBot { kind } => {
+                self.spawn_bot(engine, *kind, None);
             }
-            GameEvent::DamageActor { actor, who, amount } => {
+            Message::DamageActor { actor, who, amount } => {
                 self.damage_actor(*actor, *who, *amount);
             }
-            GameEvent::CreateEffect { kind, position } => {
+            Message::CreateEffect { kind, position } => {
                 let scene = engine.scenes.get_mut(self.scene);
                 effects::create(*kind, &mut scene.graph, &mut engine.resource_manager, *position)
             }
-            GameEvent::SpawnPlayer => {
-                self.spawn_player(engine)
+            Message::SpawnPlayer => {
+                self.spawn_player(engine);
             }
-            GameEvent::SpawnItem { kind, position, adjust_height, lifetime } => {
+            Message::SpawnItem { kind, position, adjust_height, lifetime } => {
                 self.spawn_item(engine, *kind, *position, *adjust_height, *lifetime)
             }
-            GameEvent::AddNotification { .. } => {
-                // Ignore
-            }
-            GameEvent::RespawnActor { actor } => {
+            Message::RespawnActor { actor } => {
                 self.respawn_actor(engine, *actor)
             }
+            _ => ()
         }
     }
 
-    pub fn set_events_sender(&mut self, sender: Sender<GameEvent>) {
-        self.events_sender = Some(sender.clone());
+    pub fn set_message_sender(&mut self, sender: Sender<Message>) {
+        self.sender = Some(sender.clone());
 
         // Attach new sender to all event sources.
         for actor in self.actors.iter_mut() {
@@ -858,79 +1011,4 @@ impl Visit for SpawnPoint {
 
         visitor.leave_region()
     }
-}
-
-#[allow(dead_code)]
-pub enum GameEvent {
-    GiveNewWeapon {
-        actor: Handle<Actor>,
-        kind: WeaponKind,
-    },
-    AddBot {
-        kind: BotKind,
-        position: Vec3,
-    },
-    RemoveActor {
-        actor: Handle<Actor>
-    },
-    /// Spawns new bot at random spawn point. Selection of spawn point can be based on some
-    /// particular heuristic, leading to good selection (like do spawn at a point with least
-    /// enemies nearby, which will increase survival probability)
-    SpawnBot {
-        kind: BotKind
-    },
-    /// Gives item of specified kind to a given actor. Basically it means that actor will take
-    /// item and consume it immediately (heal itself, add ammo, etc.)
-    GiveItem {
-        actor: Handle<Actor>,
-        kind: ItemKind,
-    },
-    PickUpItem {
-        actor: Handle<Actor>,
-        item: Handle<Item>,
-    },
-    SpawnItem {
-        kind: ItemKind,
-        position: Vec3,
-        adjust_height: bool,
-        lifetime: Option<f32>,
-    },
-    CreateProjectile {
-        kind: ProjectileKind,
-        position: Vec3,
-        direction: Vec3,
-        initial_velocity: Vec3,
-        owner: Handle<Weapon>,
-    },
-    ShootWeapon {
-        weapon: Handle<Weapon>,
-        initial_velocity: Vec3,
-    },
-    PlaySound {
-        path: PathBuf,
-        position: Vec3,
-    },
-    ShowWeapon {
-        weapon: Handle<Weapon>,
-        state: bool,
-    },
-    DamageActor {
-        actor: Handle<Actor>,
-        /// Actor who damaged target actor, can be Handle::NONE if damage came from environment
-        /// or not from any actor.
-        who: Handle<Actor>,
-        amount: f32,
-    },
-    CreateEffect {
-        kind: EffectKind,
-        position: Vec3,
-    },
-    SpawnPlayer,
-    /// HUD listens such events and puts them into queue.
-    AddNotification {
-        text: String
-    },
-    RespawnActor {
-        actor: Handle<Actor>
-    },
 }

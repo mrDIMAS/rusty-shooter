@@ -26,7 +26,7 @@ use std::{
 };
 use crate::{
     GameTime,
-    level::GameEvent,
+    message::Message,
     effects::EffectKind,
 };
 
@@ -82,7 +82,7 @@ pub struct Item {
     reactivation_timer: f32,
     active: bool,
     definition: &'static ItemDefinition,
-    sender: Option<Sender<GameEvent>>,
+    sender: Option<Sender<Message>>,
     lifetime: Option<f32>,
 }
 
@@ -177,7 +177,7 @@ impl Item {
         position: Vec3,
         scene: &mut Scene,
         resource_manager: &mut ResourceManager,
-        sender: Sender<GameEvent>,
+        sender: Sender<Message>,
     ) -> Self {
         let definition = Self::get_definition(kind);
 
@@ -231,7 +231,7 @@ impl Item {
             if self.reactivation_timer <= 0.0 {
                 self.active = true;
 
-                self.sender.as_ref().unwrap().send(GameEvent::CreateEffect {
+                self.sender.as_ref().unwrap().send(Message::CreateEffect {
                     kind: EffectKind::ItemAppear,
                     position,
                 }).unwrap();

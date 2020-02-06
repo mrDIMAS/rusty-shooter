@@ -83,7 +83,12 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 	- [x] Ammo
 	- [x] Health
 	- [x] Armor
+	- [ ] Game mode specific score
+		- [ ] Death match - dummy added
+		- [ ] Team death match
+		- [ ] Capture the flag
 - [x] Bot whip attack - bots can punch you in the face you stand too close to them.
+	- [x] Damage
 - [x] Bots animations - more or less done, bots are fully animated and has configured animation machines. This can change if there will be a need for more animations.
 - [x] Sparks when projectile hit surface.
 - [x] Ability to pickup dropped weapons.
@@ -106,22 +111,26 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 	- [x] Shot sounds
 	- [x] Music
 	- [x] Item pickup	
+	- [ ] Damage sound
+	- [ ] Jump sound
+	- [ ] Ambient sound
 - [ ] Leader board - game mode specific leader board should be added. 
-	- [ ] Bind to specific key
-	- [ ] Deathmatch
-		- [ ] Table of Name, Kills, Death, K/D Ratio
+	- [x] Bind to specific key
+	- [x] Time limit
+	- [x] Deathmatch
+		- [x] Table of Name, Kills, Deaths, K/D Ratio
 	- [ ] Team death match
 		- [ ] Header with team score: Red Team Frags - Blue Team Frags
-		- [ ] Table of Name, Kills, Death, K/D Ratio
+		- [ ] Table of Name, Kills, Deaths, K/D Ratio
 	- [ ] Capture the flag
 		- [ ] Header with team score: Red Team Flags - Blue Team Flags
-		- [ ] Table of Name, Kills, Death, K/D Ratio		
-- [ ] Match options
-	- [ ] Time limit
+		- [ ] Table of Name, Kills, Deaths, K/D Ratio		
+- [ ] Match options	
+	- [x] Time limit
 	- [ ] Match type
 	- [ ] Map
-	- [ ] Deathmatch
-		- [ ] Frag limit
+	- [x] Deathmatch
+		- [x] Frag limit
 	- [ ] Team deathmatch
 		- [ ] Frag limit
 	- [ ] Capture the flag

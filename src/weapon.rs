@@ -8,10 +8,10 @@ use crate::{
     actor::Actor,
     GameTime,
     level::CleanUp,
-    level::GameEvent,
+    message::Message,
 };
 use rg3d::{
-    physics::{RayCastOptions, Physics},
+    physics::{RayCastOptions, HitKind, Physics},
     engine::resource_manager::ResourceManager,
     scene::{
         node::Node,
@@ -39,6 +39,8 @@ use rg3d::{
         math::{vec3::Vec3, ray::Ray},
     },
 };
+use crate::actor::ActorContainer;
+use crate::character::AsCharacter;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum WeaponKind {
@@ -78,7 +80,7 @@ pub struct Weapon {
     owner: Handle<Actor>,
     ammo: u32,
     pub definition: &'static WeaponDefinition,
-    pub sender: Option<Sender<GameEvent>>,
+    pub sender: Option<Sender<Message>>,
 }
 
 pub struct WeaponDefinition {
@@ -163,7 +165,7 @@ impl Weapon {
         }
     }
 
-    pub fn new(kind: WeaponKind, resource_manager: &mut ResourceManager, scene: &mut Scene, sender: Sender<GameEvent>) -> Weapon {
+    pub fn new(kind: WeaponKind, resource_manager: &mut ResourceManager, scene: &mut Scene, sender: Sender<Message>) -> Weapon {
         let definition = Self::get_definition(kind);
 
         let model = resource_manager.request_model(Path::new(definition.model))
@@ -209,10 +211,10 @@ impl Weapon {
         self.model
     }
 
-    pub fn update(&mut self, scene: &mut Scene) {
+    pub fn update(&mut self, scene: &mut Scene, actors: &ActorContainer) {
         self.offset.follow(&self.dest_offset, 0.2);
 
-        self.update_laser_sight(&mut scene.graph, &scene.physics);
+        self.update_laser_sight(&mut scene.graph, &scene.physics, actors);
 
         let node = scene.graph.get_mut(self.model);
         node.base_mut().get_local_transform_mut().set_position(self.offset);
@@ -246,7 +248,7 @@ impl Weapon {
         self.ammo += amount;
     }
 
-    fn update_laser_sight(&self, graph: &mut Graph, physics: &Physics) {
+    fn update_laser_sight(&self, graph: &mut Graph, physics: &Physics, actors: &ActorContainer) {
         let mut laser_dot_position = Vec3::ZERO;
         let model = graph.get(self.model);
         let begin = model.base().get_global_position();
@@ -254,12 +256,25 @@ impl Weapon {
         if let Some(ray) = Ray::from_two_points(&begin, &end) {
             let mut result = Vec::new();
             if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
-                let offset = result[0].normal.normalized().unwrap_or_default().scale(0.2);
-                laser_dot_position = result[0].position + offset;
+                'hit_loop: for hit in result {
+                    // Filter hit with owner capsule
+                    if let HitKind::Body(body) = hit.kind {
+                        for (handle, actor) in actors.pair_iter() {
+                            if self.owner == handle && actor.character().body == body {
+                                continue 'hit_loop;
+                            }
+                        }
+                    }
+                    let offset = hit.normal.normalized().unwrap_or_default().scale(0.2);
+                    laser_dot_position = hit.position + offset;
+                }
             }
         }
 
-        graph.get_mut(self.laser_dot).base_mut().get_local_transform_mut().set_position(laser_dot_position);
+        graph.get_mut(self.laser_dot)
+            .base_mut()
+            .get_local_transform_mut()
+            .set_position(laser_dot_position);
     }
 
     pub fn get_ammo(&self) -> u32 {
@@ -284,7 +299,7 @@ impl Weapon {
             let position = self.get_shot_position(&scene.graph);
 
             if let Some(sender) = self.sender.as_ref() {
-                sender.send(GameEvent::PlaySound {
+                sender.send(Message::PlaySound {
                     path: PathBuf::from(self.definition.shot_sound),
                     position,
                 }).unwrap();
@@ -324,7 +339,7 @@ impl WeaponContainer {
     }
 
     pub fn free(&mut self, weapon: Handle<Weapon>) {
-        self.pool.free(weapon)
+self.pool.free(weapon);
     }
 
     pub fn iter_mut(&mut self) -> PoolIteratorMut<Weapon> {
@@ -339,9 +354,9 @@ impl WeaponContainer {
         self.pool.borrow_mut(handle)
     }
 
-    pub fn update(&mut self, scene: &mut Scene) {
+    pub fn update(&mut self, scene: &mut Scene, actors: &ActorContainer) {
         for weapon in self.pool.iter_mut() {
-            weapon.update(scene)
+            weapon.update(scene, actors)
         }
     }
 }

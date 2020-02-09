@@ -9,8 +9,5 @@ license = "MIT"
 opt-level = 2
 
 [dependencies]
-rg3d = { path = "../rg3d", version = "0.8.0" }
+rg3d = { path = "../rg3d", version = "0.9.0" }
 rand = "0.7.0"
-
-[patch.crates-io]
-winit = { git = "https://github.com/rust-windowing/winit" }

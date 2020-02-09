@@ -25,6 +25,8 @@ use rg3d::{
     },
     core::{
         pool::Handle,
+        math::vec2::Vec2,
+        color::Color
     },
     gui::{
         ttf::Font,
@@ -59,6 +61,8 @@ use rg3d::{
         HorizontalAlignment,
         Builder,
         image::ImageBuilder,
+        border::BorderBuilder,
+        brush::{Brush, GradientPoint}
     },
     utils,
 };

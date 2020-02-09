@@ -33,6 +33,7 @@ use rg3d::{
         Builder,
         UINodeContainer,
         bool_to_visibility,
+        brush::Brush
     },
 };
 use crate::{
@@ -42,7 +43,6 @@ use crate::{
     MatchOptions,
     character::Team
 };
-
 
 pub struct Hud {
     root: Handle<UINode>,
@@ -117,13 +117,13 @@ impl Hud {
                 })
                 .with_child(BorderBuilder::new(WidgetBuilder::new()
                     .on_column(0)
-                    .with_background(Color::opaque(249, 166, 2))
-                    .with_foreground(Color::opaque(200, 110, 0))
+                    .with_background(Brush::Solid(Color::opaque(249, 166, 2)))
+                    .with_foreground(Brush::Solid(Color::opaque(200, 110, 0)))
                     .with_child({
                         first_score = TextBuilder::new(WidgetBuilder::new()
                             .with_horizontal_alignment(HorizontalAlignment::Center)
                             .with_vertical_alignment(VerticalAlignment::Center)
-                            .with_foreground(Color::BLACK))
+                            .with_foreground(Brush::Solid(Color::BLACK)))
                             .with_text("30")
                             .build(ui);
                         first_score
@@ -132,13 +132,13 @@ impl Hud {
                     .build(ui))
                 .with_child(BorderBuilder::new(WidgetBuilder::new()
                     .on_column(1)
-                    .with_background(Color::opaque(127, 127, 127))
-                    .with_foreground(Color::opaque(80, 80, 80))
+                    .with_background(Brush::Solid(Color::opaque(127, 127, 127)))
+                    .with_foreground(Brush::Solid(Color::opaque(80, 80, 80)))
                     .with_child({
                         second_score = TextBuilder::new(WidgetBuilder::new()
                             .with_horizontal_alignment(HorizontalAlignment::Center)
                             .with_vertical_alignment(VerticalAlignment::Center)
-                            .with_foreground(Color::BLACK))
+                            .with_foreground(Brush::Solid(Color::BLACK)))
                             .with_text("20")
                             .build(ui);
                         second_score
@@ -167,7 +167,7 @@ impl Hud {
                     .build(ui))
                 .with_child({
                     health = TextBuilder::new(WidgetBuilder::new()
-                        .with_foreground(Color::opaque(180, 14, 22))
+                        .with_foreground(Brush::Solid(Color::opaque(180, 14, 22)))
                         .with_width(170.0)
                         .with_height(35.0))
                         .with_text("100")
@@ -196,7 +196,7 @@ impl Hud {
                 )
                 .with_child({
                     ammo = TextBuilder::new(WidgetBuilder::new()
-                        .with_foreground(Color::opaque(79, 79, 255))
+                        .with_foreground(Brush::Solid(Color::opaque(79, 79, 255)))
                         .with_width(170.0)
                         .with_height(35.0))
                         .with_font(font.clone())
@@ -224,7 +224,7 @@ impl Hud {
                     .build(ui))
                 .with_child({
                     armor = TextBuilder::new(WidgetBuilder::new()
-                        .with_foreground(Color::opaque(255, 100, 26))
+                        .with_foreground(Brush::Solid(Color::opaque(255, 100, 26)))
                         .with_width(170.0)
                         .with_height(35.0))
                         .with_font(font.clone())
@@ -446,7 +446,7 @@ impl LeaderBoardUI {
         let table = GridBuilder::new(WidgetBuilder::new()
             .on_row(1)
             .on_column(1)
-            .with_background(Color::from_rgba(0, 0, 0, 0))
+            .with_background(Brush::Solid(Color::BLACK))
             .with_child(TextBuilder::new(WidgetBuilder::new()
                 .on_column(0)
                 .on_row(0)
@@ -513,7 +513,7 @@ impl LeaderBoardUI {
             .with_child(GridBuilder::new(WidgetBuilder::new()
                 .on_column(0)
                 .on_row(2)
-                .with_foreground(Color::opaque(120, 120, 120))
+                .with_foreground(Brush::Solid(Color::opaque(120, 120, 120)))
                 .with_child(TextBuilder::new(WidgetBuilder::new()
                     .with_horizontal_alignment(HorizontalAlignment::Center)
                     .with_vertical_alignment(VerticalAlignment::Center)

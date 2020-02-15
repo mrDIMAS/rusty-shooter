@@ -70,12 +70,15 @@ use rg3d::{
         },
     },
     gui::{
-        widget::WidgetBuilder,
-        UINode,
+        widget::{WidgetBuilder, Widget},
+        node::UINode,
         text::TextBuilder,
-        text::Text,
         Builder,
         UINodeContainer,
+        ControlTemplate,
+        UserInterface,
+        Control,
+        message::UiMessage,
     },
     scene::{
         particle_system::CustomEmitterFactory,
@@ -85,13 +88,39 @@ use rg3d::{
     engine::Engine,
 };
 
+pub struct StubUiMessage {}
+
+pub struct StubUiNode {
+    widget: Widget<StubUiMessage, StubUiNode>
+}
+
+impl Control<StubUiMessage, StubUiNode> for StubUiNode {
+    fn widget(&self) -> &Widget<StubUiMessage, StubUiNode> {
+        unimplemented!()
+    }
+
+    fn widget_mut(&mut self) -> &mut Widget<StubUiMessage, StubUiNode> {
+        unimplemented!()
+    }
+
+    fn raw_copy(&self) -> UINode<StubUiMessage, StubUiNode> {
+        unimplemented!()
+    }
+}
+
+// Configure engine
+pub type UINodeHandle = Handle<UINode<StubUiMessage, StubUiNode>>;
+pub type GameEngine = Engine<StubUiMessage, StubUiNode>;
+pub type UIControlTemplate = ControlTemplate<StubUiMessage, StubUiNode>;
+pub type Gui = UserInterface<StubUiMessage, StubUiNode>;
+pub type GuiMessage = UiMessage<StubUiMessage, StubUiNode>;
 
 pub struct Game {
     menu: Menu,
     hud: Hud,
-    engine: Engine,
+    engine: GameEngine,
     level: Option<Level>,
-    debug_text: Handle<UINode>,
+    debug_text: UINodeHandle,
     debug_string: String,
     last_tick_time: time::Instant,
     music: Handle<SoundSource>,
@@ -126,7 +155,7 @@ impl Default for DeathMatch {
     fn default() -> Self {
         Self {
             time_limit_secs: Default::default(),
-            frag_limit: 0
+            frag_limit: 0,
         }
     }
 }
@@ -152,7 +181,7 @@ impl Default for TeamDeathMatch {
     fn default() -> Self {
         Self {
             time_limit_secs: Default::default(),
-            team_frag_limit: 0
+            team_frag_limit: 0,
         }
     }
 }
@@ -178,7 +207,7 @@ impl Default for CaptureTheFlag {
     fn default() -> Self {
         Self {
             time_limit_secs: Default::default(),
-            flag_limit: 0
+            flag_limit: 0,
         }
     }
 }
@@ -260,7 +289,7 @@ impl Game {
             .with_inner_size(inner_size)
             .with_resizable(true);
 
-        let mut engine = Engine::new(window_builder, &events_loop).unwrap();
+        let mut engine = GameEngine::new(window_builder, &events_loop).unwrap();
         let hrtf_sphere = rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin").unwrap();
         engine.sound_context
             .lock()
@@ -400,7 +429,7 @@ impl Game {
         let mut visitor = Visitor::new();
 
         // Visit engine state first.
-        self.engine.visit("Engine", &mut visitor)?;
+        self.engine.visit("GameEngine", &mut visitor)?;
 
         self.level.visit("Level", &mut visitor)?;
 
@@ -421,9 +450,9 @@ impl Game {
 
                 // Load engine state first
                 println!("Trying to load engine state...");
-                match self.engine.visit("Engine", &mut visitor) {
+                match self.engine.visit("GameEngine", &mut visitor) {
                     Ok(_) => {
-                        println!("Engine state successfully loaded!");
+                        println!("GameEngine state successfully loaded!");
 
                         // Then load game state.
                         match self.level.visit("Level", &mut visitor) {
@@ -471,7 +500,7 @@ impl Game {
             &mut self.engine,
             self.control_scheme.clone(),
             self.events_sender.clone(),
-            options
+            options,
         ));
         self.set_menu_visible(false);
     }
@@ -496,7 +525,7 @@ impl Game {
         if let Some(ref mut level) = self.level {
             level.update(&mut self.engine, time);
             let ui = &mut self.engine.user_interface;
-            self.hud.set_time( ui, level.time());
+            self.hud.set_time(ui, level.time());
             let player = level.get_player();
             if player.is_some() {
                 // Sync hud with player state.
@@ -568,22 +597,21 @@ impl Game {
                Triangles: {}\n\
                Draw calls: {}\n\
                Up time: {:.2} s\n\
-               Sound render time: {:?}",
+               Sound render time: {:?}\n\
+               UI Time: {:?}",
                statistics.pure_frame_time * 1000.0,
                statistics.capped_frame_time * 1000.0,
                statistics.frames_per_second,
                statistics.geometry.triangles_rendered,
                statistics.geometry.draw_calls,
                elapsed,
-               self.engine.sound_context.lock().unwrap().full_render_duration()
+               self.engine.sound_context.lock().unwrap().full_render_duration(),
+               self.engine.ui_time
         ).unwrap();
 
-        self.engine
-            .user_interface
-            .node_mut(self.debug_text)
-            .downcast_mut::<Text>()
-            .unwrap()
-            .set_text(self.debug_string.as_str());
+        if let UINode::Text(text) = self.engine.user_interface.node_mut(self.debug_text) {
+            text.set_text(self.debug_string.as_str());
+        }
     }
 
     pub fn limit_fps(&mut self, value: f64) {

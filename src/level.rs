@@ -10,30 +10,20 @@ use std::{
     collections::HashMap,
 };
 use rand::Rng;
-use crate::{
-    actor::{ActorContainer, Actor},
-    weapon::{
-        Weapon,
-        WeaponKind,
-        WeaponContainer,
-    }, player::Player, GameTime,
-    bot::{
-        Bot,
-        BotKind,
-    }, projectile::{
-        ProjectileContainer,
-        ProjectileKind,
-        Projectile,
-    }, character::AsCharacter,
-    jump_pad::{JumpPadContainer, JumpPad},
-    item::{ItemContainer, Item, ItemKind},
-    control_scheme::ControlScheme, effects,
-    message::Message,
-    MatchOptions,
-};
+use crate::{actor::{ActorContainer, Actor}, weapon::{
+    Weapon,
+    WeaponKind,
+    WeaponContainer,
+}, player::Player, GameTime, bot::{
+    Bot,
+    BotKind,
+}, projectile::{
+    ProjectileContainer,
+    ProjectileKind,
+    Projectile,
+}, character::AsCharacter, jump_pad::{JumpPadContainer, JumpPad}, item::{ItemContainer, Item, ItemKind}, control_scheme::ControlScheme, effects, message::Message, MatchOptions, GameEngine};
 use rg3d::{
     core::math::PositionProvider,
-    engine::Engine,
     resource::{
         texture::TextureKind,
     },
@@ -345,7 +335,7 @@ pub struct LevelUpdateContext<'a> {
 
 impl Level {
     pub fn new(
-        engine: &mut Engine,
+        engine: &mut GameEngine,
         control_scheme: Rc<RefCell<ControlScheme>>,
         sender: Sender<Message>,
         options: MatchOptions,
@@ -406,7 +396,7 @@ impl Level {
         level
     }
 
-    pub fn build_navmesh(&mut self, engine: &mut Engine) {
+    pub fn build_navmesh(&mut self, engine: &mut GameEngine) {
         if self.navmesh.is_none() {
             let scene = engine.scenes.get_mut(self.scene);
             let navmesh_handle = scene.graph.find_by_name(self.map_root, "Navmesh");
@@ -420,7 +410,7 @@ impl Level {
         }
     }
 
-    pub fn analyze(&mut self, engine: &mut Engine) {
+    pub fn analyze(&mut self, engine: &mut GameEngine) {
         let mut items = Vec::new();
         let mut spawn_points = Vec::new();
         let mut death_zones = Vec::new();
@@ -474,7 +464,7 @@ impl Level {
             .collect();
     }
 
-    pub fn destroy(&mut self, engine: &mut Engine) {
+    pub fn destroy(&mut self, engine: &mut GameEngine) {
         engine.scenes.remove(self.scene);
     }
 
@@ -502,7 +492,7 @@ impl Level {
         &self.weapons
     }
 
-    fn pick(&self, engine: &mut Engine, from: Vec3, to: Vec3) -> Vec3 {
+    fn pick(&self, engine: &mut GameEngine, from: Vec3, to: Vec3) -> Vec3 {
         let scene = engine.scenes.get_mut(self.scene);
         if let Some(ray) = Ray::from_two_points(&from, &to) {
             let mut intersections = Vec::new();
@@ -518,7 +508,7 @@ impl Level {
         }
     }
 
-    fn remove_weapon(&mut self, engine: &mut Engine, weapon: Handle<Weapon>) {
+    fn remove_weapon(&mut self, engine: &mut GameEngine, weapon: Handle<Weapon>) {
         let scene = engine.scenes.get_mut(self.scene);
         for projectile in self.projectiles.iter_mut() {
             if projectile.owner == weapon {
@@ -530,7 +520,7 @@ impl Level {
         self.weapons.free(weapon);
     }
 
-    fn give_new_weapon(&mut self, engine: &mut Engine, actor: Handle<Actor>, kind: WeaponKind) {
+    fn give_new_weapon(&mut self, engine: &mut GameEngine, actor: Handle<Actor>, kind: WeaponKind) {
         if self.actors.contains(actor) {
             let scene = engine.scenes.get_mut(self.scene);
             let mut weapon = Weapon::new(kind, &mut engine.resource_manager, scene, self.sender.as_ref().unwrap().clone());
@@ -550,7 +540,7 @@ impl Level {
         }
     }
 
-    fn add_bot(&mut self, engine: &mut Engine, kind: BotKind, position: Vec3, name: Option<String>) -> Handle<Actor> {
+    fn add_bot(&mut self, engine: &mut GameEngine, kind: BotKind, position: Vec3, name: Option<String>) -> Handle<Actor> {
         let scene = engine.scenes.get_mut(self.scene);
         let mut bot = Bot::new(kind, &mut engine.resource_manager, scene, position, self.sender.as_ref().unwrap().clone()).unwrap();
         let name = name.unwrap_or_else(|| format!("Bot {:?} {}", kind, self.actors.count()));
@@ -563,7 +553,7 @@ impl Level {
         bot
     }
 
-    fn remove_actor(&mut self, engine: &mut Engine, actor: Handle<Actor>) {
+    fn remove_actor(&mut self, engine: &mut GameEngine, actor: Handle<Actor>) {
         if self.actors.contains(actor) {
             let scene = engine.scenes.get_mut(self.scene);
             let character = self.actors.get(actor).character();
@@ -597,7 +587,7 @@ impl Level {
         }
     }
 
-    fn spawn_player(&mut self, engine: &mut Engine) -> Handle<Actor> {
+    fn spawn_player(&mut self, engine: &mut GameEngine) -> Handle<Actor> {
         let index = self.find_suitable_spawn_point(engine);
         let spawn_position = self.spawn_points
             .get(index)
@@ -619,7 +609,7 @@ impl Level {
         self.player
     }
 
-    fn give_item(&mut self, engine: &mut Engine, actor: Handle<Actor>, kind: ItemKind) {
+    fn give_item(&mut self, engine: &mut GameEngine, actor: Handle<Actor>, kind: ItemKind) {
         if self.actors.contains(actor) {
             let character = self.actors.get_mut(actor).character_mut();
             match kind {
@@ -666,7 +656,7 @@ impl Level {
         }
     }
 
-    fn pickup_item(&mut self, engine: &mut Engine, actor: Handle<Actor>, item: Handle<Item>) {
+    fn pickup_item(&mut self, engine: &mut GameEngine, actor: Handle<Actor>, item: Handle<Item>) {
         if self.actors.contains(actor) && self.items.contains(item) {
             let item = self.items.get_mut(item);
 
@@ -687,7 +677,7 @@ impl Level {
     }
 
     fn create_projectile(&mut self,
-                         engine: &mut Engine,
+                         engine: &mut GameEngine,
                          kind: ProjectileKind,
                          position: Vec3,
                          direction: Vec3,
@@ -709,7 +699,7 @@ impl Level {
         self.projectiles.add(projectile);
     }
 
-    fn play_sound<P: AsRef<Path>>(&self, engine: &mut Engine, path: P, position: Vec3) {
+    fn play_sound<P: AsRef<Path>>(&self, engine: &mut GameEngine, path: P, position: Vec3) {
         let mut sound_context = engine.sound_context.lock().unwrap();
         let shot_buffer = engine.resource_manager.request_sound_buffer(path, false).unwrap();
         let shot_sound = SpatialSourceBuilder::new(
@@ -723,7 +713,7 @@ impl Level {
         sound_context.add_source(shot_sound);
     }
 
-    fn shoot_weapon(&mut self, engine: &mut Engine, weapon_handle: Handle<Weapon>, initial_velocity: Vec3, time: GameTime) {
+    fn shoot_weapon(&mut self, engine: &mut GameEngine, weapon_handle: Handle<Weapon>, initial_velocity: Vec3, time: GameTime) {
         if self.weapons.contains(weapon_handle) {
             let scene = engine.scenes.get_mut(self.scene);
             let weapon = self.weapons.get_mut(weapon_handle);
@@ -736,12 +726,12 @@ impl Level {
         }
     }
 
-    fn show_weapon(&mut self, engine: &mut Engine, weapon_handle: Handle<Weapon>, state: bool) {
+    fn show_weapon(&mut self, engine: &mut GameEngine, weapon_handle: Handle<Weapon>, state: bool) {
         let scene = engine.scenes.get_mut(self.scene);
         self.weapons.get(weapon_handle).set_visibility(state, &mut scene.graph)
     }
 
-    fn find_suitable_spawn_point(&self, engine: &mut Engine) -> usize {
+    fn find_suitable_spawn_point(&self, engine: &mut GameEngine) -> usize {
         // Find spawn point with least amount of enemies nearby.
         let scene = engine.scenes.get(self.scene);
         let mut index = rand::thread_rng().gen_range(0, self.spawn_points.len());
@@ -760,7 +750,7 @@ impl Level {
         index
     }
 
-    fn spawn_bot(&mut self, engine: &mut Engine, kind: BotKind, name: Option<String>) -> Handle<Actor> {
+    fn spawn_bot(&mut self, engine: &mut GameEngine, kind: BotKind, name: Option<String>) -> Handle<Actor> {
         let index = self.find_suitable_spawn_point(engine);
         let spawn_position = self.spawn_points
             .get(index)
@@ -813,7 +803,7 @@ impl Level {
         }
     }
 
-    fn spawn_item(&mut self, engine: &mut Engine, kind: ItemKind, position: Vec3, adjust_height: bool, lifetime: Option<f32>) {
+    fn spawn_item(&mut self, engine: &mut GameEngine, kind: ItemKind, position: Vec3, adjust_height: bool, lifetime: Option<f32>) {
         let position = if adjust_height {
             self.pick(engine, position, position - Vec3::new(0.0, 1000.0, 0.0))
         } else {
@@ -830,7 +820,7 @@ impl Level {
         self.time
     }
 
-    pub fn update(&mut self, engine: &mut Engine, time: GameTime) {
+    pub fn update(&mut self, engine: &mut GameEngine, time: GameTime) {
         self.time += time.delta;
 
         let scene = engine.scenes.get_mut(self.scene);
@@ -873,7 +863,7 @@ impl Level {
         self.actors.update(&mut context);
     }
 
-    pub fn respawn_actor(&mut self, engine: &mut Engine, actor: Handle<Actor>) {
+    pub fn respawn_actor(&mut self, engine: &mut GameEngine, actor: Handle<Actor>) {
         if self.actors.contains(actor) {
             let name = self.actors.get(actor).character().name.clone();
 
@@ -897,7 +887,7 @@ impl Level {
         }
     }
 
-    pub fn handle_message(&mut self, engine: &mut Engine, message: &Message, time: GameTime) {
+    pub fn handle_message(&mut self, engine: &mut GameEngine, message: &Message, time: GameTime) {
         match message {
             Message::GiveNewWeapon { actor, kind } => {
                 self.give_new_weapon(engine, *actor, *kind);
@@ -964,7 +954,7 @@ impl Level {
         }
     }
 
-    pub fn debug_draw(&self, engine: &mut Engine) {
+    pub fn debug_draw(&self, engine: &mut GameEngine) {
         let debug_renderer = &mut engine.renderer.debug_renderer;
 
         if let Some(navmesh) = self.navmesh.as_ref() {

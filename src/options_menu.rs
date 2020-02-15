@@ -3,29 +3,20 @@ use std::{
     sync::mpsc::Sender,
     cell::RefCell,
 };
-use crate::{
-    control_scheme::{
-        ControlScheme,
-        ControlButton,
-    },
-    message::Message,
-    menu::InterfaceTemplates
-};
+use crate::{control_scheme::{
+    ControlScheme,
+    ControlButton,
+}, message::Message, menu::InterfaceTemplates, UINodeHandle, GameEngine, GuiMessage};
 use rg3d::{
-    engine::Engine, event::{
+    event::{
         WindowEvent, Event, MouseScrollDelta,
         MouseButton,
     },
     monitor::VideoMode, window::Fullscreen,
-    core::{
-        pool::Handle,
-    },
     gui::{
-        check_box::CheckBox,
         UINodeContainer,
         text_box::TextBoxBuilder,
         list_box::ListBoxBuilder,
-        UINode,
         grid::{
             GridBuilder,
             Row,
@@ -41,14 +32,16 @@ use rg3d::{
             TextBuilder,
             Text,
         },
-        scroll_bar::ScrollBar,
         button::{
             ButtonBuilder,
             Button,
         },
-        event::{
-            UIEvent,
-            UIEventKind,
+        message::{
+            UiMessageData,
+            ScrollBarMessage,
+            ItemsControlMessage,
+            CheckBoxMessage,
+            ButtonMessage,
         },
         widget::WidgetBuilder,
         HorizontalAlignment,
@@ -58,37 +51,38 @@ use rg3d::{
             TabControlBuilder,
             TabDefinition,
         },
+        node::UINode,
     },
 };
 
 pub struct OptionsMenu {
-    pub window: Handle<UINode>,
+    pub window: UINodeHandle,
     sender: Sender<Message>,
-    sb_sound_volume: Handle<UINode>,
-    pub sb_music_volume: Handle<UINode>,
-    lb_video_modes: Handle<UINode>,
-    cb_fullscreen: Handle<UINode>,
-    cb_spot_shadows: Handle<UINode>,
-    cb_soft_spot_shadows: Handle<UINode>,
-    cb_point_shadows: Handle<UINode>,
-    cb_soft_point_shadows: Handle<UINode>,
-    sb_point_shadow_distance: Handle<UINode>,
-    sb_spot_shadow_distance: Handle<UINode>,
+    sb_sound_volume: UINodeHandle,
+    pub sb_music_volume: UINodeHandle,
+    lb_video_modes: UINodeHandle,
+    cb_fullscreen: UINodeHandle,
+    cb_spot_shadows: UINodeHandle,
+    cb_soft_spot_shadows: UINodeHandle,
+    cb_point_shadows: UINodeHandle,
+    cb_soft_point_shadows: UINodeHandle,
+    sb_point_shadow_distance: UINodeHandle,
+    sb_spot_shadow_distance: UINodeHandle,
     video_modes: Vec<VideoMode>,
     control_scheme: Rc<RefCell<ControlScheme>>,
-    control_scheme_buttons: Vec<Handle<UINode>>,
+    control_scheme_buttons: Vec<UINodeHandle>,
     active_control_button: Option<usize>,
-    sb_mouse_sens: Handle<UINode>,
-    cb_mouse_y_inverse: Handle<UINode>,
-    cb_smooth_mouse: Handle<UINode>,
-    cb_shake_camera: Handle<UINode>,
-    btn_reset_control_scheme: Handle<UINode>,
-    cb_use_hrtf: Handle<UINode>,
-    btn_reset_audio_settings: Handle<UINode>,
+    sb_mouse_sens: UINodeHandle,
+    cb_mouse_y_inverse: UINodeHandle,
+    cb_smooth_mouse: UINodeHandle,
+    cb_shake_camera: UINodeHandle,
+    btn_reset_control_scheme: UINodeHandle,
+    cb_use_hrtf: UINodeHandle,
+    btn_reset_audio_settings: UINodeHandle,
 }
 
 impl OptionsMenu {
-    pub fn new(engine: &mut Engine, interface_templates: &InterfaceTemplates, control_scheme: Rc<RefCell<ControlScheme>>, sender: Sender<Message>) -> Self {
+    pub fn new(engine: &mut GameEngine, interface_templates: &InterfaceTemplates, control_scheme: Rc<RefCell<ControlScheme>>, sender: Sender<Message>) -> Self {
         let video_modes: Vec<VideoMode> = engine.get_window()
             .primary_monitor()
             .video_modes()
@@ -186,13 +180,12 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             cb_fullscreen = interface_templates.check_box.instantiate(ui);
-                            ui.node_mut(cb_fullscreen)
-                                .downcast_mut::<CheckBox>()
-                                .unwrap()
-                                .set_checked(Some(false))
-                                .widget_mut()
-                                .set_row(2)
-                                .set_column(1);
+                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_fullscreen) {
+                                check_box.set_checked(Some(false))
+                                    .widget_mut()
+                                    .set_row(2)
+                                    .set_column(1);
+                            }
                             cb_fullscreen
                         })
 
@@ -207,13 +200,12 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             cb_spot_shadows = interface_templates.check_box.instantiate(ui);
-                            ui.node_mut(cb_spot_shadows)
-                                .downcast_mut::<CheckBox>()
-                                .unwrap()
-                                .set_checked(Some(settings.spot_shadows_enabled))
-                                .widget_mut()
-                                .set_row(3)
-                                .set_column(1);
+                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_spot_shadows) {
+                                check_box.set_checked(Some(settings.spot_shadows_enabled))
+                                    .widget_mut()
+                                    .set_row(3)
+                                    .set_column(1);
+                            }
                             cb_spot_shadows
                         })
 
@@ -228,13 +220,12 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             cb_soft_spot_shadows = interface_templates.check_box.instantiate(ui);
-                            ui.node_mut(cb_soft_spot_shadows)
-                                .downcast_mut::<CheckBox>()
-                                .unwrap()
-                                .set_checked(Some(settings.spot_soft_shadows))
-                                .widget_mut()
-                                .set_row(4)
-                                .set_column(1);
+                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_soft_spot_shadows) {
+                                check_box.set_checked(Some(settings.spot_soft_shadows))
+                                    .widget_mut()
+                                    .set_row(4)
+                                    .set_column(1);
+                            }
                             cb_soft_spot_shadows
                         })
 
@@ -249,16 +240,15 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             sb_spot_shadow_distance = interface_templates.scroll_bar.instantiate(ui);
-                            ui.node_mut(sb_spot_shadow_distance)
-                                .downcast_mut::<ScrollBar>()
-                                .unwrap()
-                                .set_min_value(1.0)
-                                .set_max_value(15.0)
-                                .set_value(settings.spot_shadows_distance)
-                                .set_step(0.25)
-                                .widget_mut()
-                                .set_row(5)
-                                .set_column(1);
+                            if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_spot_shadow_distance) {
+                                scroll_bar.set_min_value(1.0)
+                                    .set_max_value(15.0)
+                                    .set_value(settings.spot_shadows_distance)
+                                    .set_step(0.25)
+                                    .widget_mut()
+                                    .set_row(5)
+                                    .set_column(1);
+                            }
                             sb_spot_shadow_distance
                         })
 
@@ -273,13 +263,12 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             cb_point_shadows = interface_templates.check_box.instantiate(ui);
-                            ui.node_mut(cb_point_shadows)
-                                .downcast_mut::<CheckBox>()
-                                .unwrap()
-                                .set_checked(Some(settings.point_shadows_enabled))
-                                .widget_mut()
-                                .set_row(6)
-                                .set_column(1);
+                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_point_shadows) {
+                                check_box.set_checked(Some(settings.point_shadows_enabled))
+                                    .widget_mut()
+                                    .set_row(6)
+                                    .set_column(1);
+                            }
                             cb_point_shadows
                         })
 
@@ -294,13 +283,12 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             cb_soft_point_shadows = interface_templates.check_box.instantiate(ui);
-                            ui.node_mut(cb_soft_point_shadows)
-                                .downcast_mut::<CheckBox>()
-                                .unwrap()
-                                .set_checked(Some(settings.point_soft_shadows))
-                                .widget_mut()
-                                .set_row(7)
-                                .set_column(1);
+                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_soft_point_shadows) {
+                                check_box.set_checked(Some(settings.point_soft_shadows))
+                                    .widget_mut()
+                                    .set_row(7)
+                                    .set_column(1);
+                            }
                             cb_soft_point_shadows
                         })
 
@@ -315,16 +303,15 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             sb_point_shadow_distance = interface_templates.scroll_bar.instantiate(ui);
-                            ui.node_mut(sb_point_shadow_distance)
-                                .downcast_mut::<ScrollBar>()
-                                .unwrap()
-                                .set_min_value(1.0)
-                                .set_max_value(15.0)
-                                .set_value(settings.point_shadows_distance)
-                                .set_step(0.25)
-                                .widget_mut()
-                                .set_row(8)
-                                .set_column(1);
+                            if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_point_shadow_distance) {
+                                scroll_bar.set_min_value(1.0)
+                                    .set_max_value(15.0)
+                                    .set_value(settings.point_shadows_distance)
+                                    .set_step(0.25)
+                                    .widget_mut()
+                                    .set_row(8)
+                                    .set_column(1);
+                            }
                             sb_point_shadow_distance
                         }))
                         .add_row(Row::strict(200.0))
@@ -360,16 +347,15 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             sb_sound_volume = interface_templates.scroll_bar.instantiate(ui);
-                            ui.node_mut(sb_sound_volume)
-                                .downcast_mut::<ScrollBar>()
-                                .unwrap()
-                                .set_min_value(0.0)
-                                .set_max_value(1.0)
-                                .set_value(1.0)
-                                .set_step(0.025)
-                                .widget_mut()
-                                .set_row(0)
-                                .set_column(1);
+                            if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_sound_volume) {
+                                scroll_bar.set_min_value(0.0)
+                                    .set_max_value(1.0)
+                                    .set_value(1.0)
+                                    .set_step(0.025)
+                                    .widget_mut()
+                                    .set_row(0)
+                                    .set_column(1);
+                            }
                             sb_sound_volume
                         })
                         .with_child(TextBuilder::new(WidgetBuilder::new()
@@ -381,16 +367,15 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             sb_music_volume = interface_templates.scroll_bar.instantiate(ui);
-                            ui.node_mut(sb_music_volume)
-                                .downcast_mut::<ScrollBar>()
-                                .unwrap()
-                                .set_min_value(0.0)
-                                .set_max_value(1.0)
-                                .set_value(0.0)
-                                .set_step(0.025)
-                                .widget_mut()
-                                .set_row(1)
-                                .set_column(1);
+                            if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_music_volume) {
+                                scroll_bar.set_min_value(0.0)
+                                    .set_max_value(1.0)
+                                    .set_value(0.0)
+                                    .set_step(0.025)
+                                    .widget_mut()
+                                    .set_row(1)
+                                    .set_column(1);
+                            }
                             sb_music_volume
                         })
                         .with_child(TextBuilder::new(WidgetBuilder::new()
@@ -402,13 +387,12 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             cb_use_hrtf = interface_templates.check_box.instantiate(ui);
-                            ui.node_mut(cb_use_hrtf)
-                                .downcast_mut::<CheckBox>()
-                                .unwrap()
-                                .set_checked(Some(true))
-                                .widget_mut()
-                                .set_row(2)
-                                .set_column(1);
+                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_use_hrtf) {
+                                check_box.set_checked(Some(true))
+                                    .widget_mut()
+                                    .set_row(2)
+                                    .set_column(1);
+                            }
                             cb_use_hrtf
                         })
                         .with_child({
@@ -472,16 +456,15 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             sb_mouse_sens = interface_templates.scroll_bar.instantiate(ui);
-                            ui.node_mut(sb_mouse_sens)
-                                .downcast_mut::<ScrollBar>()
-                                .unwrap()
-                                .set_min_value(0.05)
-                                .set_max_value(2.0)
-                                .set_value(control_scheme.borrow().mouse_sens)
-                                .set_step(0.05)
-                                .widget_mut()
-                                .set_row(0)
-                                .set_column(1);
+                            if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_mouse_sens) {
+                                scroll_bar.set_min_value(0.05)
+                                    .set_max_value(2.0)
+                                    .set_value(control_scheme.borrow().mouse_sens)
+                                    .set_step(0.05)
+                                    .widget_mut()
+                                    .set_row(0)
+                                    .set_column(1);
+                            }
                             sb_mouse_sens
                         })
                         .with_child(TextBuilder::new(WidgetBuilder::new()
@@ -493,13 +476,12 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             cb_mouse_y_inverse = interface_templates.check_box.instantiate(ui);
-                            ui.node_mut(cb_mouse_y_inverse)
-                                .downcast_mut::<CheckBox>()
-                                .unwrap()
-                                .set_checked(Some(control_scheme.borrow().mouse_y_inverse))
-                                .widget_mut()
-                                .set_row(1)
-                                .set_column(1);
+                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_mouse_y_inverse) {
+                                check_box.set_checked(Some(control_scheme.borrow().mouse_y_inverse))
+                                    .widget_mut()
+                                    .set_row(1)
+                                    .set_column(1);
+                            }
                             cb_mouse_y_inverse
                         })
                         .with_child(TextBuilder::new(WidgetBuilder::new()
@@ -511,13 +493,12 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             cb_smooth_mouse = interface_templates.check_box.instantiate(ui);
-                            ui.node_mut(cb_smooth_mouse)
-                                .downcast_mut::<CheckBox>()
-                                .unwrap()
-                                .set_checked(Some(control_scheme.borrow().smooth_mouse))
-                                .widget_mut()
-                                .set_row(2)
-                                .set_column(1);
+                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_smooth_mouse) {
+                                check_box.set_checked(Some(control_scheme.borrow().smooth_mouse))
+                                    .widget_mut()
+                                    .set_row(2)
+                                    .set_column(1);
+                            }
                             cb_smooth_mouse
                         })
                         .with_child(TextBuilder::new(WidgetBuilder::new()
@@ -529,13 +510,12 @@ impl OptionsMenu {
                             .build(ui))
                         .with_child({
                             cb_shake_camera = interface_templates.check_box.instantiate(ui);
-                            ui.node_mut(cb_shake_camera)
-                                .downcast_mut::<CheckBox>()
-                                .unwrap()
-                                .set_checked(Some(control_scheme.borrow().shake_camera))
-                                .widget_mut()
-                                .set_row(3)
-                                .set_column(1);
+                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_shake_camera) {
+                                check_box.set_checked(Some(control_scheme.borrow().shake_camera))
+                                    .widget_mut()
+                                    .set_row(3)
+                                    .set_column(1);
+                            }
                             cb_shake_camera
                         })
                         .with_child({
@@ -560,7 +540,7 @@ impl OptionsMenu {
             })
             .build(ui);
 
-        let options_window: Handle<UINode> = WindowBuilder::new(WidgetBuilder::new()
+        let options_window: UINodeHandle = WindowBuilder::new(WidgetBuilder::new()
             .with_width(500.0))
             .with_title(WindowTitle::Text("Options"))
             .open(false)
@@ -594,16 +574,15 @@ impl OptionsMenu {
         }
     }
 
-    pub fn sync_to_model(&mut self, engine: &mut Engine) {
+    pub fn sync_to_model(&mut self, engine: &mut GameEngine) {
         let ui = &mut engine.user_interface;
         let control_scheme = self.control_scheme.borrow();
         let settings = engine.renderer.get_quality_settings();
 
-        let mut sync_check_box = |handle: Handle<UINode>, value: bool| {
-            ui.node_mut(handle)
-                .downcast_mut::<CheckBox>()
-                .unwrap()
-                .set_checked(Some(value));
+        let mut sync_check_box = |handle: UINodeHandle, value: bool| {
+            if let UINode::CheckBox(check_box) = ui.node_mut(handle) {
+                check_box.set_checked(Some(value));
+            }
         };
         sync_check_box(self.cb_spot_shadows, settings.spot_shadows_enabled);
         sync_check_box(self.cb_soft_spot_shadows, settings.spot_soft_shadows);
@@ -619,11 +598,10 @@ impl OptionsMenu {
         };
         sync_check_box(self.cb_use_hrtf, is_hrtf);
 
-        let mut sync_scroll_bar = |handle: Handle<UINode>, value: f32| {
-            ui.node_mut(handle)
-                .downcast_mut::<ScrollBar>()
-                .unwrap()
-                .set_value(value);
+        let mut sync_scroll_bar = |handle: UINodeHandle, value: f32| {
+            if let UINode::ScrollBar(scroll_bar) = ui.node_mut(handle) {
+                scroll_bar.set_value(value);
+            }
         };
         sync_scroll_bar(self.sb_point_shadow_distance, settings.point_shadows_distance);
         sync_scroll_bar(self.sb_spot_shadow_distance, settings.spot_shadows_distance);
@@ -631,19 +609,16 @@ impl OptionsMenu {
         sync_scroll_bar(self.sb_sound_volume, engine.sound_context.lock().unwrap().master_gain());
 
         for (btn, def) in self.control_scheme_buttons.iter().zip(self.control_scheme.borrow().buttons().iter()) {
-            let text = ui.node(*btn)
-                .downcast_ref::<Button>()
-                .unwrap()
-                .content();
-
-            ui.node_mut(text)
-                .downcast_mut::<Text>()
-                .unwrap()
-                .set_text(def.button.name());
+            if let UINode::Button(button) = ui.node(*btn) {
+                let text = button.content();
+                if let UINode::Text(text) = ui.node_mut(text) {
+                    text.set_text(def.button.name());
+                }
+            }
         }
     }
 
-    pub fn process_input_event(&mut self, engine: &mut Engine, event: &Event<()>) {
+    pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             let mut control_button = None;
 
@@ -679,17 +654,12 @@ impl OptionsMenu {
 
             if let Some(control_button) = control_button {
                 if let Some(active_control_button) = self.active_control_button {
-                    let button_txt = engine.user_interface
-                        .node_mut(self.control_scheme_buttons[active_control_button])
-                        .downcast_mut::<Button>()
-                        .unwrap()
-                        .content();
-
-                    engine.user_interface
-                        .node_mut(button_txt)
-                        .downcast_mut::<Text>()
-                        .unwrap()
-                        .set_text(control_button.name());
+                    if let UINode::Button(button) = engine.user_interface.node_mut(self.control_scheme_buttons[active_control_button]) {
+                        let button_txt = button.content();
+                        if let UINode::Text(button_txt) = engine.user_interface.node_mut(button_txt) {
+                            button_txt.set_text(control_button.name());
+                        }
+                    }
 
                     self.control_scheme
                         .borrow_mut()
@@ -702,80 +672,83 @@ impl OptionsMenu {
         }
     }
 
-    pub fn handle_ui_event(&mut self, engine: &mut Engine, event: &UIEvent) {
+    pub fn handle_ui_event(&mut self, engine: &mut GameEngine, message: &GuiMessage) {
         let old_settings = engine.renderer.get_quality_settings();
         let mut settings = old_settings;
 
-        match event.kind {
-            UIEventKind::NumericValueChanged { new_value, .. } => {
-                if event.source() == self.sb_sound_volume {
-                    engine.sound_context.lock().unwrap().set_master_gain(new_value)
-                } else if event.source() == self.sb_point_shadow_distance {
-                    settings.point_shadows_distance = new_value;
-                } else if event.source() == self.sb_spot_shadow_distance {
-                    settings.spot_shadows_distance = new_value;
-                } else if event.source() == self.sb_mouse_sens {
-                    self.control_scheme
-                        .borrow_mut()
-                        .mouse_sens = new_value;
-                } else if event.source() == self.sb_music_volume {
-                    self.sender
-                        .send(Message::SetMusicVolume {
-                            volume: new_value
-                        })
-                        .unwrap();
-                }
-            }
-            UIEventKind::SelectionChanged(new_value) => {
-                if event.source() == self.lb_video_modes {
-                    if let Some(index) = new_value {
-                        let video_mode = self.video_modes[index].clone();
-                        engine.get_window().set_fullscreen(Some(Fullscreen::Exclusive(video_mode)))
+        match &message.data {
+            UiMessageData::ScrollBar(prop) => {
+                if let ScrollBarMessage::Value(new_value) = prop {
+                    if message.source() == self.sb_sound_volume {
+                        engine.sound_context.lock().unwrap().set_master_gain(*new_value)
+                    } else if message.source() == self.sb_point_shadow_distance {
+                        settings.point_shadows_distance = *new_value;
+                    } else if message.source() == self.sb_spot_shadow_distance {
+                        settings.spot_shadows_distance = *new_value;
+                    } else if message.source() == self.sb_mouse_sens {
+                        self.control_scheme
+                            .borrow_mut()
+                            .mouse_sens = *new_value;
+                    } else if message.source() == self.sb_music_volume {
+                        self.sender
+                            .send(Message::SetMusicVolume {
+                                volume: *new_value
+                            })
+                            .unwrap();
                     }
                 }
             }
-            UIEventKind::Checked(value) => {
-                let mut control_scheme = self.control_scheme.borrow_mut();
-                if event.source() == self.cb_point_shadows {
-                    settings.point_shadows_enabled = value.unwrap_or(false);
-                } else if event.source() == self.cb_spot_shadows {
-                    settings.spot_shadows_enabled = value.unwrap_or(false);
-                } else if event.source() == self.cb_soft_spot_shadows {
-                    settings.spot_soft_shadows = value.unwrap_or(false);
-                } else if event.source() == self.cb_soft_point_shadows {
-                    settings.point_soft_shadows = value.unwrap_or(false);
-                } else if event.source() == self.cb_mouse_y_inverse {
-                    control_scheme.mouse_y_inverse = value.unwrap_or(false);
-                } else if event.source() == self.cb_smooth_mouse {
-                    control_scheme.smooth_mouse = value.unwrap_or(false);
-                } else if event.source() == self.cb_shake_camera {
-                    control_scheme.shake_camera = value.unwrap_or(false);
+            UiMessageData::ItemsControl(msg) => {
+                if let ItemsControlMessage::SelectionChanged(new_value) = msg {
+                    if message.source() == self.lb_video_modes {
+                        if let Some(index) = new_value {
+                            let video_mode = self.video_modes[*index].clone();
+                            engine.get_window().set_fullscreen(Some(Fullscreen::Exclusive(video_mode)))
+                        }
+                    }
                 }
             }
-            UIEventKind::Click => {
-                if event.source() == self.btn_reset_control_scheme {
-                    self.control_scheme.borrow_mut().reset();
-                    self.sync_to_model(engine);
-                } else if event.source() == self.btn_reset_audio_settings {
-                    engine.sound_context.lock().unwrap().set_master_gain(1.0);
-                    self.sync_to_model(engine);
+            UiMessageData::CheckBox(msg) => {
+                if let CheckBoxMessage::Checked(value) = msg {
+                    let mut control_scheme = self.control_scheme.borrow_mut();
+                    if message.source() == self.cb_point_shadows {
+                        settings.point_shadows_enabled = value.unwrap_or(false);
+                    } else if message.source() == self.cb_spot_shadows {
+                        settings.spot_shadows_enabled = value.unwrap_or(false);
+                    } else if message.source() == self.cb_soft_spot_shadows {
+                        settings.spot_soft_shadows = value.unwrap_or(false);
+                    } else if message.source() == self.cb_soft_point_shadows {
+                        settings.point_soft_shadows = value.unwrap_or(false);
+                    } else if message.source() == self.cb_mouse_y_inverse {
+                        control_scheme.mouse_y_inverse = value.unwrap_or(false);
+                    } else if message.source() == self.cb_smooth_mouse {
+                        control_scheme.smooth_mouse = value.unwrap_or(false);
+                    } else if message.source() == self.cb_shake_camera {
+                        control_scheme.shake_camera = value.unwrap_or(false);
+                    }
                 }
+            }
+            UiMessageData::Button(msg) => {
+                if let ButtonMessage::Click = msg {
+                    if message.source() == self.btn_reset_control_scheme {
+                        self.control_scheme.borrow_mut().reset();
+                        self.sync_to_model(engine);
+                    } else if message.source() == self.btn_reset_audio_settings {
+                        engine.sound_context.lock().unwrap().set_master_gain(1.0);
+                        self.sync_to_model(engine);
+                    }
 
-                for (i, button) in self.control_scheme_buttons.iter().enumerate() {
-                    if event.source() == *button {
-                        let text = engine.user_interface
-                            .node(*button)
-                            .downcast_ref::<Button>()
-                            .unwrap()
-                            .content();
+                    for (i, button) in self.control_scheme_buttons.iter().enumerate() {
+                        if message.source() == *button {
+                            if let UINode::Button(button) = engine.user_interface.node(*button) {
+                                let text = button.content();
+                                if let UINode::Text(text) = engine.user_interface.node_mut(text) {
+                                    text.set_text("[WAITING INPUT]");
+                                }
+                            }
 
-                        engine.user_interface
-                            .node_mut(text)
-                            .downcast_mut::<Text>()
-                            .unwrap()
-                            .set_text("[WAITING INPUT]");
-
-                        self.active_control_button = Some(i);
+                            self.active_control_button = Some(i);
+                        }
                     }
                 }
             }

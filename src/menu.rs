@@ -8,25 +8,14 @@ use std::{
     },
     cell::RefCell,
 };
-use crate::{
-    control_scheme::ControlScheme,
-    message::Message,
-    match_menu::MatchMenu,
-    options_menu::OptionsMenu,
-};
+use crate::{control_scheme::ControlScheme, message::Message, match_menu::MatchMenu, options_menu::OptionsMenu, UINodeHandle, GameEngine, UIControlTemplate, Gui, GuiMessage, StubUiMessage, StubUiNode};
 use rg3d::{
     resource::{
         texture::TextureKind,
     },
-    engine::Engine,
     event::{
         WindowEvent,
         Event,
-    },
-    core::{
-        pool::Handle,
-        math::vec2::Vec2,
-        color::Color
     },
     gui::{
         ttf::Font,
@@ -34,8 +23,7 @@ use rg3d::{
         ControlTemplate,
         style::{StyleBuilder, Style},
         check_box::CheckBoxBuilder,
-        UserInterface,
-        UINode,
+        Control,
         grid::{
             GridBuilder,
             Row,
@@ -49,10 +37,11 @@ use rg3d::{
         },
         scroll_bar::ScrollBarBuilder,
         button::ButtonBuilder,
-        Visibility,
-        event::{
-            UIEvent,
-            UIEventKind,
+        message::{
+            UiMessage,
+            UiMessageData,
+            WindowMessage,
+            ButtonMessage,
         },
         widget::{
             WidgetBuilder,
@@ -61,32 +50,30 @@ use rg3d::{
         HorizontalAlignment,
         Builder,
         image::ImageBuilder,
-        border::BorderBuilder,
-        brush::{Brush, GradientPoint}
     },
     utils,
 };
 
 pub struct Menu {
     sender: Sender<Message>,
-    root: Handle<UINode>,
-    btn_new_game: Handle<UINode>,
-    btn_save_game: Handle<UINode>,
-    btn_settings: Handle<UINode>,
-    btn_load_game: Handle<UINode>,
-    btn_quit_game: Handle<UINode>,
+    root: UINodeHandle,
+    btn_new_game: UINodeHandle,
+    btn_save_game: UINodeHandle,
+    btn_settings: UINodeHandle,
+    btn_load_game: UINodeHandle,
+    btn_quit_game: UINodeHandle,
     options_menu: OptionsMenu,
     match_menu: MatchMenu,
 }
 
 pub struct InterfaceTemplates {
     pub style: Rc<Style>,
-    pub scroll_bar: ControlTemplate,
-    pub check_box: ControlTemplate,
+    pub scroll_bar: UIControlTemplate,
+    pub check_box: UIControlTemplate,
 }
 
 impl Menu {
-    pub fn new(engine: &mut Engine, control_scheme: Rc<RefCell<ControlScheme>>, sender: Sender<Message>) -> Self {
+    pub fn new(engine: &mut GameEngine, control_scheme: Rc<RefCell<ControlScheme>>, sender: Sender<Message>) -> Self {
         let frame_size = engine.renderer.get_frame_size();
 
         let font: Font = Font::from_file(
@@ -96,7 +83,7 @@ impl Menu {
         let font = Arc::new(Mutex::new(font));
 
         let common_style = Rc::new(StyleBuilder::new()
-            .with_setter(Widget::MARGIN, Box::new(Thickness::uniform(2.0)))
+            .with_setter(Widget::<StubUiMessage, StubUiNode>::MARGIN, Box::new(Thickness::uniform(2.0)))
             .build());
 
         let interface_templates = InterfaceTemplates {
@@ -135,7 +122,7 @@ impl Menu {
         let btn_save_game;
         let btn_load_game;
         let btn_quit_game;
-        let root: Handle<UINode> = GridBuilder::new(WidgetBuilder::new()
+        let root: UINodeHandle = GridBuilder::new(WidgetBuilder::new()
             .with_width(frame_size.0 as f32)
             .with_height(frame_size.1 as f32)
             .with_child(WindowBuilder::new(WidgetBuilder::new()
@@ -225,44 +212,44 @@ impl Menu {
         }
     }
 
-    pub fn set_visible(&mut self, ui: &mut UserInterface, visible: bool) {
-        let visibility = if visible { Visibility::Visible } else { Visibility::Collapsed };
+    pub fn set_visible(&mut self, ui: &mut Gui, visible: bool) {
         ui.node_mut(self.root)
             .widget_mut()
-            .set_visibility(visibility);
+            .set_visibility(visible);
 
         if !visible {
-            ui.send_event(UIEvent::targeted(self.options_menu.window, UIEventKind::Closed));
-            ui.send_event(UIEvent::targeted(self.match_menu.window, UIEventKind::Closed));
+            ui.post_message(UiMessage::targeted(self.options_menu.window, UiMessageData::Window(WindowMessage::Closed)));
+            ui.post_message(UiMessage::targeted(self.match_menu.window, UiMessageData::Window(WindowMessage::Closed)));
         }
     }
 
-    pub fn is_visible(&self, ui: &UserInterface) -> bool {
+    pub fn is_visible(&self, ui: &Gui) -> bool {
         ui.node(self.root)
             .widget()
-            .get_visibility() == Visibility::Visible
+            .visibility()
     }
 
-    pub fn process_input_event(&mut self, engine: &mut Engine, event: &Event<()>) {
+    pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             if let WindowEvent::Resized(new_size) = event {
                 engine.user_interface
                     .node_mut(self.root)
                     .widget_mut()
-                    .set_width(new_size.width as f32)
-                    .set_height(new_size.height as f32);
+                    .set_width_mut(new_size.width as f32)
+                    .set_height_mut(new_size.height as f32);
             }
         }
 
         self.options_menu.process_input_event(engine, event);
     }
 
-    pub fn handle_ui_event(&mut self, engine: &mut Engine, event: &UIEvent) {
-        match event.kind {
-            UIEventKind::Click => {
+    pub fn handle_ui_event(&mut self, engine: &mut GameEngine, event: &GuiMessage) {
+        if let UiMessageData::Button(msg) = &event.data {
+            if let ButtonMessage::Click = msg {
                 if event.source() == self.btn_new_game {
                     engine.user_interface
-                        .send_event(UIEvent::targeted(self.match_menu.window, UIEventKind::Opened));
+                        .post_message(UiMessage::targeted(
+                            self.match_menu.window, UiMessageData::Window(WindowMessage::Opened)));
                 } else if event.source() == self.btn_save_game {
                     self.sender
                         .send(Message::SaveGame)
@@ -277,10 +264,10 @@ impl Menu {
                         .unwrap();
                 } else if event.source() == self.btn_settings {
                     engine.user_interface
-                        .send_event(UIEvent::targeted(self.options_menu.window, UIEventKind::Opened));
+                        .post_message(UiMessage::targeted(
+                            self.options_menu.window, UiMessageData::Window(WindowMessage::Opened)));
                 }
             }
-            _ => ()
         }
 
         self.options_menu.handle_ui_event(engine, event);

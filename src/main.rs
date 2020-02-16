@@ -420,8 +420,7 @@ impl Game {
 
     pub fn create_debug_ui(&mut self) {
         self.debug_text = TextBuilder::new(WidgetBuilder::new()
-            .with_width(400.0)
-            .with_height(200.0))
+            .with_width(400.0))
             .build(&mut self.engine.user_interface);
     }
 

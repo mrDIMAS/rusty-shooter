@@ -24,8 +24,6 @@ use rg3d::{
         scroll_bar::Orientation,
         VerticalAlignment,
         Thickness,
-        Builder,
-        UINodeContainer,
         brush::Brush,
         node::UINode,
         Control
@@ -65,8 +63,6 @@ impl Hud {
             35.0,
             Font::default_char_set()).unwrap();
         let font = Arc::new(Mutex::new(font));
-
-
 
         let health;
         let armor;

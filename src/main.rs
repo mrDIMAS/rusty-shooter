@@ -20,6 +20,7 @@ mod control_scheme;
 mod match_menu;
 mod message;
 mod options_menu;
+mod gui;
 
 use crate::{
     character::AsCharacter,
@@ -73,9 +74,6 @@ use rg3d::{
         widget::{WidgetBuilder, Widget},
         node::UINode,
         text::TextBuilder,
-        Builder,
-        UINodeContainer,
-        ControlTemplate,
         UserInterface,
         Control,
         message::UiMessage,
@@ -88,32 +86,27 @@ use rg3d::{
     engine::Engine,
 };
 
-pub struct StubUiMessage {}
+#[derive(Debug)]
+pub struct CustomUiMessage {}
 
-pub struct StubUiNode {
-    widget: Widget<StubUiMessage, StubUiNode>
-}
+#[derive(Debug)]
+pub enum DummyUiNode {}
 
-impl Control<StubUiMessage, StubUiNode> for StubUiNode {
-    fn widget(&self) -> &Widget<StubUiMessage, StubUiNode> {
+impl Control<CustomUiMessage, DummyUiNode> for DummyUiNode {
+    fn widget(&self) -> &Widget<CustomUiMessage, DummyUiNode> {
         unimplemented!()
     }
 
-    fn widget_mut(&mut self) -> &mut Widget<StubUiMessage, StubUiNode> {
-        unimplemented!()
-    }
-
-    fn raw_copy(&self) -> UINode<StubUiMessage, StubUiNode> {
+    fn widget_mut(&mut self) -> &mut Widget<CustomUiMessage, DummyUiNode> {
         unimplemented!()
     }
 }
 
 // Configure engine
-pub type UINodeHandle = Handle<UINode<StubUiMessage, StubUiNode>>;
-pub type GameEngine = Engine<StubUiMessage, StubUiNode>;
-pub type UIControlTemplate = ControlTemplate<StubUiMessage, StubUiNode>;
-pub type Gui = UserInterface<StubUiMessage, StubUiNode>;
-pub type GuiMessage = UiMessage<StubUiMessage, StubUiNode>;
+pub type UINodeHandle = Handle<UINode<CustomUiMessage, DummyUiNode>>;
+pub type GameEngine = Engine<CustomUiMessage, DummyUiNode>;
+pub type Gui = UserInterface<CustomUiMessage, DummyUiNode>;
+pub type GuiMessage = UiMessage<CustomUiMessage, DummyUiNode>;
 
 pub struct Game {
     menu: Menu,

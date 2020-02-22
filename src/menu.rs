@@ -8,7 +8,16 @@ use std::{
     },
     cell::RefCell,
 };
-use crate::{control_scheme::ControlScheme, message::Message, match_menu::MatchMenu, options_menu::OptionsMenu, UINodeHandle, GameEngine, UIControlTemplate, Gui, GuiMessage, StubUiMessage, StubUiNode};
+use crate::{
+    message::Message,
+    match_menu::MatchMenu,
+    options_menu::OptionsMenu,
+    UINodeHandle,
+    GameEngine,
+    Gui,
+    GuiMessage,
+    control_scheme::ControlScheme
+};
 use rg3d::{
     resource::{
         texture::TextureKind,
@@ -19,9 +28,6 @@ use rg3d::{
     },
     gui::{
         ttf::Font,
-        UINodeContainer,
-        ControlTemplate,
-        style::{StyleBuilder, Style},
         check_box::CheckBoxBuilder,
         Control,
         grid::{
@@ -35,8 +41,9 @@ use rg3d::{
             WindowBuilder,
             WindowTitle,
         },
-        scroll_bar::ScrollBarBuilder,
+        scroll_bar::{ScrollBarBuilder, Orientation},
         button::ButtonBuilder,
+        scroll_viewer::ScrollViewerBuilder,
         message::{
             UiMessage,
             UiMessageData,
@@ -45,14 +52,13 @@ use rg3d::{
         },
         widget::{
             WidgetBuilder,
-            Widget,
         },
         HorizontalAlignment,
-        Builder,
         image::ImageBuilder,
     },
     utils,
 };
+use rg3d::engine::resource_manager::ResourceManager;
 
 pub struct Menu {
     sender: Sender<Message>,
@@ -66,10 +72,39 @@ pub struct Menu {
     match_menu: MatchMenu,
 }
 
-pub struct InterfaceTemplates {
-    pub style: Rc<Style>,
-    pub scroll_bar: UIControlTemplate,
-    pub check_box: UIControlTemplate,
+pub fn create_scroll_bar(ui: &mut Gui, resource_manager: &mut ResourceManager, orientation: Orientation) -> UINodeHandle {
+    let mut wb = WidgetBuilder::new();
+    match orientation {
+        Orientation::Vertical => wb = wb.with_width(30.0),
+        Orientation::Horizontal => wb = wb.with_height(30.0),
+    }
+    ScrollBarBuilder::new(wb)
+        .with_orientation(orientation)
+        .show_value(true)
+        .with_indicator(ImageBuilder::new(WidgetBuilder::new())
+            .with_opt_texture(utils::into_any_arc(resource_manager.request_texture("data/ui/circle.png", TextureKind::RGBA8)))
+            .build(ui))
+        .build(ui)
+}
+
+pub fn create_check_box(ui: &mut Gui, resource_manager: &mut ResourceManager) -> UINodeHandle {
+    CheckBoxBuilder::new(WidgetBuilder::new()
+        .with_margin(Thickness::uniform(2.0))
+        .with_width(24.0)
+        .with_height(24.0)
+        .with_vertical_alignment(VerticalAlignment::Center)
+        .with_horizontal_alignment(HorizontalAlignment::Left))
+        .with_check_mark(ImageBuilder::new(WidgetBuilder::new())
+            .with_opt_texture(utils::into_any_arc(resource_manager.request_texture("data/ui/check_mark.png", TextureKind::RGBA8)))
+            .build(ui))
+        .build(ui)
+}
+
+pub fn create_scroll_viewer(ui: &mut Gui, resource_manager: &mut ResourceManager) -> UINodeHandle {
+    ScrollViewerBuilder::new(WidgetBuilder::new())
+        .with_horizontal_scroll_bar(create_scroll_bar(ui, resource_manager, Orientation::Horizontal))
+        .with_vertical_scroll_bar(create_scroll_bar(ui, resource_manager, Orientation::Vertical))
+        .build(ui)
 }
 
 impl Menu {
@@ -81,39 +116,6 @@ impl Menu {
             30.0,
             Font::default_char_set()).unwrap();
         let font = Arc::new(Mutex::new(font));
-
-        let common_style = Rc::new(StyleBuilder::new()
-            .with_setter(Widget::<StubUiMessage, StubUiNode>::MARGIN, Box::new(Thickness::uniform(2.0)))
-            .build());
-
-        let interface_templates = InterfaceTemplates {
-            style: common_style.clone(),
-            scroll_bar: {
-                let mut scroll_bar_template = ControlTemplate::new();
-                ScrollBarBuilder::new(WidgetBuilder::new()
-                    .with_style(common_style.clone()))
-                    .show_value(true)
-                    .with_indicator(ImageBuilder::new(WidgetBuilder::new())
-                        .with_opt_texture(utils::into_any_arc(engine.resource_manager.request_texture("data/ui/circle.png", TextureKind::RGBA8)))
-                        .build(&mut scroll_bar_template))
-                    .build(&mut scroll_bar_template);
-                scroll_bar_template
-            },
-            check_box: {
-                let mut check_box_template = ControlTemplate::new();
-                CheckBoxBuilder::new(WidgetBuilder::new()
-                    .with_style(common_style.clone())
-                    .with_width(24.0)
-                    .with_height(24.0)
-                    .with_vertical_alignment(VerticalAlignment::Center)
-                    .with_horizontal_alignment(HorizontalAlignment::Left))
-                    .with_check_mark(ImageBuilder::new(WidgetBuilder::new())
-                        .with_opt_texture(utils::into_any_arc(engine.resource_manager.request_texture("data/ui/check_mark.png", TextureKind::RGBA8)))
-                        .build(&mut check_box_template))
-                    .build(&mut check_box_template);
-                check_box_template
-            },
-        };
 
         let ui = &mut engine.user_interface;
 
@@ -207,8 +209,8 @@ impl Menu {
             btn_save_game,
             btn_load_game,
             btn_quit_game,
-            options_menu: OptionsMenu::new(engine, &interface_templates, control_scheme.clone(), sender.clone()),
-            match_menu: MatchMenu::new(&mut engine.user_interface, &interface_templates, sender),
+            options_menu: OptionsMenu::new(engine, control_scheme.clone(), sender.clone()),
+            match_menu: MatchMenu::new(&mut engine.user_interface, &mut engine.resource_manager, sender),
         }
     }
 

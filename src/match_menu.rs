@@ -1,5 +1,7 @@
 use rg3d::{
     gui::{
+        combobox::ComboBoxBuilder,
+        Thickness,
         window::{
             WindowBuilder,
             WindowTitle,
@@ -10,25 +12,33 @@ use rg3d::{
             Row,
             Column,
         },
-        Builder,
+        scroll_bar::Orientation,
         text::TextBuilder,
         message::{
             UiMessageData,
             ButtonMessage,
         },
         button::ButtonBuilder,
-        UINodeContainer,
         Control,
         node::UINode,
+        VerticalAlignment,
+        text_box::TextBoxBuilder,
+        decorator::DecoratorBuilder,
+        border::BorderBuilder,
+        HorizontalAlignment,
     },
+    engine::resource_manager::ResourceManager,
 };
 use std::sync::mpsc::Sender;
 use crate::{
-    message::Message, MatchOptions,
-    menu::InterfaceTemplates,
-    DeathMatch, UINodeHandle,
-    GameEngine, Gui,
+    message::Message,
+    MatchOptions,
+    DeathMatch,
+    UINodeHandle,
+    GameEngine,
+    Gui,
     GuiMessage,
+    menu::create_scroll_bar,
 };
 
 pub struct MatchMenu {
@@ -40,7 +50,7 @@ pub struct MatchMenu {
 }
 
 impl MatchMenu {
-    pub fn new(ui: &mut Gui, interface_templates: &InterfaceTemplates, sender: Sender<Message>) -> Self {
+    pub fn new(ui: &mut Gui, resource_manager: &mut ResourceManager, sender: Sender<Message>) -> Self {
         let common_row = Row::strict(36.0);
 
         let sb_frag_limit;
@@ -52,13 +62,12 @@ impl MatchMenu {
             .open(false)
             .with_content(GridBuilder::new(WidgetBuilder::new()
                 .with_child(TextBuilder::new(WidgetBuilder::new()
-                    .with_style(interface_templates.style.clone())
                     .on_row(0)
                     .on_column(0))
                     .with_text("Time Limit (min)")
                     .build(ui))
                 .with_child({
-                    sb_time_limit = interface_templates.scroll_bar.instantiate(ui);
+                    sb_time_limit = create_scroll_bar(ui, resource_manager, Orientation::Horizontal);
                     if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_time_limit) {
                         scroll_bar.set_value(10.0)
                             .set_min_value(5.0)
@@ -66,18 +75,18 @@ impl MatchMenu {
                             .set_step(1.0)
                             .widget_mut()
                             .set_row(0)
-                            .set_column(1);
+                            .set_column(1)
+                            .set_margin(Thickness::uniform(2.0));
                     }
                     sb_time_limit
                 })
                 .with_child(TextBuilder::new(WidgetBuilder::new()
-                    .with_style(interface_templates.style.clone())
                     .on_row(1)
                     .on_column(0))
                     .with_text("Frag Limit")
                     .build(ui))
                 .with_child({
-                    sb_frag_limit = interface_templates.scroll_bar.instantiate(ui);
+                    sb_frag_limit = create_scroll_bar(ui, resource_manager, Orientation::Horizontal);
                     if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_frag_limit) {
                         scroll_bar.set_value(30.0)
                             .set_step(1.0)
@@ -85,14 +94,52 @@ impl MatchMenu {
                             .set_max_value(200.0)
                             .widget_mut()
                             .set_row(1)
-                            .set_column(1);
+                            .set_column(1)
+                            .set_margin(Thickness::uniform(2.0));
                     }
                     sb_frag_limit
                 })
+                .with_child(TextBuilder::new(WidgetBuilder::new()
+                    .on_row(2)
+                    .on_column(0)
+                    .with_margin(Thickness::uniform(2.0)))
+                    .with_text("Player Name")
+                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                    .build(ui))
+                .with_child(TextBoxBuilder::new(WidgetBuilder::new()
+                    .on_row(2)
+                    .on_column(1)
+                    .with_margin(Thickness::uniform(2.0)))
+                    .with_text("Unnamed Player".to_owned())
+                    .build(ui))
+                .with_child(ComboBoxBuilder::new(WidgetBuilder::new()
+                    .on_column(1)
+                    .on_row(3))
+                    .with_items({
+                        let mut items = Vec::new();
+
+                        items.push(ButtonBuilder::new(WidgetBuilder::new()
+                            .with_height(30.0))
+                            .with_text("FOOOOBAR")
+                            .build(ui));
+
+                        items.push(ButtonBuilder::new(WidgetBuilder::new()
+                            .with_height(30.0))
+                            .with_text("FOOOOBAR2")
+                            .build(ui));
+
+                        items.push(ButtonBuilder::new(WidgetBuilder::new()
+                            .with_height(30.0))
+                            .with_text("FOOOOBAR3")
+                            .build(ui));
+
+
+                        items
+                    })
+                    .build(ui))
                 .with_child({
                     start_button = ButtonBuilder::new(WidgetBuilder::new()
-                        .with_style(interface_templates.style.clone())
-                        .on_row(2)
+                        .on_row(4)
                         .on_column(1))
                         .with_text("Start")
                         .build(ui);
@@ -100,6 +147,8 @@ impl MatchMenu {
                 }))
                 .add_column(Column::strict(200.0))
                 .add_column(Column::stretch())
+                .add_row(common_row)
+                .add_row(common_row)
                 .add_row(common_row)
                 .add_row(common_row)
                 .add_row(common_row)

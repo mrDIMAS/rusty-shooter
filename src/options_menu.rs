@@ -56,7 +56,7 @@ use rg3d::{
         node::UINode,
     },
 };
-use crate::menu::{create_check_box, create_scroll_bar, create_scroll_viewer};
+use crate::gui::{create_check_box, create_scroll_bar, create_scroll_viewer};
 
 pub struct OptionsMenu {
     pub window: UINodeHandle,
@@ -156,7 +156,7 @@ impl OptionsMenu {
                                                         .on_column(0)
                                                         .with_height(25.0)
                                                         .with_width(200.0))
-                                                        .with_text(format!("{}x{}@{}Hz", size.width, size.height, rate).as_str())
+                                                        .with_text(format!("{} x {} @ {}Hz", size.width, size.height, rate).as_str())
                                                         .with_vertical_text_alignment(VerticalAlignment::Center)
                                                         .with_horizontal_text_alignment(HorizontalAlignment::Center)
                                                         .build(ui))

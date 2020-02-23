@@ -33,6 +33,7 @@ use crate::{
     hud::Hud,
     actor::Actor,
     control_scheme::ControlScheme,
+    gui::{CustomUiMessage, DummyUiNode}
 };
 use std::{
     sync::mpsc::{
@@ -86,21 +87,6 @@ use rg3d::{
     engine::Engine,
 };
 
-#[derive(Debug)]
-pub struct CustomUiMessage {}
-
-#[derive(Debug)]
-pub enum DummyUiNode {}
-
-impl Control<CustomUiMessage, DummyUiNode> for DummyUiNode {
-    fn widget(&self) -> &Widget<CustomUiMessage, DummyUiNode> {
-        unimplemented!()
-    }
-
-    fn widget_mut(&mut self) -> &mut Widget<CustomUiMessage, DummyUiNode> {
-        unimplemented!()
-    }
-}
 
 // Configure engine
 pub type UINodeHandle = Handle<UINode<CustomUiMessage, DummyUiNode>>;
@@ -359,7 +345,7 @@ impl Game {
                         dt -= fixed_timestep as f64;
                         game.time.elapsed += fixed_timestep as f64;
 
-                        while let Some(mut ui_event) = game.engine.get_ui_mut().poll_ui_event() {
+                        while let Some(mut ui_event) = game.engine.get_ui_mut().poll_message() {
                             game.menu.handle_ui_event(&mut game.engine, &mut ui_event);
                         }
 
@@ -621,7 +607,7 @@ impl Game {
             if let Some(event) = translate_event(event) {
                 self.engine
                     .user_interface
-                    .process_input_event(&event);
+                    .process_os_event(&event);
             }
         }
 

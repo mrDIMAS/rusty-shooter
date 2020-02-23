@@ -38,7 +38,7 @@ use crate::{
     GameEngine,
     Gui,
     GuiMessage,
-    menu::create_scroll_bar,
+    gui::create_scroll_bar,
 };
 
 pub struct MatchMenu {
@@ -118,21 +118,16 @@ impl MatchMenu {
                     .with_items({
                         let mut items = Vec::new();
 
-                        items.push(ButtonBuilder::new(WidgetBuilder::new()
-                            .with_height(30.0))
-                            .with_text("FOOOOBAR")
-                            .build(ui));
-
-                        items.push(ButtonBuilder::new(WidgetBuilder::new()
-                            .with_height(30.0))
-                            .with_text("FOOOOBAR2")
-                            .build(ui));
-
-                        items.push(ButtonBuilder::new(WidgetBuilder::new()
-                            .with_height(30.0))
-                            .with_text("FOOOOBAR3")
-                            .build(ui));
-
+                        for i in 0..10 {
+                            let item = DecoratorBuilder::new(
+                                BorderBuilder::new(
+                                    WidgetBuilder::new().with_child(
+                                        TextBuilder::new(WidgetBuilder::new()
+                                            .with_height(30.0))
+                                            .with_text(format!("Item {}", i))
+                                            .build(ui)))).build(ui);
+                            items.push(item);
+                        }
 
                         items
                     })

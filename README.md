@@ -84,7 +84,7 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 	- [x] Health
 	- [x] Armor
 	- [ ] Game mode specific score
-		- [ ] Death match - dummy added
+		- [x] Death match
 		- [ ] Team death match
 		- [ ] Capture the flag
 - [x] Bot whip attack - bots can punch you in the face you stand too close to them.
@@ -99,7 +99,7 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [x] Vision frustum for bots - bots can "see" only in front of them.
 - [x] Death zones - places where actor dies immediately (space, death fog, squashed, telefragged, etc) is added 
 - [ ] Level editor - some simple level editor would be nice, for now I'll continue use ancient 3ds max 2012. Game items are placed on level using dummies which then are substituded with real items, this works but very uncomfortable because it is not WYSIWYG editor.
-- [ ] Restyle UI - it is boring gray right now. Main menu also should have some sort of background, not just black void.
+- [x] Restyle UI. Main menu also should have some sort of background, not just black void.
 - [ ] Loading screen - currently game just hangs for 8+ seconds until it load a level, this should be done async.
 - [ ] Environment interaction - its implemented partially - any actor can use jump pads, pick up items. 
 - [ ] More bots - there are only three bot kind available, there are a lot of free models on mixamo.com which can be used to add more bots.

@@ -1,5 +1,7 @@
 use rg3d::{
     gui::{
+        HorizontalAlignment,
+        VerticalAlignment,
         combobox::ComboBoxBuilder,
         Thickness,
         window::{
@@ -21,7 +23,6 @@ use rg3d::{
         button::ButtonBuilder,
         Control,
         node::UINode,
-        VerticalAlignment,
         text_box::TextBoxBuilder,
         decorator::DecoratorBuilder,
         border::BorderBuilder,
@@ -63,73 +64,79 @@ impl MatchMenu {
                 .with_child(TextBuilder::new(WidgetBuilder::new()
                     .on_row(0)
                     .on_column(0))
+                    .with_text("Match Type")
+                    .build(ui))
+                .with_child(ComboBoxBuilder::new(WidgetBuilder::new()
+                    .on_column(1)
+                    .on_row(0))
+                    .with_items({
+                        let mut items = Vec::new();
+                        for mode in ["Deathmatch", "Team Deathmatch", "Capture The Flag"].iter() {
+                            let item = DecoratorBuilder::new(
+                                BorderBuilder::new(
+                                    WidgetBuilder::new()
+                                        .with_height(30.0)
+                                        .with_child(TextBuilder::new(WidgetBuilder::new()
+                                            .with_horizontal_alignment(HorizontalAlignment::Center)
+                                            .with_vertical_alignment(VerticalAlignment::Center))
+                                            .with_text(mode)
+                                            .build(ui))))
+                                .build(ui);
+                            items.push(item);
+                        }
+                        items
+                    })
+                    .build(ui))
+                .with_child(TextBuilder::new(WidgetBuilder::new()
+                    .on_row(1)
+                    .on_column(0))
                     .with_text("Time Limit (min)")
                     .build(ui))
                 .with_child({
-                    sb_time_limit = create_scroll_bar(ui, resource_manager, Orientation::Horizontal);
+                    sb_time_limit = create_scroll_bar(ui, resource_manager, Orientation::Horizontal, true);
                     if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_time_limit) {
                         scroll_bar.set_value(10.0)
                             .set_min_value(5.0)
                             .set_max_value(60.0)
                             .set_step(1.0)
                             .widget_mut()
-                            .set_row(0)
+                            .set_row(1)
                             .set_column(1)
                             .set_margin(Thickness::uniform(2.0));
                     }
                     sb_time_limit
                 })
                 .with_child(TextBuilder::new(WidgetBuilder::new()
-                    .on_row(1)
+                    .on_row(2)
                     .on_column(0))
                     .with_text("Frag Limit")
                     .build(ui))
                 .with_child({
-                    sb_frag_limit = create_scroll_bar(ui, resource_manager, Orientation::Horizontal);
+                    sb_frag_limit = create_scroll_bar(ui, resource_manager, Orientation::Horizontal, true);
                     if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_frag_limit) {
                         scroll_bar.set_value(30.0)
                             .set_step(1.0)
                             .set_min_value(10.0)
                             .set_max_value(200.0)
                             .widget_mut()
-                            .set_row(1)
+                            .set_row(2)
                             .set_column(1)
                             .set_margin(Thickness::uniform(2.0));
                     }
                     sb_frag_limit
                 })
                 .with_child(TextBuilder::new(WidgetBuilder::new()
-                    .on_row(2)
+                    .on_row(3)
                     .on_column(0)
                     .with_margin(Thickness::uniform(2.0)))
                     .with_text("Player Name")
                     .with_vertical_text_alignment(VerticalAlignment::Center)
                     .build(ui))
                 .with_child(TextBoxBuilder::new(WidgetBuilder::new()
-                    .on_row(2)
+                    .on_row(3)
                     .on_column(1)
                     .with_margin(Thickness::uniform(2.0)))
                     .with_text("Unnamed Player".to_owned())
-                    .build(ui))
-                .with_child(ComboBoxBuilder::new(WidgetBuilder::new()
-                    .on_column(1)
-                    .on_row(3))
-                    .with_items({
-                        let mut items = Vec::new();
-
-                        for i in 0..10 {
-                            let item = DecoratorBuilder::new(
-                                BorderBuilder::new(
-                                    WidgetBuilder::new().with_child(
-                                        TextBuilder::new(WidgetBuilder::new()
-                                            .with_height(30.0))
-                                            .with_text(format!("Item {}", i))
-                                            .build(ui)))).build(ui);
-                            items.push(item);
-                        }
-
-                        items
-                    })
                     .build(ui))
                 .with_child({
                     start_button = ButtonBuilder::new(WidgetBuilder::new()

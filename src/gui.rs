@@ -49,7 +49,7 @@ impl Control<CustomUiMessage, DummyUiNode> for DummyUiNode {
     }
 }
 
-pub fn create_scroll_bar(ui: &mut Gui, resource_manager: &mut ResourceManager, orientation: Orientation) -> UINodeHandle {
+pub fn create_scroll_bar(ui: &mut Gui, resource_manager: &mut ResourceManager, orientation: Orientation, show_value: bool) -> UINodeHandle {
     let mut wb = WidgetBuilder::new();
     match orientation {
         Orientation::Vertical => wb = wb.with_width(30.0),
@@ -57,7 +57,7 @@ pub fn create_scroll_bar(ui: &mut Gui, resource_manager: &mut ResourceManager, o
     }
     ScrollBarBuilder::new(wb)
         .with_orientation(orientation)
-        .show_value(true)
+        .show_value(show_value)
         .with_indicator(ImageBuilder::new(WidgetBuilder::new()
             .with_background(Brush::Solid(Color::opaque(60, 60, 60))))
             .with_opt_texture(utils::into_any_arc(resource_manager.request_texture("data/ui/circle.png", TextureKind::RGBA8)))
@@ -80,7 +80,7 @@ pub fn create_check_box(ui: &mut Gui, resource_manager: &mut ResourceManager) ->
 
 pub fn create_scroll_viewer(ui: &mut Gui, resource_manager: &mut ResourceManager) -> UINodeHandle {
     ScrollViewerBuilder::new(WidgetBuilder::new())
-        .with_horizontal_scroll_bar(create_scroll_bar(ui, resource_manager, Orientation::Horizontal))
-        .with_vertical_scroll_bar(create_scroll_bar(ui, resource_manager, Orientation::Vertical))
+        .with_horizontal_scroll_bar(create_scroll_bar(ui, resource_manager, Orientation::Horizontal, false))
+        .with_vertical_scroll_bar(create_scroll_bar(ui, resource_manager, Orientation::Vertical, false))
         .build(ui)
 }

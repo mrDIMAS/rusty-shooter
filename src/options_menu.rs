@@ -241,7 +241,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            sb_spot_shadow_distance = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal);
+                            sb_spot_shadow_distance = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal, true);
                             if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_spot_shadow_distance) {
                                 scroll_bar.set_min_value(1.0)
                                     .set_max_value(15.0)
@@ -305,7 +305,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            sb_point_shadow_distance = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal);
+                            sb_point_shadow_distance = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal, true);
                             if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_point_shadow_distance) {
                                 scroll_bar.set_min_value(1.0)
                                     .set_max_value(15.0)
@@ -349,7 +349,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            sb_sound_volume = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal);
+                            sb_sound_volume = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal, true);
                             if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_sound_volume) {
                                 scroll_bar.set_min_value(0.0)
                                     .set_max_value(1.0)
@@ -370,7 +370,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            sb_music_volume = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal);
+                            sb_music_volume = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal, true);
                             if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_music_volume) {
                                 scroll_bar.set_min_value(0.0)
                                     .set_max_value(1.0)
@@ -460,7 +460,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            sb_mouse_sens = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal);
+                            sb_mouse_sens = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal, true);
                             if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_mouse_sens) {
                                 scroll_bar.set_min_value(0.05)
                                     .set_max_value(2.0)

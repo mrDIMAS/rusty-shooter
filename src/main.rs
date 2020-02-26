@@ -26,7 +26,6 @@ use crate::{
     character::AsCharacter,
     level::{
         Level,
-        CylinderEmitter,
     },
     message::Message,
     menu::Menu,
@@ -72,23 +71,18 @@ use rg3d::{
         },
     },
     gui::{
-        widget::{WidgetBuilder, Widget},
+        widget::WidgetBuilder,
         node::UINode,
         text::TextBuilder,
         UserInterface,
-        Control,
         message::UiMessage,
-    },
-    scene::{
-        particle_system::CustomEmitterFactory,
     },
     event::{DeviceEvent, WindowEvent, ElementState, VirtualKeyCode, Event},
     event_loop::{EventLoop, ControlFlow},
     engine::Engine,
 };
 
-
-// Configure engine
+// Define type aliases for engine structs.
 pub type UINodeHandle = Handle<UINode<CustomUiMessage, DummyUiNode>>;
 pub type GameEngine = Engine<CustomUiMessage, DummyUiNode>;
 pub type Gui = UserInterface<CustomUiMessage, DummyUiNode>;
@@ -275,14 +269,7 @@ impl Game {
             .unwrap()
             .set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(rg3d::sound::hrtf::HrtfRenderer::new(hrtf_sphere)));
 
-        if let Ok(mut factory) = CustomEmitterFactory::get() {
-            factory.set_callback(Box::new(|kind| {
-                match kind {
-                    0 => Ok(Box::new(CylinderEmitter::new())),
-                    _ => Err(String::from("invalid custom emitter kind"))
-                }
-            }))
-        }
+        effects::register_custom_emitter_factory();
 
         engine.renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
@@ -525,8 +512,6 @@ impl Game {
 
     fn handle_messages(&mut self, time: GameTime) {
         while let Ok(message) = self.events_receiver.try_recv() {
-            println!("{:?}", message);
-
             match &message {
                 Message::StartNewGame { options } => {
                     self.start_new_game(*options);

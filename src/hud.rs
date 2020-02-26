@@ -26,14 +26,14 @@ use rg3d::{
         Thickness,
         brush::Brush,
         node::UINode,
-        Control
+        Control,
     },
 };
 use crate::{
     level::LeaderBoard, GameTime, message::Message,
     MatchOptions, character::Team,
     UINodeHandle, GameEngine,
-    Gui
+    Gui,
 };
 
 pub struct Hud {
@@ -46,6 +46,7 @@ pub struct Hud {
     message_queue: VecDeque<String>,
     message_timeout: f32,
     leader_board: LeaderBoardUI,
+    match_limit: UINodeHandle,
     first_score: UINodeHandle,
     second_score: UINodeHandle,
 }
@@ -71,6 +72,7 @@ impl Hud {
         let time;
         let first_score;
         let second_score;
+        let match_limit;
         let root = GridBuilder::new(WidgetBuilder::new()
             .with_width(frame_size.0 as f32)
             .with_height(frame_size.1 as f32)
@@ -103,10 +105,25 @@ impl Hud {
                     left: 50.0,
                     top: 0.0,
                     right: 0.0,
-                    bottom: 150.0
+                    bottom: 150.0,
                 })
                 .with_child(BorderBuilder::new(WidgetBuilder::new()
                     .on_column(0)
+                    .with_background(Brush::Solid(Color::opaque(34, 177, 76)))
+                    .with_foreground(Brush::Solid(Color::opaque(52, 216, 101)))
+                    .with_child({
+                        match_limit = TextBuilder::new(WidgetBuilder::new()
+                            .with_horizontal_alignment(HorizontalAlignment::Center)
+                            .with_vertical_alignment(VerticalAlignment::Center)
+                            .with_foreground(Brush::Solid(Color::BLACK)))
+                            .with_text("0")
+                            .build(ui);
+                        match_limit
+                    }))
+                    .with_stroke_thickness(Thickness::uniform(2.0))
+                    .build(ui))
+                .with_child(BorderBuilder::new(WidgetBuilder::new()
+                    .on_column(1)
                     .with_background(Brush::Solid(Color::opaque(249, 166, 2)))
                     .with_foreground(Brush::Solid(Color::opaque(200, 110, 0)))
                     .with_child({
@@ -114,14 +131,14 @@ impl Hud {
                             .with_horizontal_alignment(HorizontalAlignment::Center)
                             .with_vertical_alignment(VerticalAlignment::Center)
                             .with_foreground(Brush::Solid(Color::BLACK)))
-                            .with_text("30")
+                            .with_text("0")
                             .build(ui);
                         first_score
                     }))
                     .with_stroke_thickness(Thickness::uniform(2.0))
                     .build(ui))
                 .with_child(BorderBuilder::new(WidgetBuilder::new()
-                    .on_column(1)
+                    .on_column(2)
                     .with_background(Brush::Solid(Color::opaque(127, 127, 127)))
                     .with_foreground(Brush::Solid(Color::opaque(80, 80, 80)))
                     .with_child({
@@ -129,12 +146,13 @@ impl Hud {
                             .with_horizontal_alignment(HorizontalAlignment::Center)
                             .with_vertical_alignment(VerticalAlignment::Center)
                             .with_foreground(Brush::Solid(Color::BLACK)))
-                            .with_text("20")
+                            .with_text("0")
                             .build(ui);
                         second_score
                     }))
                     .with_stroke_thickness(Thickness::uniform(2.0))
                     .build(ui)))
+                .add_column(Column::strict(75.0))
                 .add_column(Column::strict(75.0))
                 .add_column(Column::strict(75.0))
                 .add_row(Row::strict(33.0))
@@ -257,6 +275,7 @@ impl Hud {
             time,
             first_score,
             second_score,
+            match_limit,
             message_timeout: 0.0,
             message_queue: Default::default(),
         }
@@ -337,9 +356,43 @@ impl Hud {
         }
     }
 
+    fn sync_to_model(&mut self, ui: &mut Gui, leader_board: &LeaderBoard, match_options: &MatchOptions) {
+        // TODO: This is probably not correct way of showing leader and second place on HUD
+        //  it is better to show player's score and leader/second score of some bot.
+        if let Some((leader_name, leader_score)) = leader_board.highest_personal_score(None) {
+            if let UINode::Text(text) = ui.node_mut(self.first_score) {
+                text.set_text(format!("{}", leader_score));
+            }
+
+            if let Some((_, second_score)) = leader_board.highest_personal_score(Some(leader_name)) {
+                if let UINode::Text(text) = ui.node_mut(self.second_score) {
+                    text.set_text(format!("{}", second_score));
+                }
+            }
+        }
+
+        if let UINode::Text(text) = ui.node_mut(self.match_limit) {
+            let limit = match match_options {
+                MatchOptions::DeathMatch(dm) => dm.frag_limit,
+                MatchOptions::TeamDeathMatch(tdm) => tdm.team_frag_limit,
+                MatchOptions::CaptureTheFlag(ctf) => ctf.flag_limit,
+            };
+
+            text.set_text(format!("{}", limit));
+        }
+    }
+
     pub fn handle_message(&mut self, message: &Message, ui: &mut Gui, leader_board: &LeaderBoard, match_options: &MatchOptions) {
-        if let Message::AddNotification { text } = message {
-            self.add_message(text)
+        match message {
+            Message::AddNotification { text } => {
+                self.add_message(text)
+            }
+            Message::AddBot { .. } => self.sync_to_model(ui, leader_board, match_options),
+            Message::RemoveActor { .. } => self.sync_to_model(ui, leader_board, match_options),
+            Message::SpawnBot { .. } => self.sync_to_model(ui, leader_board, match_options),
+            Message::SpawnPlayer => self.sync_to_model(ui, leader_board, match_options),
+            Message::RespawnActor { .. } => self.sync_to_model(ui, leader_board, match_options),
+            _ => ()
         }
 
         self.leader_board.handle_message(message, ui, leader_board, match_options);
@@ -380,6 +433,7 @@ impl LeaderBoardUI {
         // Rebuild entire table, this is far from ideal but it is simplest solution.
         // Shouldn't be a big problem because this method should be called once anything
         // changes in leader board.
+        // TODO: Remove unnecessary rebuild of table.
 
         let row_template = Row::strict(30.0);
 
@@ -452,7 +506,7 @@ impl LeaderBoardUI {
             .with_child({
                 match match_options {
                     MatchOptions::DeathMatch(dm) => {
-                        let text = if let Some((name, kills)) = leader_board.highest_personal_score() {
+                        let text = if let Some((name, kills)) = leader_board.highest_personal_score(None) {
                             format!("{} leads with {} frags\nPlaying until {} frags", name, kills, dm.frag_limit)
                         } else {
                             format!("Draw\nPlaying until {} frags", dm.frag_limit)

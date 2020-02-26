@@ -1,9 +1,15 @@
-use crate::{Gui, UINodeHandle};
+//! Contains all helper functions that creates styled widgets for game user interface.
+//! However most of the styles are used from dark theme of rg3d-ui library so there
+//! is not much.
+
+use crate::{Gui, UINodeHandle, GuiMessage};
 use rg3d::{
     engine::resource_manager::ResourceManager,
     utils,
+    core::color::Color,
     resource::texture::TextureKind,
     gui::{
+        brush::Brush,
         scroll_bar::ScrollBarBuilder,
         check_box::CheckBoxBuilder,
         VerticalAlignment,
@@ -37,6 +43,10 @@ impl Control<CustomUiMessage, DummyUiNode> for DummyUiNode {
     fn raw_copy(&self) -> UINode<CustomUiMessage, DummyUiNode> {
         unimplemented!()
     }
+
+    fn handle_message(&mut self, _: UINodeHandle, _: &mut Gui, _: &mut GuiMessage) {
+        unimplemented!()
+    }
 }
 
 pub fn create_scroll_bar(ui: &mut Gui, resource_manager: &mut ResourceManager, orientation: Orientation) -> UINodeHandle {
@@ -48,7 +58,8 @@ pub fn create_scroll_bar(ui: &mut Gui, resource_manager: &mut ResourceManager, o
     ScrollBarBuilder::new(wb)
         .with_orientation(orientation)
         .show_value(true)
-        .with_indicator(ImageBuilder::new(WidgetBuilder::new())
+        .with_indicator(ImageBuilder::new(WidgetBuilder::new()
+            .with_background(Brush::Solid(Color::opaque(60, 60, 60))))
             .with_opt_texture(utils::into_any_arc(resource_manager.request_texture("data/ui/circle.png", TextureKind::RGBA8)))
             .build(ui))
         .build(ui)

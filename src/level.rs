@@ -10,35 +10,43 @@ use std::{
     collections::HashMap,
 };
 use rand::Rng;
-use crate::{actor::{ActorContainer, Actor}, weapon::{
-    Weapon,
-    WeaponKind,
-    WeaponContainer,
-}, player::Player, GameTime, bot::{
-    Bot,
-    BotKind,
-}, projectile::{
-    ProjectileContainer,
-    ProjectileKind,
-    Projectile,
-}, character::AsCharacter, jump_pad::{JumpPadContainer, JumpPad}, item::{ItemContainer, Item, ItemKind}, control_scheme::ControlScheme, effects, message::Message, MatchOptions, GameEngine};
+use crate::{
+    actor::{ActorContainer, Actor},
+    weapon::{
+        Weapon,
+        WeaponKind,
+        WeaponContainer,
+    },
+    player::Player,
+    GameTime,
+    bot::{
+        Bot,
+        BotKind,
+    },
+    projectile::{
+        ProjectileContainer,
+        ProjectileKind,
+        Projectile,
+    },
+    jump_pad::{JumpPadContainer, JumpPad},
+    item::{ItemContainer, Item, ItemKind},
+    control_scheme::ControlScheme,
+    effects,
+    message::Message,
+    MatchOptions,
+    GameEngine,
+    character::{
+        AsCharacter,
+        Team,
+    },
+};
 use rg3d::{
     core::math::PositionProvider,
-    resource::{
-        texture::TextureKind,
-    },
     event::Event,
     scene::{
         Scene,
-        base::{AsBase, BaseBuilder},
-        particle_system::{
-            ParticleSystem, Emitter,
-            EmitterKind, CustomEmitter, Particle,
-            Emit,
-        },
-        particle_system::{ParticleSystemBuilder, EmitterBuilder},
+        base::AsBase,
         node::Node,
-        transform::TransformBuilder,
     },
     utils::{
         self,
@@ -46,7 +54,6 @@ use rg3d::{
     },
     core::{
         color::Color,
-        color_gradient::{ColorGradient, GradientPoint},
         pool::Handle,
         visitor::{
             Visit,
@@ -70,7 +77,6 @@ use rg3d::{
     },
     renderer::debug_renderer,
 };
-use crate::character::Team;
 
 pub struct Level {
     map_root: Handle<Node>,
@@ -159,10 +165,18 @@ impl LeaderBoard {
         }
     }
 
-    pub fn highest_personal_score(&self) -> Option<(&str, u32)> {
+    /// Returns record about leader as a pair of character name and its score.
+    /// `except` parameter can be used to exclude already found leader and search
+    /// for a character at second place.
+    pub fn highest_personal_score(&self, except: Option<&str>) -> Option<(&str, u32)> {
         let mut pair = None;
 
         for (name, score) in self.personal_score.iter() {
+            if let Some(except) = except {
+                if name == except {
+                    continue;
+                }
+            }
             match pair {
                 None => pair = Some((name.as_str(), score.kills)),
                 Some(ref mut pair) => {
@@ -253,54 +267,6 @@ impl Visit for Level {
     }
 }
 
-#[derive(Copy, Clone)]
-pub struct CylinderEmitter {
-    height: f32,
-    radius: f32,
-}
-
-impl CylinderEmitter {
-    pub fn new() -> Self {
-        Self {
-            height: 1.0,
-            radius: 0.5,
-        }
-    }
-}
-
-impl CustomEmitter for CylinderEmitter {
-    fn box_clone(&self) -> Box<dyn CustomEmitter> {
-        Box::new(self.clone())
-    }
-
-    fn get_kind(&self) -> i32 {
-        0
-    }
-}
-
-impl Visit for CylinderEmitter {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.radius.visit("Radius", visitor)?;
-        self.height.visit("Height", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
-impl Emit for CylinderEmitter {
-    fn emit(&self, _emitter: &Emitter, _particle_system: &ParticleSystem, particle: &mut Particle) {
-        // Disk point picking extended in 3D - http://mathworld.wolfram.com/DiskPointPicking.html
-        let s: f32 = rand::thread_rng().gen_range(0.0, 1.0);
-        let theta = rand::thread_rng().gen_range(0.0, 2.0 * std::f32::consts::PI);
-        let z = rand::thread_rng().gen_range(0.0, self.height);
-        let r = s.sqrt() * self.radius;
-        let x = r * theta.cos();
-        let y = r * theta.sin();
-        particle.position = Vec3::new(x, y, z);
-    }
-}
 
 pub struct DeathZone {
     bounds: AxisAlignedBoundingBox
@@ -356,25 +322,6 @@ impl Level {
             }
         }
 
-        scene.graph.add_node(Node::ParticleSystem(
-            ParticleSystemBuilder::new(BaseBuilder::new()
-                .with_local_transform(TransformBuilder::new()
-                    .with_local_position(Vec3::new(0.0, 1.0, 0.0))
-                    .build()))
-                .with_acceleration(Vec3::new(0.0, -0.01, 0.0))
-                .with_color_over_lifetime_gradient({
-                    let mut gradient = ColorGradient::new();
-                    gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(150, 150, 150, 0)));
-                    gradient.add_point(GradientPoint::new(0.05, Color::from_rgba(150, 150, 150, 220)));
-                    gradient.add_point(GradientPoint::new(0.85, Color::from_rgba(255, 255, 255, 180)));
-                    gradient.add_point(GradientPoint::new(1.00, Color::from_rgba(255, 255, 255, 0)));
-                    gradient
-                })
-                .with_emitters(vec![
-                    EmitterBuilder::new(EmitterKind::Custom(Box::new(CylinderEmitter { height: 0.2, radius: 0.2 }))).build()
-                ])
-                .with_opt_texture(engine.resource_manager.request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8))
-                .build()));
 
         let mut level = Level {
             scene: engine.scenes.add(scene),

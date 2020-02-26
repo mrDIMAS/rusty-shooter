@@ -16,19 +16,16 @@ use crate::{
     GameEngine,
     Gui,
     GuiMessage,
-    control_scheme::ControlScheme
+    control_scheme::ControlScheme,
 };
 use rg3d::{
-    resource::{
-        texture::TextureKind,
-    },
+    core::math::vec2::Vec2,
     event::{
         WindowEvent,
         Event,
     },
     gui::{
         ttf::Font,
-        check_box::CheckBoxBuilder,
         Control,
         grid::{
             GridBuilder,
@@ -36,29 +33,22 @@ use rg3d::{
             Column,
         },
         Thickness,
-        VerticalAlignment,
         window::{
             WindowBuilder,
             WindowTitle,
         },
-        scroll_bar::{ScrollBarBuilder, Orientation},
         button::ButtonBuilder,
-        scroll_viewer::ScrollViewerBuilder,
         message::{
             UiMessage,
             UiMessageData,
             WindowMessage,
             ButtonMessage,
+            WidgetMessage,
+            WidgetProperty,
         },
-        widget::{
-            WidgetBuilder,
-        },
-        HorizontalAlignment,
-        image::ImageBuilder,
+        widget::WidgetBuilder,
     },
-    utils,
 };
-use rg3d::engine::resource_manager::ResourceManager;
 
 pub struct Menu {
     sender: Sender<Message>,
@@ -232,7 +222,15 @@ impl Menu {
                 } else if event.source() == self.btn_settings {
                     engine.user_interface
                         .post_message(UiMessage::targeted(
-                            self.options_menu.window, UiMessageData::Window(WindowMessage::Opened)));
+                            self.options_menu.window,
+                            UiMessageData::Window(WindowMessage::Opened)));
+                    engine.user_interface
+                        .post_message(
+                            UiMessage::targeted(
+                                self.options_menu.window,
+                                UiMessageData::Widget(
+                                    WidgetMessage::Property(
+                                        WidgetProperty::DesiredPosition(Vec2::new(200.0, 200.0))))))
                 }
             }
         }

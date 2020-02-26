@@ -4,24 +4,38 @@ use rg3d::{
         color::Color,
         numeric_range::NumericRange,
         math::vec3::Vec3,
+        visitor::{VisitResult, Visitor, Visit}
     },
     engine::resource_manager::ResourceManager,
     scene::{
-        particle_system::{ParticleSystemBuilder, EmitterKind, EmitterBuilder, SphereEmitter},
+        particle_system::{
+            ParticleSystemBuilder,
+            EmitterKind,
+            EmitterBuilder,
+            SphereEmitter,
+            CustomEmitter,
+            Emit,
+            ParticleSystem,
+            Particle,
+            Emitter,
+            CustomEmitterFactory
+        },
         node::Node,
         transform::TransformBuilder,
         graph::Graph,
-        base::BaseBuilder
+        base::BaseBuilder,
     },
-    resource::texture::TextureKind
+    resource::texture::TextureKind,
 };
 use std::path::Path;
+use rand::Rng;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum EffectKind {
     BulletImpact,
     ItemAppear,
-    Smoke
+    Smoke,
+    Steam
 }
 
 pub fn create(kind: EffectKind, graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {
@@ -29,7 +43,90 @@ pub fn create(kind: EffectKind, graph: &mut Graph, resource_manager: &mut Resour
         EffectKind::BulletImpact => create_bullet_impact(graph, resource_manager, pos),
         EffectKind::ItemAppear => create_item_appear(graph, resource_manager, pos),
         EffectKind::Smoke => create_smoke(graph, resource_manager, pos),
+        EffectKind::Steam => create_steam(graph, resource_manager, pos)
     }
+}
+
+#[derive(Copy, Clone)]
+pub struct CylinderEmitter {
+    height: f32,
+    radius: f32,
+}
+
+impl CylinderEmitter {
+    pub fn new() -> Self {
+        Self {
+            height: 1.0,
+            radius: 0.5,
+        }
+    }
+}
+
+impl CustomEmitter for CylinderEmitter {
+    fn box_clone(&self) -> Box<dyn CustomEmitter> {
+        Box::new(self.clone())
+    }
+
+    fn get_kind(&self) -> i32 {
+        0
+    }
+}
+
+impl Visit for CylinderEmitter {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.radius.visit("Radius", visitor)?;
+        self.height.visit("Height", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
+impl Emit for CylinderEmitter {
+    fn emit(&self, _emitter: &Emitter, _particle_system: &ParticleSystem, particle: &mut Particle) {
+        // Disk point picking extended in 3D - http://mathworld.wolfram.com/DiskPointPicking.html
+        let s: f32 = rand::thread_rng().gen_range(0.0, 1.0);
+        let theta = rand::thread_rng().gen_range(0.0, 2.0 * std::f32::consts::PI);
+        let z = rand::thread_rng().gen_range(0.0, self.height);
+        let r = s.sqrt() * self.radius;
+        let x = r * theta.cos();
+        let y = r * theta.sin();
+        particle.position = Vec3::new(x, y, z);
+    }
+}
+
+pub fn register_custom_emitter_factory() {
+    if let Ok(mut factory) = CustomEmitterFactory::get() {
+        factory.set_callback(Box::new(|kind| {
+            match kind {
+                0 => Ok(Box::new(CylinderEmitter::new())),
+                _ => Err(String::from("invalid custom emitter kind"))
+            }
+        }))
+    }
+}
+
+fn create_steam(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {
+    graph.add_node(Node::ParticleSystem(
+        ParticleSystemBuilder::new(BaseBuilder::new()
+            .with_local_transform(TransformBuilder::new()
+                .with_local_position(pos)
+                .build()))
+            .with_acceleration(Vec3::new(0.0, -0.01, 0.0))
+            .with_color_over_lifetime_gradient({
+                let mut gradient = ColorGradient::new();
+                gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(150, 150, 150, 0)));
+                gradient.add_point(GradientPoint::new(0.05, Color::from_rgba(150, 150, 150, 220)));
+                gradient.add_point(GradientPoint::new(0.85, Color::from_rgba(255, 255, 255, 180)));
+                gradient.add_point(GradientPoint::new(1.00, Color::from_rgba(255, 255, 255, 0)));
+                gradient
+            })
+            .with_emitters(vec![
+                EmitterBuilder::new(EmitterKind::Custom(Box::new(CylinderEmitter { height: 0.2, radius: 0.2 }))).build()
+            ])
+            .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8))
+            .build()));
 }
 
 fn create_bullet_impact(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {

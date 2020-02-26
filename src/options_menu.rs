@@ -3,10 +3,17 @@ use std::{
     sync::mpsc::Sender,
     cell::RefCell,
 };
-use crate::{control_scheme::{
-    ControlScheme,
-    ControlButton,
-}, message::Message, UINodeHandle, GameEngine, GuiMessage};
+use crate::{
+    control_scheme::{
+        ControlScheme,
+        ControlButton,
+    },
+    message::Message,
+    UINodeHandle,
+    GameEngine,
+    GuiMessage,
+    gui::{create_check_box, create_scroll_bar, create_scroll_viewer},
+};
 use rg3d::{
     event::{
         WindowEvent, Event, MouseScrollDelta,
@@ -14,8 +21,6 @@ use rg3d::{
     },
     monitor::VideoMode, window::Fullscreen,
     gui::{
-        text_box::TextBoxBuilder,
-        list_box::ListBoxBuilder,
         items_control::ItemsControlBuilder,
         grid::{
             GridBuilder,
@@ -28,16 +33,10 @@ use rg3d::{
             WindowBuilder,
             WindowTitle,
         },
-        text::{
-            TextBuilder,
-            Text,
-        },
+        text::TextBuilder,
         border::BorderBuilder,
         decorator::DecoratorBuilder,
-        button::{
-            ButtonBuilder,
-            Button,
-        },
+        button::ButtonBuilder,
         message::{
             UiMessageData,
             ScrollBarMessage,
@@ -56,7 +55,6 @@ use rg3d::{
         node::UINode,
     },
 };
-use crate::gui::{create_check_box, create_scroll_bar, create_scroll_viewer};
 
 pub struct OptionsMenu {
     pub window: UINodeHandle,
@@ -647,7 +645,7 @@ impl OptionsMenu {
                         control_button = Some(ControlButton::Key(code));
                     }
                 }
-                WindowEvent::MouseInput { button, state, .. } => {
+                WindowEvent::MouseInput { button, .. } => {
                     let index = match button {
                         MouseButton::Left => 1,
                         MouseButton::Right => 2,

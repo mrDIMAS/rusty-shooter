@@ -25,7 +25,6 @@ use rg3d::{
         text_box::TextBoxBuilder,
         decorator::DecoratorBuilder,
         border::BorderBuilder,
-        HorizontalAlignment,
     },
     engine::resource_manager::ResourceManager,
 };

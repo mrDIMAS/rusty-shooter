@@ -1,16 +1,32 @@
-use crate::{bot::BotKind, weapon::{
-    WeaponKind,
-    Weapon
-}, actor::Actor, item::{
-    ItemKind,
-    Item
-}, projectile::ProjectileKind, effects::EffectKind, MatchOptions};
+//! Game uses message passing mechanism to perform specific actions. For example to spawn
+//! a bot or item everything you need is to send appropriate message and level will create
+//! required entity. This is very effective decoupling mechanism that works perfectly with
+//! strict ownership rules of Rust.
+//!
+//! Each message can be handle in multiple "systems", for example when bot dies, leader board
+//! detects it and counts deaths of bot and adds one frag to a killer (if any). This way leader
+//! board know nothing about bots, it just knows the fact that bot died. In other way bot knows
+//! nothing about leader board - its can just die. Not sure if this mechanism is suitable for
+//! all kinds of games, but at least it very useful for first-person shooters.
+
+use crate::{
+    bot::BotKind,
+    weapon::{
+        WeaponKind,
+        Weapon,
+    },
+    actor::Actor, item::{
+        ItemKind,
+        Item,
+    },
+    projectile::ProjectileKind,
+    effects::EffectKind,
+    MatchOptions,
+};
 use std::path::PathBuf;
-use rg3d::{
-    core::{
-        pool::Handle,
-        math::vec3::Vec3
-    }
+use rg3d::core::{
+    pool::Handle,
+    math::vec3::Vec3,
 };
 
 #[derive(Debug)]
@@ -20,10 +36,10 @@ pub enum Message {
         kind: WeaponKind,
     },
     AddBot {
-            kind: BotKind,
-            position: Vec3,
-            name: Option<String>
-        },
+        kind: BotKind,
+        position: Vec3,
+        name: Option<String>,
+    },
     RemoveActor {
         actor: Handle<Actor>
     },

@@ -96,7 +96,6 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [x] Give player some weapon on respawn.
 - [x] Events log - simple text-based event log - it shows all significant events - death of an actor, damage, etc.
 - [x] Pathfinding - based on navmesh.
-- [x] Vision frustum for bots - bots can "see" only in front of them.
 - [x] Death zones - places where actor dies immediately (space, death fog, squashed, telefragged, etc) is added 
 - [ ] Level editor - some simple level editor would be nice, for now I'll continue use ancient 3ds max 2012. Game items are placed on level using dummies which then are substituded with real items, this works but very uncomfortable because it is not WYSIWYG editor.
 - [x] Restyle UI. Main menu also should have some sort of background, not just black void.
@@ -104,7 +103,13 @@ Also make sure rg3d has all its dependent `rg3d-` crates near by of latest versi
 - [ ] Environment interaction - its implemented partially - any actor can use jump pads, pick up items. 
 - [ ] More bots - there are only three bot kind available, there are a lot of free models on mixamo.com which can be used to add more bots.
 - [ ] More levels - currently there is only one level which is boring as fuck.
-- [ ] AI - bots are very stupid right now and this should be fixed.
+- [ ] Bots AI
+	- [ ] Improve vertical aiming - currently bots have vertical aim but it seems have interference with hands animations
+	- [x] Bots walking from item to item and shooting nearby targets
+	- [x] Vision frustum for bots - bots can "see" only in front of them.
+	- [ ] Remove "wall hack" from bots - currently bots can see thru walls and will try to shoot there.
+	- [ ] Make behaviour more natural
+- [ ] Win/loss mechanichs - currently you can't win or loss in game.
 - [ ] Bots hit reaction - partially done, bots have hit reaction animation but there is still no visual "proof" that is was hit. Some sort of blood splashes should be added as well as hit sound.
 - [ ] Improve sound - many events in game still does not have sound. There are plenty of free sources with sounds, this should be used.
 	- [x] Step sounds

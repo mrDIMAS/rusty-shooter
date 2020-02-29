@@ -6,7 +6,12 @@ use rg3d::{
     core::{
         pool::Handle,
         math::vec3::Vec3,
-        visitor::{Visit, Visitor, VisitResult, VisitError},
+        visitor::{
+            Visit,
+            Visitor,
+            VisitResult,
+            VisitError
+        },
     },
     physics::{
         rigid_body::RigidBody,

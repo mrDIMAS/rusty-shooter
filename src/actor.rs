@@ -26,6 +26,7 @@ use rg3d::{
             Visitor,
             VisitResult,
         },
+        math::vec3::Vec3
     },
     scene::{
         base::AsBase,
@@ -43,7 +44,7 @@ impl Default for Actor {
     }
 }
 
-macro_rules! dispatch {
+macro_rules! static_dispatch {
     ($self:ident, $func:ident, $($args:expr),*) => {
         match $self {
             Actor::Player(v) => v.$func($($args),*),
@@ -69,23 +70,23 @@ impl Actor {
     }
 
     pub fn can_be_removed(&self) -> bool {
-        dispatch!(self, can_be_removed,)
+        static_dispatch!(self, can_be_removed,)
     }
 }
 
 impl AsCharacter for Actor {
     fn character(&self) -> &Character {
-        dispatch!(self, character,)
+        static_dispatch!(self, character,)
     }
 
     fn character_mut(&mut self) -> &mut Character {
-        dispatch!(self, character_mut,)
+        static_dispatch!(self, character_mut,)
     }
 }
 
 impl LevelEntity for Actor {
     fn update(&mut self, context: &mut LevelUpdateContext) {
-        dispatch!(self, update, context)
+        static_dispatch!(self, update, context)
     }
 }
 
@@ -108,14 +109,26 @@ impl Visit for Actor {
     }
 }
 
+// Helper struct that used to hold information about possible target for bots
+// it contains all needed information to select suitable target. This is needed
+// because of borrowing rules that does not allows to have a mutable reference
+// to array element and iterate over array using immutable borrow.
+pub struct TargetDescriptor {
+    pub handle: Handle<Actor>,
+    pub health: f32,
+    pub position: Vec3,
+}
+
 pub struct ActorContainer {
-    pool: Pool<Actor>
+    pool: Pool<Actor>,
+    target_descriptors: Vec<TargetDescriptor>
 }
 
 impl ActorContainer {
     pub fn new() -> Self {
         Self {
-            pool: Default::default()
+            pool: Default::default(),
+            target_descriptors: Default::default()
         }
     }
 
@@ -144,8 +157,21 @@ impl ActorContainer {
     }
 
     pub fn update(&mut self, context: &mut LevelUpdateContext) {
+        self.target_descriptors.clear();
+        for (handle, actor) in self.pool.pair_iter() {
+            self.target_descriptors.push(TargetDescriptor {
+                handle,
+                health: actor.character().health,
+                position: actor.character().get_position(&context.scene.physics)
+            });
+        }
+
         for (handle, actor) in self.pool.pair_iter_mut() {
             let is_dead = actor.character().is_dead();
+
+            if let Actor::Bot(bot) = actor {
+                bot.select_target(handle, context.scene, &self.target_descriptors);
+            }
 
             actor.update(context);
 

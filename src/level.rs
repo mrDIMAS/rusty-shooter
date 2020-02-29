@@ -336,9 +336,9 @@ impl Level {
         level.analyze(engine);
 
         sender.send(Message::SpawnPlayer).unwrap();
-        sender.send(Message::AddBot { kind: BotKind::Maw, position: Vec3::new(0.0, 0.0, -1.0), name: None }).unwrap();
-        sender.send(Message::AddBot { kind: BotKind::Mutant, position: Vec3::new(0.0, 0.0, 1.0), name: None }).unwrap();
-        sender.send(Message::AddBot { kind: BotKind::Parasite, position: Vec3::new(1.0, 0.0, 0.0), name: None }).unwrap();
+        sender.send(Message::SpawnBot { kind: BotKind::Maw, name: "Maw".to_owned() }).unwrap();
+        sender.send(Message::SpawnBot { kind: BotKind::Mutant, name: "Mutant".to_owned() }).unwrap();
+        sender.send(Message::SpawnBot { kind: BotKind::Parasite, name: "Parasite".to_owned() }).unwrap();
 
         level
     }
@@ -492,9 +492,6 @@ impl Level {
         let mut bot = Bot::new(kind, &mut engine.resource_manager, scene, position, self.sender.as_ref().unwrap().clone()).unwrap();
         let name = name.unwrap_or_else(|| format!("Bot {:?} {}", kind, self.actors.count()));
         self.leader_board.get_or_add_actor(&name);
-        bot.set_target_actor(self.player)
-            .character_mut()
-            .set_name(name);
         let bot = self.actors.add(Actor::Bot(bot));
         self.give_new_weapon(engine, bot, WeaponKind::Ak47);
         bot
@@ -575,7 +572,7 @@ impl Level {
                         // If actor already has weapon of given kind, then just add ammo to it.
                         if weapon.get_kind() == weapon_kind {
                             found = true;
-                            weapon.add_ammo(30);
+                            weapon.add_ammo(200);
                             break;
                         }
                     }
@@ -588,9 +585,9 @@ impl Level {
                     for weapon in character.get_weapons() {
                         let weapon = self.weapons.get_mut(*weapon);
                         let (weapon_kind, ammo) = match kind {
-                            ItemKind::Plasma => (WeaponKind::PlasmaRifle, 20),
-                            ItemKind::Ak47Ammo => (WeaponKind::Ak47, 30),
-                            ItemKind::M4Ammo => (WeaponKind::M4, 25),
+                            ItemKind::Plasma => (WeaponKind::PlasmaRifle, 200),
+                            ItemKind::Ak47Ammo => (WeaponKind::Ak47, 200),
+                            ItemKind::M4Ammo => (WeaponKind::M4, 200),
                             _ => continue,
                         };
                         if weapon.get_kind() == weapon_kind {
@@ -742,11 +739,6 @@ impl Level {
                     self.leader_board.add_frag(who_name)
                 }
             }
-            if let Actor::Bot(bot) = actor {
-                if who.is_some() {
-                    bot.set_target_actor(who);
-                }
-            }
         }
     }
 
@@ -778,11 +770,6 @@ impl Level {
             .get_position(&scene.physics);
 
         for (handle, actor) in self.actors.pair_iter_mut() {
-            // TODO: Replace with automatic target selection.
-            if let Actor::Bot(bot) = actor {
-                bot.set_target(player_position);
-            }
-
             for death_zone in self.death_zones.iter() {
                 if death_zone.bounds.is_contains_point(actor.character().get_position(&scene.physics)) {
                     self.sender
@@ -863,8 +850,8 @@ impl Level {
             Message::ShowWeapon { weapon, state } => {
                 self.show_weapon(engine, *weapon, *state)
             }
-            Message::SpawnBot { kind } => {
-                self.spawn_bot(engine, *kind, None);
+            Message::SpawnBot { kind, name } => {
+                self.spawn_bot(engine, *kind, Some(name.clone()));
             }
             Message::DamageActor { actor, who, amount } => {
                 self.damage_actor(*actor, *who, *amount);

@@ -12,14 +12,21 @@ use crate::{
     UINodeHandle,
     GameEngine,
     GuiMessage,
-    gui::{create_check_box, create_scroll_bar, create_scroll_viewer},
+    gui::{
+        create_check_box,
+        create_scroll_bar,
+        create_scroll_viewer
+    },
 };
 use rg3d::{
     event::{
-        WindowEvent, Event, MouseScrollDelta,
+        WindowEvent,
+        Event,
+        MouseScrollDelta,
         MouseButton,
     },
-    monitor::VideoMode, window::Fullscreen,
+    monitor::VideoMode,
+    window::Fullscreen,
     gui::{
         items_control::ItemsControlBuilder,
         grid::{

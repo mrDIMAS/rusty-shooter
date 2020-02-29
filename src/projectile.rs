@@ -36,13 +36,13 @@ use crate::{
     },
     level::CleanUp,
     message::Message,
+    effects::EffectKind
 };
 use std::{
     path::Path,
     sync::mpsc::Sender,
 };
 use rand::Rng;
-use crate::effects::EffectKind;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ProjectileKind {
@@ -129,7 +129,7 @@ impl Projectile {
             }
             ProjectileKind::Bullet => {
                 static DEFINITION: ProjectileDefinition = ProjectileDefinition {
-                    damage: 5.0,
+                    damage: 15.0,
                     speed: 0.75,
                     lifetime: 10.0,
                     is_kinematic: true,

@@ -47,7 +47,8 @@ pub enum Message {
     /// particular heuristic, leading to good selection (like do spawn at a point with least
     /// enemies nearby, which will increase survival probability)
     SpawnBot {
-        kind: BotKind
+        kind: BotKind,
+        name: String
     },
     /// Gives item of specified kind to a given actor. Basically it means that actor will take
     /// item and consume it immediately (heal itself, add ammo, etc.)
@@ -81,6 +82,7 @@ pub enum Message {
     PlaySound {
         path: PathBuf,
         position: Vec3,
+        // TODO: Add more options here - gain, distance rolloff, etc.
     },
     ShowWeapon {
         weapon: Handle<Weapon>,

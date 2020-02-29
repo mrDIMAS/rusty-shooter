@@ -88,6 +88,7 @@ pub struct WeaponDefinition {
     pub shot_sound: &'static str,
     pub ammo: u32,
     pub projectile: ProjectileKind,
+    pub shoot_interval: f64,
 }
 
 impl Default for Weapon {
@@ -139,8 +140,9 @@ impl Weapon {
                 static DEFINITION: WeaponDefinition = WeaponDefinition {
                     model: "data/models/m4.FBX",
                     shot_sound: "data/sounds/m4_shot.ogg",
-                    ammo: 115,
+                    ammo: 200,
                     projectile: ProjectileKind::Bullet,
+                    shoot_interval: 0.22,
                 };
                 &DEFINITION
             }
@@ -148,8 +150,9 @@ impl Weapon {
                 static DEFINITION: WeaponDefinition = WeaponDefinition {
                     model: "data/models/ak47.FBX",
                     shot_sound: "data/sounds/m4_shot.ogg",
-                    ammo: 100,
+                    ammo: 200,
                     projectile: ProjectileKind::Bullet,
+                    shoot_interval: 0.22,
                 };
                 &DEFINITION
             }
@@ -157,8 +160,9 @@ impl Weapon {
                 static DEFINITION: WeaponDefinition = WeaponDefinition {
                     model: "data/models/plasma_rifle.FBX",
                     shot_sound: "data/sounds/plasma_shot.ogg",
-                    ammo: 40,
+                    ammo: 100,
                     projectile: ProjectileKind::Plasma,
+                    shoot_interval: 0.5,
                 };
                 &DEFINITION
             }
@@ -290,7 +294,7 @@ impl Weapon {
     }
 
     pub fn try_shoot(&mut self, scene: &mut Scene, time: GameTime) -> bool {
-        if self.ammo != 0 && time.elapsed - self.last_shot_time >= 0.1 {
+        if self.ammo != 0 && time.elapsed - self.last_shot_time >= self.definition.shoot_interval {
             self.ammo -= 1;
 
             self.offset = Vec3::new(0.0, 0.0, -0.05);

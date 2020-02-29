@@ -207,6 +207,13 @@ impl Menu {
                     engine.user_interface
                         .post_message(UiMessage::targeted(
                             self.match_menu.window, UiMessageData::Window(WindowMessage::Opened)));
+                    engine.user_interface
+                        .post_message(
+                            UiMessage::targeted(
+                                self.match_menu.window,
+                                UiMessageData::Widget(
+                                    WidgetMessage::Property(
+                                        WidgetProperty::DesiredPosition(Vec2::new(400.0, 0.0))))))
                 } else if event.source() == self.btn_save_game {
                     self.sender
                         .send(Message::SaveGame)

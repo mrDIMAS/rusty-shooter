@@ -4,6 +4,7 @@ use rg3d::{
             Handle,
             Pool,
             PoolPairIterator,
+            PoolIterator
         },
         visitor::{Visit, Visitor, VisitResult},
         math::vec3::Vec3,
@@ -333,6 +334,10 @@ impl ItemContainer {
 
     pub fn pair_iter(&self) -> PoolPairIterator<Item> {
         self.pool.pair_iter()
+    }
+
+    pub fn iter(&self) -> PoolIterator<Item> {
+        self.pool.iter()
     }
 
     pub fn update(&mut self, scene: &mut Scene, time: GameTime) {

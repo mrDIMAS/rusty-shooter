@@ -40,7 +40,7 @@ cargo run --release
 
 Keep in mind that it can be different from latest version!
 
-[![gameplay](rusty-shooter-youtube.PNG)](https://www.youtube.com/watch?v=UDn8ymyXPcI)
+[![Gameplay video](pics/rusty-shooter-youtube.PNG?raw=true "Video")](https://www.youtube.com/watch?v=UDn8ymyXPcI)
 
 ## Screenshots
 

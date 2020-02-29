@@ -36,6 +36,12 @@ git pull
 cargo run --release
 ```
 
+## Gameplay video
+
+Keep in mind that it can be different from latest version!
+
+[![gameplay](rusty-shooter-youtube.PNG)](https://www.youtube.com/watch?v=UDn8ymyXPcI)
+
 ## Screenshots
 
 ![1](pics/1.jpg?raw=true "Game 1")

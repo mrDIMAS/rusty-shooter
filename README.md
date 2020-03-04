@@ -138,6 +138,8 @@ Keep in mind that it can be different from latest version!
 - [ ] Environment interaction - its implemented partially - any actor can use jump pads, pick up items. 
 - [ ] More bots - there are only three bot kind available, there are a lot of free models on mixamo.com which can be used to add more bots.
 - [ ] More levels - currently there is only one level which is boring as fuck.
+- [x] Add small interval between bots/player respawn
+- [x] Add something like "You died" text on HUD when player dies.
 - [ ] Bots AI
 	- [ ] Improve vertical aiming - currently bots have vertical aim but it seems have interference with hands animations
 	- [x] Bots walking from item to item and shooting nearby targets

@@ -1,22 +1,3 @@
-use rg3d::{
-    core::{
-        visitor::{Visit, Visitor, VisitResult},
-        pool::Handle,
-        math::{vec3::Vec3, quat::Quat, mat3::Mat3},
-    },
-    event::{DeviceEvent, Event, MouseScrollDelta, ElementState},
-    scene::{
-        node::Node,
-        Scene,
-        base::AsBase,
-    },
-    sound::context::Context,
-    physics::{
-        convex_shape::ConvexShape,
-        rigid_body::RigidBody,
-        convex_shape::{CapsuleShape, Axis},
-    },
-};
 use rand::Rng;
 use crate::{
     character::{
@@ -42,6 +23,35 @@ use std::{
         mpsc::Sender,
     },
     cell::RefCell,
+};
+use rg3d::{
+    core::{
+        visitor::{Visit, Visitor, VisitResult},
+        pool::Handle,
+        math::{vec3::Vec3, quat::Quat, mat3::Mat3},
+    },
+    event::{
+        DeviceEvent,
+        Event,
+        MouseScrollDelta,
+        ElementState
+    },
+    scene::{
+        node::Node,
+        Scene,
+        base::AsBase,
+        camera::CameraBuilder,
+        base::BaseBuilder
+    },
+    sound::context::Context,
+    physics::{
+        convex_shape::{
+            ConvexShape,
+            CapsuleShape,
+            Axis
+        },
+        rigid_body::RigidBody,
+    },
 };
 
 pub struct Controller {
@@ -214,7 +224,9 @@ impl CleanUp for Player {
 
 impl Player {
     pub fn new(scene: &mut Scene, sender: Sender<Message>) -> Player {
-        let camera_handle = scene.graph.add_node(Node::Camera(Default::default()));
+        let camera_handle = scene.graph.add_node(Node::Camera(
+            CameraBuilder::new(BaseBuilder::new()).build())
+        );
 
         let height = Self::default().stand_body_height;
         let mut camera_pivot = Node::Base(Default::default());
@@ -284,6 +296,10 @@ impl Player {
             }
         };
         capsule.set_height(new_height);
+    }
+
+    pub fn camera(&self) -> Handle<Node> {
+        self.camera
     }
 
     pub fn set_control_scheme(&mut self, control_scheme: Rc<RefCell<ControlScheme>>) {

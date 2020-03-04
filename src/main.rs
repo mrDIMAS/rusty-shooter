@@ -21,6 +21,7 @@ mod match_menu;
 mod message;
 mod options_menu;
 mod gui;
+mod leader_board;
 
 use crate::{
     character::AsCharacter,
@@ -502,6 +503,9 @@ impl Game {
                     let current_weapon = level.get_weapons().get(current_weapon);
                     self.hud.set_ammo(ui, current_weapon.get_ammo());
                 }
+                self.hud.set_is_died(ui, false);
+            } else {
+                self.hud.set_is_died(ui, true);
             }
         }
 
@@ -619,7 +623,7 @@ impl Game {
         }
 
         self.menu.process_input_event(&mut self.engine, &event);
-        self.hud.process_input_event(&mut self.engine, &event);
+        self.hud.process_event(&mut self.engine, &event);
     }
 }
 

@@ -3,13 +3,6 @@ use std::{
     sync::mpsc::Sender,
     path::PathBuf,
 };
-use crate::{
-    projectile::ProjectileKind,
-    actor::Actor,
-    GameTime,
-    level::CleanUp,
-    message::Message,
-};
 use rg3d::{
     physics::{RayCastOptions, HitKind, Physics},
     engine::resource_manager::ResourceManager,
@@ -39,8 +32,15 @@ use rg3d::{
         math::{vec3::Vec3, ray::Ray},
     },
 };
-use crate::actor::ActorContainer;
-use crate::character::AsCharacter;
+use crate::{
+    actor::ActorContainer,
+    projectile::ProjectileKind,
+    actor::Actor,
+    GameTime,
+    level::CleanUp,
+    message::Message,
+    character::AsCharacter,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum WeaponKind {
@@ -142,7 +142,7 @@ impl Weapon {
                     shot_sound: "data/sounds/m4_shot.ogg",
                     ammo: 200,
                     projectile: ProjectileKind::Bullet,
-                    shoot_interval: 0.22,
+                    shoot_interval: 0.15,
                 };
                 &DEFINITION
             }
@@ -152,7 +152,7 @@ impl Weapon {
                     shot_sound: "data/sounds/m4_shot.ogg",
                     ammo: 200,
                     projectile: ProjectileKind::Bullet,
-                    shoot_interval: 0.22,
+                    shoot_interval: 0.15,
                 };
                 &DEFINITION
             }
@@ -162,7 +162,7 @@ impl Weapon {
                     shot_sound: "data/sounds/plasma_shot.ogg",
                     ammo: 100,
                     projectile: ProjectileKind::Plasma,
-                    shoot_interval: 0.5,
+                    shoot_interval: 0.25,
                 };
                 &DEFINITION
             }
@@ -343,7 +343,7 @@ impl WeaponContainer {
     }
 
     pub fn free(&mut self, weapon: Handle<Weapon>) {
-self.pool.free(weapon);
+        self.pool.free(weapon);
     }
 
     pub fn iter_mut(&mut self) -> PoolIteratorMut<Weapon> {

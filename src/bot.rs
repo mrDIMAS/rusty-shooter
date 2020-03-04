@@ -68,7 +68,7 @@ pub enum BotKind {
 }
 
 impl BotKind {
-    pub fn new(id: i32) -> Result<Self, String> {
+    pub fn from_id(id: i32) -> Result<Self, String> {
         match id {
             0 => Ok(BotKind::Mutant),
             1 => Ok(BotKind::Parasite),
@@ -98,8 +98,6 @@ pub struct Bot {
     dying_machine: DyingMachine,
     last_health: f32,
     restoration_time: f32,
-    shoot_interval: f32,
-    shots_made: usize,
     path: Vec<Vec3>,
     move_target: Vec3,
     current_path_point: usize,
@@ -135,8 +133,6 @@ impl Default for Bot {
             dying_machine: Default::default(),
             last_health: 0.0,
             restoration_time: 0.0,
-            shoot_interval: 0.0,
-            shots_made: 0,
             path: Default::default(),
             move_target: Default::default(),
             current_path_point: 0,
@@ -276,8 +272,6 @@ impl LevelEntity for Bot {
                 .evaluate_pose(&context.scene.animations, context.time.delta)
                 .apply(&mut context.scene.graph);
 
-            self.shoot_interval -= context.time.delta;
-
             if distance > threshold && can_aim && self.can_shoot() {
                 if let Some(weapon) = self.character.weapons.get(self.character.current_weapon as usize) {
                     self.character
@@ -288,11 +282,6 @@ impl LevelEntity for Bot {
                             weapon: *weapon,
                             initial_velocity: Vec3::ZERO,
                         }).unwrap();
-                    self.shots_made += 1;
-                    if self.shots_made >= 4 {
-                        self.shots_made = 0;
-                        self.shoot_interval = 0.5;
-                    }
                 }
             }
 
@@ -885,7 +874,7 @@ impl Visit for Bot {
         let mut kind_id = self.kind.id();
         kind_id.visit("Kind", visitor)?;
         if visitor.is_reading() {
-            self.kind = BotKind::new(kind_id)?;
+            self.kind = BotKind::from_id(kind_id)?;
         }
 
         self.definition = Self::get_definition(self.kind);

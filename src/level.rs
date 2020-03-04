@@ -7,7 +7,6 @@ use std::{
         Arc,
         mpsc::Sender,
     },
-    collections::HashMap,
 };
 use rand::Rng;
 use crate::{
@@ -35,24 +34,17 @@ use crate::{
     message::Message,
     MatchOptions,
     GameEngine,
-    character::{
-        AsCharacter,
-        Team,
-    },
+    character::AsCharacter,
+    leader_board::LeaderBoard,
 };
 use rg3d::{
-    core::math::PositionProvider,
-    event::Event,
-    scene::{
-        Scene,
-        base::AsBase,
-        node::Node,
-    },
-    utils::{
-        self,
-        navmesh::Navmesh,
-    },
     core::{
+        math::{
+            PositionProvider,
+            vec3::*,
+            ray::Ray,
+            aabb::AxisAlignedBoundingBox,
+        },
         color::Color,
         pool::Handle,
         visitor::{
@@ -60,11 +52,20 @@ use rg3d::{
             VisitResult,
             Visitor,
         },
-        math::{
-            vec3::*,
-            ray::Ray,
-            aabb::AxisAlignedBoundingBox,
+    },
+    event::Event,
+    scene::{
+        Scene,
+        base::{
+            AsBase,
+            BaseBuilder,
         },
+        node::Node,
+        camera::CameraBuilder,
+    },
+    utils::{
+        self,
+        navmesh::Navmesh,
     },
     physics::RayCastOptions,
     sound::{
@@ -77,6 +78,8 @@ use rg3d::{
     },
     renderer::debug_renderer,
 };
+
+pub const RESPAWN_TIME: f32 = 4.0;
 
 pub struct Level {
     map_root: Handle<Node>,
@@ -95,124 +98,9 @@ pub struct Level {
     pub options: MatchOptions,
     time: f32,
     pub leader_board: LeaderBoard,
-}
-
-#[derive(Copy, Clone)]
-pub struct PersonalScore {
-    pub kills: u32,
-    pub deaths: u32,
-}
-
-impl Default for PersonalScore {
-    fn default() -> Self {
-        Self {
-            kills: 0,
-            deaths: 0,
-        }
-    }
-}
-
-impl Visit for PersonalScore {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.kills.visit("Kills", visitor)?;
-        self.deaths.visit("Deaths", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
-pub struct LeaderBoard {
-    personal_score: HashMap<String, PersonalScore>,
-    team_score: HashMap<Team, u32>,
-}
-
-impl LeaderBoard {
-    pub fn get_or_add_actor<P: AsRef<str>>(&mut self, actor_name: P) -> &mut PersonalScore {
-        self.personal_score
-            .entry(actor_name.as_ref().to_owned())
-            .or_insert(Default::default())
-    }
-
-    pub fn remove_actor<P: AsRef<str>>(&mut self, actor_name: P) {
-        self.personal_score.remove(actor_name.as_ref());
-    }
-
-    pub fn add_frag<P: AsRef<str>>(&mut self, actor_name: P) {
-        self.get_or_add_actor(actor_name).kills += 1;
-    }
-
-    pub fn add_death<P: AsRef<str>>(&mut self, actor_name: P) {
-        self.get_or_add_actor(actor_name).deaths += 1;
-    }
-
-    pub fn score_of<P: AsRef<str>>(&self, actor_name: P) -> u32 {
-        match self.personal_score.get(actor_name.as_ref()) {
-            None => 0,
-            Some(value) => value.kills,
-        }
-    }
-
-    pub fn add_team_frag(&mut self, team: Team) {
-        *self.team_score.entry(team).or_insert(0) += 1;
-    }
-
-    pub fn team_score(&self, team: Team) -> u32 {
-        match self.team_score.get(&team) {
-            None => 0,
-            Some(score) => *score,
-        }
-    }
-
-    /// Returns record about leader as a pair of character name and its score.
-    /// `except` parameter can be used to exclude already found leader and search
-    /// for a character at second place.
-    pub fn highest_personal_score(&self, except: Option<&str>) -> Option<(&str, u32)> {
-        let mut pair = None;
-
-        for (name, score) in self.personal_score.iter() {
-            if let Some(except) = except {
-                if name == except {
-                    continue;
-                }
-            }
-            match pair {
-                None => pair = Some((name.as_str(), score.kills)),
-                Some(ref mut pair) => {
-                    if score.kills > pair.1 {
-                        *pair = (name.as_str(), score.kills)
-                    }
-                }
-            }
-        }
-
-        pair
-    }
-
-    pub fn values(&self) -> &HashMap<String, PersonalScore> {
-        &self.personal_score
-    }
-}
-
-impl Default for LeaderBoard {
-    fn default() -> Self {
-        Self {
-            personal_score: Default::default(),
-            team_score: Default::default(),
-        }
-    }
-}
-
-impl Visit for LeaderBoard {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.personal_score.visit("PersonalScore", visitor)?;
-        self.team_score.visit("TeamScore", visitor)?;
-
-        visitor.leave_region()
-    }
+    respawn_list: Vec<RespawnEntry>,
+    spectator_camera: Handle<Node>,
+    target_spectator_position: Vec3,
 }
 
 impl Default for Level {
@@ -234,6 +122,9 @@ impl Default for Level {
             options: Default::default(),
             time: 0.0,
             leader_board: Default::default(),
+            respawn_list: Default::default(),
+            spectator_camera: Default::default(),
+            target_spectator_position: Default::default(),
         }
     }
 }
@@ -262,11 +153,13 @@ impl Visit for Level {
         self.options.visit("Options", visitor)?;
         self.time.visit("Time", visitor)?;
         self.leader_board.visit("LeaderBoard", visitor)?;
+        self.respawn_list.visit("RespawnList", visitor)?;
+        self.spectator_camera.visit("SpectatorCamera", visitor)?;
+        self.target_spectator_position.visit("TargetSpectatorPosition", visitor)?;
 
         visitor.leave_region()
     }
 }
-
 
 pub struct DeathZone {
     bounds: AxisAlignedBoundingBox
@@ -299,6 +192,106 @@ pub struct LevelUpdateContext<'a> {
     pub navmesh: Option<&'a mut Navmesh>,
 }
 
+struct PlayerRespawnEntry {
+    time_left: f32
+}
+
+impl Default for PlayerRespawnEntry {
+    fn default() -> Self {
+        Self {
+            time_left: 0.0
+        }
+    }
+}
+
+impl Visit for PlayerRespawnEntry {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.time_left.visit("TimeLeft", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
+struct BotRespawnEntry {
+    name: String,
+    kind: BotKind,
+    time_left: f32,
+}
+
+impl Default for BotRespawnEntry {
+    fn default() -> Self {
+        Self {
+            name: "".to_string(),
+            kind: BotKind::Mutant,
+            time_left: 0.0,
+        }
+    }
+}
+
+impl Visit for BotRespawnEntry {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.name.visit("Name", visitor)?;
+        self.time_left.visit("TimeLeft", visitor)?;
+
+        let mut kind_id = self.kind.id();
+        kind_id.visit("Kind", visitor)?;
+        self.kind = BotKind::from_id(kind_id)?;
+
+        visitor.leave_region()
+    }
+}
+
+enum RespawnEntry {
+    Bot(BotRespawnEntry),
+    Player(PlayerRespawnEntry),
+}
+
+impl Default for RespawnEntry {
+    fn default() -> Self {
+        RespawnEntry::Player(PlayerRespawnEntry::default())
+    }
+}
+
+impl RespawnEntry {
+    fn id(&self) -> u32 {
+        match self {
+            RespawnEntry::Bot { .. } => 0,
+            RespawnEntry::Player { .. } => 1,
+        }
+    }
+
+    fn from_id(id: u32) -> Result<Self, String> {
+        match id {
+            0 => Ok(RespawnEntry::Bot(Default::default())),
+            1 => Ok(RespawnEntry::Player(Default::default())),
+            _ => Err(format!("Invalid RespawnEntry type {}", id))
+        }
+    }
+}
+
+impl Visit for RespawnEntry {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        let mut id = self.id();
+        id.visit("Id", visitor)?;
+        if visitor.is_reading() {
+            *self = Self::from_id(id)?;
+        }
+
+        match self {
+            RespawnEntry::Bot(v) => v.visit("Data", visitor)?,
+            RespawnEntry::Player(v) => v.visit("Data", visitor)?,
+        }
+
+        visitor.leave_region()
+    }
+}
+
 impl Level {
     pub fn new(
         engine: &mut GameEngine,
@@ -307,6 +300,15 @@ impl Level {
         options: MatchOptions,
     ) -> Level {
         let mut scene = Scene::new();
+
+        // Spectator camera is used when there is no player on level.
+        // This includes situation when player is dead - all dead actors are removed
+        // from level.
+        let spectator_camera = scene.graph.add_node(Node::Camera(
+            CameraBuilder::new(BaseBuilder::new())
+                .enabled(false)
+                .build())
+        );
 
         let mut map_root_handle = Handle::NONE;
         let map_model = engine.resource_manager.request_model(Path::new("data/models/dm6.fbx"));
@@ -322,13 +324,13 @@ impl Level {
             }
         }
 
-
         let mut level = Level {
             scene: engine.scenes.add(scene),
             sender: Some(sender.clone()),
             control_scheme: Some(control_scheme),
             map_root: map_root_handle,
             options,
+            spectator_camera,
             ..Default::default()
         };
 
@@ -420,11 +422,12 @@ impl Level {
     }
 
     pub fn process_input_event(&mut self, event: &Event<()>) -> bool {
-        if let Actor::Player(player) = self.actors.get_mut(self.player) {
-            player.process_input_event(event)
-        } else {
-            false
+        if self.player.is_some() {
+            if let Actor::Player(player) = self.actors.get_mut(self.player) {
+                return player.process_input_event(event);
+            }
         }
+        false
     }
 
     pub fn get_actors(&self) -> &ActorContainer {
@@ -489,7 +492,7 @@ impl Level {
 
     fn add_bot(&mut self, engine: &mut GameEngine, kind: BotKind, position: Vec3, name: Option<String>) -> Handle<Actor> {
         let scene = engine.scenes.get_mut(self.scene);
-        let mut bot = Bot::new(kind, &mut engine.resource_manager, scene, position, self.sender.as_ref().unwrap().clone()).unwrap();
+        let bot = Bot::new(kind, &mut engine.resource_manager, scene, position, self.sender.as_ref().unwrap().clone()).unwrap();
         let name = name.unwrap_or_else(|| format!("Bot {:?} {}", kind, self.actors.count()));
         self.leader_board.get_or_add_actor(&name);
         let bot = self.actors.add(Actor::Bot(bot));
@@ -537,6 +540,9 @@ impl Level {
             .get(index)
             .map_or(Vec3::ZERO, |pt| pt.position);
         let scene = engine.scenes.get_mut(self.scene);
+        if let Node::Camera(spectator_camera) = scene.graph.get_mut(self.spectator_camera) {
+            spectator_camera.set_enabled(false);
+        }
         let mut player = Player::new(scene, self.sender.as_ref().unwrap().clone());
         if let Some(control_scheme) = self.control_scheme.as_ref() {
             player.set_control_scheme(control_scheme.clone());
@@ -550,6 +556,7 @@ impl Level {
         self.give_new_weapon(engine, self.player, WeaponKind::M4);
         self.give_new_weapon(engine, self.player, WeaponKind::Ak47);
         self.give_new_weapon(engine, self.player, WeaponKind::PlasmaRifle);
+
         self.player
     }
 
@@ -723,7 +730,6 @@ impl Level {
                     format!("{} took {} damage!", self.actors.get(actor).character().name, amount)
                 };
 
-
             self.sender
                 .as_ref()
                 .unwrap()
@@ -760,14 +766,54 @@ impl Level {
     }
 
     pub fn update(&mut self, engine: &mut GameEngine, time: GameTime) {
+        // Respawn is done in deferred manner: we just gather all info needed
+        // for respawn, wait some time and then re-create actor. Actor is spawned
+        // by sending a message: this is needed because there are some other
+        // systems that catches such messages and updates their own state.
+        for respawn_entry in self.respawn_list.iter_mut() {
+            match respawn_entry {
+                RespawnEntry::Bot(v) => {
+                    v.time_left -= time.delta;
+                    if v.time_left <= 0.0 {
+                        self.sender
+                            .as_mut()
+                            .unwrap()
+                            .send(Message::SpawnBot {
+                                kind: v.kind,
+                                name: v.name.clone(),
+                            })
+                            .unwrap();
+                    }
+                }
+                RespawnEntry::Player(v) => {
+                    v.time_left -= time.delta;
+                    if v.time_left <= 0.0 {
+                        self.sender
+                            .as_mut()
+                            .unwrap()
+                            .send(Message::SpawnPlayer)
+                            .unwrap();
+                    }
+                }
+            }
+        }
+
+        self.respawn_list.retain(|entry| {
+            match entry {
+                RespawnEntry::Bot(v) => v.time_left >= 0.0,
+                RespawnEntry::Player(v) => v.time_left >= 0.0,
+            }
+        });
+
         self.time += time.delta;
 
         let scene = engine.scenes.get_mut(self.scene);
 
-        let player_position = self.actors
-            .get(self.player)
-            .character()
-            .get_position(&scene.physics);
+        if let Node::Camera(spectator_camera) = scene.graph.get_mut(self.spectator_camera) {
+            let mut position = spectator_camera.base().get_global_position();
+            position.follow(&self.target_spectator_position, 0.1);
+            spectator_camera.base_mut().get_local_transform_mut().set_position(position);
+        }
 
         for (handle, actor) in self.actors.pair_iter_mut() {
             for death_zone in self.death_zones.iter() {
@@ -801,23 +847,58 @@ impl Level {
         if self.actors.contains(actor) {
             let name = self.actors.get(actor).character().name.clone();
 
-            let kind = match self.actors.get(actor) {
-                Actor::Bot(bot) => Some(bot.definition.kind),
-                Actor::Player(_) => None,
+            self.leader_board.add_death(&name);
+
+            let entry = match self.actors.get(actor) {
+                Actor::Bot(bot) => {
+                    RespawnEntry::Bot(BotRespawnEntry {
+                        name,
+                        kind: bot.definition.kind,
+                        time_left: RESPAWN_TIME,
+                    })
+                }
+                Actor::Player(player) => {
+                    // Turn on spectator camera and prepare its target position. Spectator
+                    // camera will be used to render world until player is despawned.
+                    let scene = engine.scenes.get_mut(self.scene);
+                    let position = scene.graph.get(player.camera()).base().get_global_position();
+                    if let Node::Camera(spectator_camera) = scene.graph.get_mut(self.spectator_camera) {
+                        spectator_camera
+                            .set_enabled(true)
+                            .base_mut()
+                            .get_local_transform_mut()
+                            .set_position(position);
+                    }
+                    // Use ray casting to get target position for spectator camera, it is used to
+                    // create "dropping head" effect.
+                    let ray = Ray::from_two_points(&position, &(position - Vec3::new(0.0, 1000.0, 0.0))).unwrap();
+                    let options = RayCastOptions {
+                        ignore_bodies: true,
+                        ignore_static_geometries: false,
+                        sort_results: true,
+                    };
+                    let mut result = Vec::new();
+                    if scene.physics.ray_cast(&ray, options, &mut result) {
+                        if let Some(hit) = result.first() {
+                            self.target_spectator_position = hit.position;
+                            // Prevent see-thru-floor
+                            self.target_spectator_position.y += 0.1;
+                        } else {
+                            self.target_spectator_position = position;
+                        }
+                    } else {
+                        self.target_spectator_position = position;
+                    }
+
+                    RespawnEntry::Player(PlayerRespawnEntry {
+                        time_left: RESPAWN_TIME
+                    })
+                }
             };
 
             self.remove_actor(engine, actor);
 
-            self.leader_board.add_death(&name);
-
-            match kind {
-                Some(bot) => {
-                    // Spawn bot of same kind, we don't care of preserving state of bot
-                    // after death. Leader board still will correctly count score.
-                    self.spawn_bot(engine, bot, Some(name))
-                }
-                None => self.spawn_player(engine)
-            };
+            self.respawn_list.push(entry);
         }
     }
 

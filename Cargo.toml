@@ -1,6 +1,6 @@
 [package]
 name = "rusty-shooter"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Dmitry Stepanov <d1maxa@yandex.ru>"]
 edition = "2018"
 license = "MIT"
@@ -9,5 +9,5 @@ license = "MIT"
 opt-level = 2
 
 [dependencies]
-rg3d = { path = "../rg3d", version = "0.9.0" }
+rg3d = { path = "../rg3d", version = "0.10.0" }
 rand = "0.7.0"

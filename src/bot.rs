@@ -320,6 +320,9 @@ impl LevelEntity for Bot {
                             .send(Message::PlaySound {
                                 path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())].into(),
                                 position,
+                                gain: 1.0,
+                                rolloff_factor: 2.0,
+                                radius: 3.0
                             })
                             .unwrap();
                     }

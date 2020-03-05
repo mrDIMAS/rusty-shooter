@@ -82,7 +82,9 @@ pub enum Message {
     PlaySound {
         path: PathBuf,
         position: Vec3,
-        // TODO: Add more options here - gain, distance rolloff, etc.
+        gain: f32,
+        rolloff_factor: f32,
+        radius: f32
     },
     ShowWeapon {
         weapon: Handle<Weapon>,

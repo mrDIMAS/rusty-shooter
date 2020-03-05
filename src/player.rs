@@ -151,6 +151,9 @@ impl LevelEntity for Player {
                 .send(Message::PlaySound {
                     path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())].into(),
                     position: self.character.get_position(&context.scene.physics),
+                    gain: 1.0,
+                    rolloff_factor: 2.0,
+                    radius: 3.0
                 })
                 .unwrap();
 

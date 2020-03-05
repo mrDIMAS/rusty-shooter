@@ -306,6 +306,9 @@ impl Weapon {
                 sender.send(Message::PlaySound {
                     path: PathBuf::from(self.definition.shot_sound),
                     position,
+                    gain: 1.0,
+                    rolloff_factor: 5.0,
+                    radius: 3.0
                 }).unwrap();
             }
 

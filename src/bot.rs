@@ -809,7 +809,7 @@ impl Bot {
         let position = self.character.get_position(&scene.physics);
         let mut closest_distance = std::f32::MAX;
         for desc in target_descriptors {
-            if desc.handle != self_handle {
+            if desc.handle != self_handle && self.frustum.is_contains_point(desc.position) {
                 let sqr_d = position.sqr_distance(&desc.position);
                 if sqr_d < closest_distance {
                     self.target = desc.position;

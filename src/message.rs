@@ -78,6 +78,7 @@ pub enum Message {
     ShootWeapon {
         weapon: Handle<Weapon>,
         initial_velocity: Vec3,
+        direction: Option<Vec3>
     },
     PlaySound {
         path: PathBuf,

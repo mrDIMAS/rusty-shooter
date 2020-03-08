@@ -281,6 +281,7 @@ impl LevelEntity for Bot {
                         .send(Message::ShootWeapon {
                             weapon: *weapon,
                             initial_velocity: Vec3::ZERO,
+                            direction: Some(look_dir)
                         }).unwrap();
                 }
             }

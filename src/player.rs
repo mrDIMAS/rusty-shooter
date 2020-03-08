@@ -133,6 +133,7 @@ impl LevelEntity for Player {
                 self.character.sender.as_ref().unwrap().send(Message::ShootWeapon {
                     weapon: *current_weapon_handle,
                     initial_velocity: velocity,
+                    direction: None
                 }).unwrap();
             }
         }

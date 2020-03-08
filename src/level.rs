@@ -667,14 +667,22 @@ impl Level {
         sound_context.add_source(shot_sound);
     }
 
-    fn shoot_weapon(&mut self, engine: &mut GameEngine, weapon_handle: Handle<Weapon>, initial_velocity: Vec3, time: GameTime) {
+    fn shoot_weapon(&mut self,
+                    engine: &mut GameEngine,
+                    weapon_handle: Handle<Weapon>,
+                    initial_velocity: Vec3,
+                    time: GameTime,
+                    direction: Option<Vec3>,
+    ) {
         if self.weapons.contains(weapon_handle) {
             let scene = engine.scenes.get_mut(self.scene);
             let weapon = self.weapons.get_mut(weapon_handle);
             if weapon.try_shoot(scene, time) {
                 let kind = weapon.definition.projectile;
                 let position = weapon.get_shot_position(&scene.graph);
-                let direction = weapon.get_shot_direction(&scene.graph);
+                let direction = direction.unwrap_or_else(|| weapon.get_shot_direction(&scene.graph))
+                    .normalized()
+                    .unwrap_or_else(|| Vec3::LOOK);
                 self.create_projectile(engine, kind, position, direction, initial_velocity, weapon_handle);
             }
         }
@@ -922,8 +930,8 @@ impl Level {
             Message::PickUpItem { actor, item } => {
                 self.pickup_item(engine, *actor, *item);
             }
-            Message::ShootWeapon { weapon, initial_velocity } => {
-                self.shoot_weapon(engine, *weapon, *initial_velocity, time)
+            Message::ShootWeapon { weapon, initial_velocity, direction } => {
+                self.shoot_weapon(engine, *weapon, *initial_velocity, time, direction.clone())
             }
             Message::CreateProjectile { kind, position, direction, initial_velocity, owner } => {
                 self.create_projectile(engine, *kind, *position, *direction, *initial_velocity, *owner)

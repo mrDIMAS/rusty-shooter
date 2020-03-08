@@ -141,7 +141,7 @@ Keep in mind that it can be different from latest version!
 - [x] Add small interval between bots/player respawn
 - [x] Add something like "You died" text on HUD when player dies.
 - [ ] Bots AI
-	- [ ] Improve vertical aiming - currently bots have vertical aim but it seems have interference with hands animations
+	- [x] Vertical aiming
 	- [x] Bots walking from item to item and shooting nearby targets
 	- [x] Vision frustum for bots - bots can "see" only in front of them.
 	- [ ] Remove "wall hack" from bots - currently bots can see thru walls and will try to shoot there.

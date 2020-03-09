@@ -722,7 +722,7 @@ impl Level {
         bot
     }
 
-    fn damage_actor(&mut self, engine: &GameEngine, actor: Handle<Actor>, who: Handle<Actor>, amount: f32) {
+    fn damage_actor(&mut self, engine: &GameEngine, actor: Handle<Actor>, who: Handle<Actor>, amount: f32, time: GameTime) {
         if self.actors.contains(actor) && (who.is_none() || who.is_some() && self.actors.contains(who)) {
             let mut who_name = Default::default();
             let message =
@@ -750,15 +750,13 @@ impl Level {
             let actor = self.actors.get_mut(actor);
             if let Actor::Bot(bot) = actor {
                 if let Some(who_position) = who_position {
-                    bot.set_point_of_interest(who_position);
+                    bot.set_point_of_interest(who_position, time);
                 }
             }
             let was_dead = actor.character().is_dead();
             actor.character_mut().damage(amount);
-            if !was_dead && actor.character().is_dead() {
-                if who.is_some() {
-                    self.leader_board.add_frag(who_name)
-                }
+            if !was_dead && actor.character().is_dead() && who.is_some() {
+                self.leader_board.add_frag(who_name)
             }
         }
     }
@@ -960,7 +958,7 @@ impl Level {
                 self.spawn_bot(engine, *kind, Some(name.clone()));
             }
             Message::DamageActor { actor, who, amount } => {
-                self.damage_actor(engine, *actor, *who, *amount);
+                self.damage_actor(engine, *actor, *who, *amount, time);
             }
             Message::CreateEffect { kind, position } => {
                 let scene = engine.scenes.get_mut(self.scene);

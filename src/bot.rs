@@ -23,6 +23,7 @@ use rg3d::{
             Visitor,
         },
         math::{
+            ray::Ray,
             SmoothAngle,
             vec3::Vec3,
             mat4::Mat4,
@@ -33,6 +34,8 @@ use rg3d::{
     },
     physics::{
         rigid_body::RigidBody,
+        HitKind,
+        RayCastOptions,
         convex_shape::{ConvexShape, CapsuleShape, Axis},
     },
     animation::{
@@ -684,8 +687,32 @@ impl Bot {
         self.target = None;
         let position = self.character.position(&scene.physics);
         let mut closest_distance = std::f32::MAX;
-        for desc in targets {
+        let mut raycast_results = Vec::new();
+        'target_loop: for desc in targets {
             if desc.handle != self_handle && self.frustum.is_contains_point(desc.position) {
+                if let Some(ray) = Ray::from_two_points(&position, &desc.position) {
+                    let options = RayCastOptions {
+                        ignore_bodies: false,
+                        ignore_static_geometries: false,
+                        sort_results: true,
+                    };
+                    if scene.physics.ray_cast(&ray, options, &mut raycast_results) {
+                        'hit_loop: for hit in raycast_results.iter() {
+                            match hit.kind {
+                                HitKind::StaticTriangle { .. } => {
+                                    // Target is behind something.
+                                    continue 'target_loop;
+                                }
+                                HitKind::Body(handle) => {
+                                    if self.character.body == handle {
+                                        continue 'hit_loop;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 let sqr_d = position.sqr_distance(&desc.position);
                 if sqr_d < closest_distance {
                     self.target = Some(Target { position: desc.position, handle: desc.handle });
@@ -753,7 +780,7 @@ impl Bot {
 
     fn aim_vertically(&mut self, look_dir: Vec3, graph: &mut Graph, time: GameTime) {
         let angle = self.pitch.angle();
-        self.pitch.set_target( look_dir.dot(&Vec3::UP).acos() - std::f32::consts::PI / 2.0 + self.definition.v_aim_angle_hack.to_radians())
+        self.pitch.set_target(look_dir.dot(&Vec3::UP).acos() - std::f32::consts::PI / 2.0 + self.definition.v_aim_angle_hack.to_radians())
             .update(time.delta);
 
         if self.spine.is_some() {
@@ -820,8 +847,6 @@ impl Bot {
             }
 
             self.update_frustum(position, &context.scene.graph);
-
-
 
             if let Some(look_dir) = look_dir.normalized() {
                 self.aim_vertically(look_dir, &mut context.scene.graph, context.time);
@@ -935,8 +960,9 @@ impl Bot {
         }
     }
 
-    pub fn set_point_of_interest(&mut self, poi: Vec3) {
+    pub fn set_point_of_interest(&mut self, poi: Vec3, time: GameTime) {
         self.point_of_interest = poi;
+        self.last_poi_update_time = time.elapsed;
     }
 }
 

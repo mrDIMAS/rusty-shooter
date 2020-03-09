@@ -20,7 +20,6 @@ use rg3d::{
 };
 use crate::{
     weapon::Weapon,
-    level::CleanUp,
     message::Message,
 };
 use std::sync::mpsc::Sender;
@@ -111,13 +110,6 @@ impl Visit for Character {
     }
 }
 
-impl CleanUp for Character {
-    fn clean_up(&mut self, scene: &mut Scene) {
-        scene.remove_node(self.pivot);
-        scene.physics.remove_body(self.body);
-    }
-}
-
 impl Character {
     pub fn get_body(&self) -> Handle<RigidBody> {
         self.body
@@ -131,10 +123,6 @@ impl Character {
             }
         }
         false
-    }
-
-    pub fn set_name<P: AsRef<str>>(&mut self, name: P) {
-        self.name = name.as_ref().to_owned();
     }
 
     pub fn set_team(&mut self, team: Team) {
@@ -157,7 +145,7 @@ impl Character {
         physics.borrow_body_mut(self.get_body()).set_position(position)
     }
 
-    pub fn get_position(&self, physics: &Physics) -> Vec3 {
+    pub fn position(&self, physics: &Physics) -> Vec3 {
         physics.borrow_body(self.get_body()).get_position()
     }
 
@@ -185,11 +173,11 @@ impl Character {
         self.health <= 0.0
     }
 
-    pub fn get_weapon_pivot(&self) -> Handle<Node> {
+    pub fn weapon_pivot(&self) -> Handle<Node> {
         self.weapon_pivot
     }
 
-    pub fn get_weapons(&self) -> &[Handle<Weapon>] {
+    pub fn weapons(&self) -> &[Handle<Weapon>] {
         &self.weapons
     }
 
@@ -209,7 +197,7 @@ impl Character {
         self.request_current_weapon_visible(true);
     }
 
-    pub fn get_current_weapon(&self) -> Handle<Weapon> {
+    pub fn current_weapon(&self) -> Handle<Weapon> {
         if let Some(weapon) = self.weapons.get(self.current_weapon as usize) {
             *weapon
         } else {
@@ -246,5 +234,20 @@ impl Character {
 
             self.request_current_weapon_visible(true);
         }
+    }
+
+    pub fn set_current_weapon(&mut self, i: usize) {
+        if i < self.weapons.len() {
+            self.request_current_weapon_visible(false);
+
+            self.current_weapon = i as u32;
+
+            self.request_current_weapon_visible(true);
+        }
+    }
+
+    pub fn clean_up(&mut self, scene: &mut Scene) {
+        scene.remove_node(self.pivot);
+        scene.physics.remove_body(self.body);
     }
 }

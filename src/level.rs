@@ -129,14 +129,6 @@ impl Default for Level {
     }
 }
 
-pub trait LevelEntity {
-    fn update(&mut self, context: &mut LevelUpdateContext);
-}
-
-pub trait CleanUp {
-    fn clean_up(&mut self, scene: &mut Scene);
-}
-
 impl Visit for Level {
     fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
         visitor.enter_region(name)?;
@@ -183,13 +175,14 @@ impl Default for DeathZone {
     }
 }
 
-pub struct LevelUpdateContext<'a> {
+pub struct UpdateContext<'a> {
     pub time: GameTime,
     pub scene: &'a mut Scene,
     pub sound_context: Arc<Mutex<Context>>,
     pub items: &'a ItemContainer,
     pub jump_pads: &'a JumpPadContainer,
     pub navmesh: Option<&'a mut Navmesh>,
+    pub weapons: &'a WeaponContainer,
 }
 
 struct PlayerRespawnEntry {
@@ -479,7 +472,7 @@ impl Level {
             let actor = self.actors.get_mut(actor);
             let weapon_handle = self.weapons.add(weapon);
             actor.character_mut().add_weapon(weapon_handle);
-            scene.graph.link_nodes(weapon_model, actor.character().get_weapon_pivot());
+            scene.graph.link_nodes(weapon_model, actor.character().weapon_pivot());
 
             self.sender
                 .as_ref()
@@ -506,8 +499,8 @@ impl Level {
             let character = self.actors.get(actor).character();
 
             // Make sure to remove weapons and drop appropriate items (items will be temporary).
-            let drop_position = character.get_position(&scene.physics);
-            let weapons = character.get_weapons()
+            let drop_position = character.position(&scene.physics);
+            let weapons = character.weapons()
                 .iter()
                 .map(|h| *h)
                 .collect::<Vec<Handle<Weapon>>>();
@@ -524,7 +517,6 @@ impl Level {
             let scene = engine.scenes.get_mut(self.scene);
             self.actors
                 .get_mut(actor)
-                .character_mut()
                 .clean_up(scene);
             self.actors.free(actor);
 
@@ -574,7 +566,7 @@ impl Level {
                     };
 
                     let mut found = false;
-                    for weapon_handle in character.get_weapons() {
+                    for weapon_handle in character.weapons() {
                         let weapon = self.weapons.get_mut(*weapon_handle);
                         // If actor already has weapon of given kind, then just add ammo to it.
                         if weapon.get_kind() == weapon_kind {
@@ -589,7 +581,7 @@ impl Level {
                     }
                 }
                 ItemKind::Plasma | ItemKind::Ak47Ammo | ItemKind::M4Ammo => {
-                    for weapon in character.get_weapons() {
+                    for weapon in character.weapons() {
                         let weapon = self.weapons.get_mut(*weapon);
                         let (weapon_kind, ammo) = match kind {
                             ItemKind::Plasma => (WeaponKind::PlasmaRifle, 200),
@@ -701,7 +693,7 @@ impl Level {
         for (i, pt) in self.spawn_points.iter().enumerate() {
             let mut sum_distance = 0.0;
             for actor in self.actors.iter() {
-                let position = actor.character().get_position(&scene.physics);
+                let position = actor.character().position(&scene.physics);
                 sum_distance += pt.position.distance(&position);
             }
             if sum_distance > max_distance {
@@ -730,7 +722,7 @@ impl Level {
         bot
     }
 
-    fn damage_actor(&mut self, actor: Handle<Actor>, who: Handle<Actor>, amount: f32) {
+    fn damage_actor(&mut self, engine: &GameEngine, actor: Handle<Actor>, who: Handle<Actor>, amount: f32) {
         if self.actors.contains(actor) && (who.is_none() || who.is_some() && self.actors.contains(who)) {
             let mut who_name = Default::default();
             let message =
@@ -748,7 +740,19 @@ impl Level {
                     text: message,
                 }).unwrap();
 
+            let who_position =
+                if who.is_some() {
+                    let scene = engine.scenes.get(self.scene);
+                    Some(self.actors.get(who).character().position(&scene.physics))
+                } else {
+                    None
+                };
             let actor = self.actors.get_mut(actor);
+            if let Actor::Bot(bot) = actor {
+                if let Some(who_position) = who_position {
+                    bot.set_point_of_interest(who_position);
+                }
+            }
             let was_dead = actor.character().is_dead();
             actor.character_mut().damage(amount);
             if !was_dead && actor.character().is_dead() {
@@ -776,7 +780,7 @@ impl Level {
         self.time
     }
 
-    pub fn update(&mut self, engine: &mut GameEngine, time: GameTime) {
+    fn update_respawn(&mut self, time: GameTime) {
         // Respawn is done in deferred manner: we just gather all info needed
         // for respawn, wait some time and then re-create actor. Actor is spawned
         // by sending a message: this is needed because there are some other
@@ -815,20 +819,20 @@ impl Level {
                 RespawnEntry::Player(v) => v.time_left >= 0.0,
             }
         });
+    }
 
-        self.time += time.delta;
-
-        let scene = engine.scenes.get_mut(self.scene);
-
+    fn update_spectator_camera(&mut self, scene: &mut Scene) {
         if let Node::Camera(spectator_camera) = scene.graph.get_mut(self.spectator_camera) {
             let mut position = spectator_camera.base().get_global_position();
             position.follow(&self.target_spectator_position, 0.1);
             spectator_camera.base_mut().get_local_transform_mut().set_position(position);
         }
+    }
 
+    fn update_death_zones(&mut self, scene: &Scene) {
         for (handle, actor) in self.actors.pair_iter_mut() {
             for death_zone in self.death_zones.iter() {
-                if death_zone.bounds.is_contains_point(actor.character().get_position(&scene.physics)) {
+                if death_zone.bounds.is_contains_point(actor.character().position(&scene.physics)) {
                     self.sender
                         .as_ref()
                         .unwrap()
@@ -837,21 +841,31 @@ impl Level {
                 }
             }
         }
+    }
 
+    pub fn update(&mut self, engine: &mut GameEngine, time: GameTime) {
+        self.time += time.delta;
+        self.update_respawn(time);
+        let scene = engine.scenes.get_mut(self.scene);
+        self.update_spectator_camera(scene);
+        self.update_death_zones(scene);
         self.weapons.update(scene, &self.actors);
-        self.projectiles.update(scene, &mut self.actors, &self.weapons, time);
+        self.projectiles.update(
+            scene,
+            &mut self.actors,
+            &self.weapons,
+            time,
+        );
         self.items.update(scene, time);
-
-        let mut context = LevelUpdateContext {
+        self.actors.update(&mut UpdateContext {
             time,
             scene,
             sound_context: engine.sound_context.clone(),
             items: &self.items,
             jump_pads: &self.jump_pads,
             navmesh: self.navmesh.as_mut(),
-        };
-
-        self.actors.update(&mut context);
+            weapons: &self.weapons,
+        });
     }
 
     pub fn respawn_actor(&mut self, engine: &mut GameEngine, actor: Handle<Actor>) {
@@ -946,7 +960,7 @@ impl Level {
                 self.spawn_bot(engine, *kind, Some(name.clone()));
             }
             Message::DamageActor { actor, who, amount } => {
-                self.damage_actor(*actor, *who, *amount);
+                self.damage_actor(engine, *actor, *who, *amount);
             }
             Message::CreateEffect { kind, position } => {
                 let scene = engine.scenes.get_mut(self.scene);

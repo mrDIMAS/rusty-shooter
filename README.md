@@ -144,6 +144,7 @@ Keep in mind that it can be different from latest version!
 	- [x] Vertical aiming
 	- [x] Bots walking from item to item and shooting nearby targets
 	- [x] Vision frustum for bots - bots can "see" only in front of them.
+	- [x] Automatic weapon selection
 	- [ ] Remove "wall hack" from bots - currently bots can see thru walls and will try to shoot there.
 	- [ ] Make behaviour more natural
 - [ ] Win/loss mechanichs - currently you can't win or loss in game.

@@ -1,20 +1,18 @@
 use std::{
     path::Path,
-    cell::Cell,
     sync::mpsc::Sender,
 };
 use crate::{
     character::{Character, AsCharacter},
-    level::{
-        LevelEntity,
-        CleanUp,
-        LevelUpdateContext,
-    },
+    level::UpdateContext,
     message::Message,
-    actor::Actor,
+    actor::{
+        Actor,
+        TargetDescriptor,
+    },
     GameTime,
-    actor::TargetDescriptor,
     item::ItemContainer,
+    weapon::WeaponContainer,
 };
 use rg3d::{
     core::{
@@ -25,6 +23,7 @@ use rg3d::{
             Visitor,
         },
         math::{
+            SmoothAngle,
             vec3::Vec3,
             mat4::Mat4,
             quat::Quat,
@@ -55,6 +54,7 @@ use rg3d::{
     engine::resource_manager::ResourceManager,
     renderer::debug_renderer::{self, DebugRenderer},
     animation::AnimationSignal,
+    utils::navmesh::Navmesh,
 };
 use rand::Rng;
 
@@ -86,12 +86,36 @@ impl BotKind {
     }
 }
 
+pub struct Target {
+    position: Vec3,
+    handle: Handle<Actor>,
+}
+
+impl Default for Target {
+    fn default() -> Self {
+        Self {
+            position: Default::default(),
+            handle: Default::default(),
+        }
+    }
+}
+
+impl Visit for Target {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.position.visit("Position", visitor)?;
+        self.handle.visit("Handle", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
 pub struct Bot {
-    target: Vec3,
+    target: Option<Target>,
     kind: BotKind,
     model: Handle<Node>,
     character: Character,
-    target_actor: Cell<Handle<Actor>>,
     pub definition: &'static BotDefinition,
     locomotion_machine: LocomotionMachine,
     combat_machine: CombatMachine,
@@ -107,6 +131,8 @@ pub struct Bot {
     last_path_rebuild_time: f64,
     last_move_dir: Vec3,
     spine: Handle<Node>,
+    yaw: SmoothAngle,
+    pitch: SmoothAngle,
 }
 
 impl AsCharacter for Bot {
@@ -126,7 +152,6 @@ impl Default for Bot {
             kind: BotKind::Mutant,
             model: Default::default(),
             target: Default::default(),
-            target_actor: Default::default(),
             definition: Self::get_definition(BotKind::Mutant),
             locomotion_machine: Default::default(),
             combat_machine: Default::default(),
@@ -142,6 +167,16 @@ impl Default for Bot {
             last_path_rebuild_time: -10.0,
             last_move_dir: Default::default(),
             spine: Default::default(),
+            yaw: SmoothAngle {
+                angle: 0.0,
+                target: 0.0,
+                speed: 260.0f32.to_radians(), // rad/s
+            },
+            pitch: SmoothAngle {
+                angle: 0.0,
+                target: 0.0,
+                speed: 260.0f32.to_radians(), // rad/s
+            },
         }
     }
 }
@@ -166,188 +201,7 @@ pub struct BotDefinition {
     pub left_leg_name: &'static str,
     pub right_leg_name: &'static str,
     pub spine: &'static str,
-    pub v_aim_angle_hack: f32
-}
-
-impl LevelEntity for Bot {
-    fn update(&mut self, context: &mut LevelUpdateContext) {
-        if self.character.is_dead() {
-            self.dying_machine.machine
-                .set_parameter(DYING_TO_DEAD, machine::Parameter::Rule(self.character.is_dead()))
-                .evaluate_pose(&context.scene.animations, context.time.delta)
-                .apply(&mut context.scene.graph);
-        } else {
-            self.select_point_of_interest(context.items, context.scene, &context.time);
-
-            let threshold = 2.0;
-            let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
-            let body = context.scene.physics.borrow_body_mut(self.character.body);
-            let look_dir = self.target - body.get_position();
-            let distance = look_dir.len();
-
-            let position = body.get_position();
-
-            if let Some(path_point) = self.path.get(self.current_path_point) {
-                self.move_target = *path_point;
-                if self.move_target.distance(&position) <= 2.0 {
-                    if self.current_path_point < self.path.len() - 1 {
-                        self.current_path_point += 1;
-                    }
-                }
-            }
-
-            let head_pos = position + Vec3::new(0.0, 0.8, 0.0);
-            let up = context.scene.graph.get(self.model).base().get_up_vector();
-            let look_at = head_pos + context.scene.graph.get(self.model).base().get_look_vector();
-            let view_matrix = Mat4::look_at(head_pos, look_at, up).unwrap_or_default();
-            let projection_matrix = Mat4::perspective(60.0f32.to_radians(), 16.0 / 9.0, 0.1, 7.0);
-            let view_projection_matrix = projection_matrix * view_matrix;
-            self.frustum = Frustum::from(view_projection_matrix).unwrap();
-
-            if let Some(look_dir) = look_dir.normalized() {
-                let v_aim_angle = look_dir.dot(&Vec3::UP).acos() - std::f32::consts::PI / 2.0 + self.definition.v_aim_angle_hack.to_radians();
-                if self.spine.is_some() {
-                    context.scene
-                        .graph
-                        .get_mut(self.spine)
-                        .base_mut()
-                        .get_local_transform_mut()
-                        .set_rotation(Quat::from_axis_angle(Vec3::RIGHT, v_aim_angle));
-                }
-
-                if distance > threshold {
-                    if has_ground_contact {
-                        if let Some(move_dir) = (self.move_target - position).normalized() {
-                            let vel = move_dir.scale(self.definition.walk_speed * context.time.delta);
-                            body.set_x_velocity(vel.x);
-                            body.set_z_velocity(vel.z);
-                            self.last_move_dir = move_dir;
-                        }
-                    } else {
-                        // A bit of air control. This helps jump of ledges when there is jump pad below bot.
-                        let vel = self.last_move_dir.scale(self.definition.walk_speed * context.time.delta);
-                        body.set_x_velocity(vel.x);
-                        body.set_z_velocity(vel.z);
-                    }
-                }
-
-                let pivot = context.scene.graph.get_mut(self.character.pivot);
-                let transform = pivot.base_mut().get_local_transform_mut();
-                let angle = look_dir.x.atan2(look_dir.z);
-                transform.set_rotation(Quat::from_axis_angle(Vec3::UP, angle))
-            }
-
-            let need_jump = look_dir.y >= 0.3 && has_ground_contact && distance < 2.0;
-            if need_jump {
-                body.set_y_velocity(0.08);
-            }
-            let was_damaged = self.character.health < self.last_health;
-            if was_damaged {
-                let hit_reaction = context.scene.animations.get_mut(self.combat_machine.hit_reaction_animation);
-                if hit_reaction.has_ended() {
-                    hit_reaction.rewind();
-                }
-                self.restoration_time = 0.8;
-            }
-            let can_aim = self.restoration_time <= 0.0;
-            self.last_health = self.character.health;
-
-            self.locomotion_machine.machine
-                .set_parameter(IDLE_TO_WALK_PARAM, machine::Parameter::Rule(distance > threshold))
-                .set_parameter(WALK_TO_IDLE_PARAM, machine::Parameter::Rule(distance <= threshold))
-                .set_parameter(WALK_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
-                .set_parameter(IDLE_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
-                .set_parameter(JUMP_TO_FALLING_PARAM, machine::Parameter::Rule(!has_ground_contact))
-                .set_parameter(FALLING_TO_IDLE_PARAM, machine::Parameter::Rule(has_ground_contact))
-                .evaluate_pose(&context.scene.animations, context.time.delta)
-                .apply(&mut context.scene.graph);
-
-            // Overwrite upper body with combat machine
-            self.combat_machine.machine
-                .set_parameter(WHIP_TO_AIM_PARAM, machine::Parameter::Rule(distance > threshold))
-                .set_parameter(AIM_TO_WHIP_PARAM, machine::Parameter::Rule(distance <= threshold))
-                .set_parameter(WHIP_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
-                .set_parameter(AIM_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
-                .set_parameter(HIT_REACTION_TO_AIM_PARAM, machine::Parameter::Rule(can_aim))
-                .evaluate_pose(&context.scene.animations, context.time.delta)
-                .apply(&mut context.scene.graph);
-
-            if distance > threshold && can_aim && self.can_shoot() {
-                if let Some(weapon) = self.character.weapons.get(self.character.current_weapon as usize) {
-                    self.character
-                        .sender
-                        .as_ref()
-                        .unwrap()
-                        .send(Message::ShootWeapon {
-                            weapon: *weapon,
-                            initial_velocity: Vec3::ZERO,
-                            direction: Some(look_dir)
-                        }).unwrap();
-                }
-            }
-
-            // Apply damage to target from melee attack
-            while let Some(event) = context.scene.animations.get_mut(self.combat_machine.whip_animation).pop_event() {
-                if event.signal_id == CombatMachine::HIT_SIGNAL && distance < threshold {
-                    if self.target_actor.get().is_some() {
-                        self.character
-                            .sender
-                            .as_ref()
-                            .unwrap()
-                            .send(Message::DamageActor {
-                                actor: self.target_actor.get(),
-                                who: Default::default(),
-                                amount: 20.0,
-                            })
-                            .unwrap();
-                    }
-                }
-            }
-
-            // Emit step sounds from walking animation.
-            if self.locomotion_machine.is_walking() {
-                while let Some(event) = context.scene.animations.get_mut(self.locomotion_machine.walk_animation).pop_event() {
-                    if event.signal_id == LocomotionMachine::STEP_SIGNAL && has_ground_contact {
-                        let footsteps = [
-                            "data/sounds/footsteps/FootStep_shoe_stone_step1.wav",
-                            "data/sounds/footsteps/FootStep_shoe_stone_step2.wav",
-                            "data/sounds/footsteps/FootStep_shoe_stone_step3.wav",
-                            "data/sounds/footsteps/FootStep_shoe_stone_step4.wav"
-                        ];
-                        self.character
-                            .sender
-                            .as_ref()
-                            .unwrap()
-                            .send(Message::PlaySound {
-                                path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())].into(),
-                                position,
-                                gain: 1.0,
-                                rolloff_factor: 2.0,
-                                radius: 3.0
-                            })
-                            .unwrap();
-                    }
-                }
-            }
-
-            if context.time.elapsed - self.last_path_rebuild_time >= 1.0 {
-                if let Some(navmesh) = context.navmesh.as_mut() {
-                    let from = body.get_position() - Vec3::new(0.0, 1.0, 0.0);
-                    if let Some(from_index) = navmesh.query_closest(from) {
-                        if let Some(to_index) = navmesh.query_closest(self.point_of_interest) {
-                            self.current_path_point = 0;
-                            // Rebuild path if target path vertex has changed.
-                            if navmesh.build_path(from_index, to_index, &mut self.path).is_ok() {
-                                self.path.reverse();
-                                self.last_path_rebuild_time = context.time.elapsed;
-                            }
-                        }
-                    }
-                }
-            }
-            self.restoration_time -= context.time.delta;
-        }
-    }
+    pub v_aim_angle_hack: f32,
 }
 
 fn load_animation<P: AsRef<Path>>(
@@ -355,7 +209,7 @@ fn load_animation<P: AsRef<Path>>(
     path: P,
     model: Handle<Node>,
     scene: &mut Scene,
-    spine: Handle<Node>
+    spine: Handle<Node>,
 ) -> Result<Handle<Animation>, ()> {
     let animation = *resource_manager.request_model(path)
         .ok_or(())?
@@ -376,24 +230,6 @@ fn load_animation<P: AsRef<Path>>(
 fn disable_leg_tracks(animation: &mut Animation, root: Handle<Node>, leg_name: &str, graph: &Graph) {
     animation.set_tracks_enabled_from(graph.find_by_name(root, leg_name), false, graph)
 }
-
-// Locomotion machine parameters
-pub const WALK_TO_IDLE_PARAM: &'static str = "WalkToIdle";
-pub const WALK_TO_JUMP_PARAM: &'static str = "WalkToJump";
-pub const IDLE_TO_WALK_PARAM: &'static str = "IdleToWalk";
-pub const IDLE_TO_JUMP_PARAM: &'static str = "IdleToJump";
-pub const JUMP_TO_FALLING_PARAM: &'static str = "JumpToFalling";
-pub const FALLING_TO_IDLE_PARAM: &'static str = "FallingToIdle";
-
-// Combat machine parameters
-pub const AIM_TO_WHIP_PARAM: &'static str = "AimToWhip";
-pub const WHIP_TO_AIM_PARAM: &'static str = "WhipToAim";
-pub const HIT_REACTION_TO_AIM_PARAM: &'static str = "HitReactionToAim";
-pub const AIM_TO_HIT_REACTION_PARAM: &'static str = "AimToHitReaction";
-pub const WHIP_TO_HIT_REACTION_PARAM: &'static str = "WhipToHitReaction";
-
-// Dying machine parameters
-pub const DYING_TO_DEAD: &'static str = "DyingToDead";
 
 struct LocomotionMachine {
     machine: Machine,
@@ -426,12 +262,19 @@ impl Visit for LocomotionMachine {
 impl LocomotionMachine {
     pub const STEP_SIGNAL: u64 = 1;
 
+    const WALK_TO_IDLE_PARAM: &'static str = "WalkToIdle";
+    const WALK_TO_JUMP_PARAM: &'static str = "WalkToJump";
+    const IDLE_TO_WALK_PARAM: &'static str = "IdleToWalk";
+    const IDLE_TO_JUMP_PARAM: &'static str = "IdleToJump";
+    const JUMP_TO_FALLING_PARAM: &'static str = "JumpToFalling";
+    const FALLING_TO_IDLE_PARAM: &'static str = "FallingToIdle";
+
     fn new(
         resource_manager: &mut ResourceManager,
         definition: &BotDefinition,
         model: Handle<Node>,
         scene: &mut Scene,
-        spine: Handle<Node>
+        spine: Handle<Node>,
     ) -> Result<Self, ()> {
         let idle_animation = load_animation(resource_manager, definition.idle_animation, model, scene, spine)?;
 
@@ -458,12 +301,12 @@ impl LocomotionMachine {
         let idle_node = machine.add_node(machine::PoseNode::make_play_animation(idle_animation));
         let idle_state = machine.add_state(State::new("Idle", idle_node));
 
-        machine.add_transition(machine::Transition::new("Walk->Idle", walk_state, idle_state, 0.5, WALK_TO_IDLE_PARAM))
-            .add_transition(machine::Transition::new("Walk->Jump", walk_state, jump_state, 0.5, WALK_TO_JUMP_PARAM))
-            .add_transition(machine::Transition::new("Idle->Walk", idle_state, walk_state, 0.5, IDLE_TO_WALK_PARAM))
-            .add_transition(machine::Transition::new("Idle->Jump", idle_state, jump_state, 0.5, IDLE_TO_JUMP_PARAM))
-            .add_transition(machine::Transition::new("Jump->Falling", jump_state, falling_state, 0.5, JUMP_TO_FALLING_PARAM))
-            .add_transition(machine::Transition::new("Falling->Idle", falling_state, idle_state, 0.5, FALLING_TO_IDLE_PARAM));
+        machine.add_transition(machine::Transition::new("Walk->Idle", walk_state, idle_state, 0.5, Self::WALK_TO_IDLE_PARAM))
+            .add_transition(machine::Transition::new("Walk->Jump", walk_state, jump_state, 0.5, Self::WALK_TO_JUMP_PARAM))
+            .add_transition(machine::Transition::new("Idle->Walk", idle_state, walk_state, 0.5, Self::IDLE_TO_WALK_PARAM))
+            .add_transition(machine::Transition::new("Idle->Jump", idle_state, jump_state, 0.5, Self::IDLE_TO_JUMP_PARAM))
+            .add_transition(machine::Transition::new("Jump->Falling", jump_state, falling_state, 0.5, Self::JUMP_TO_FALLING_PARAM))
+            .add_transition(machine::Transition::new("Falling->Idle", falling_state, idle_state, 0.5, Self::FALLING_TO_IDLE_PARAM));
 
         machine.set_entry_state(idle_state);
 
@@ -474,16 +317,26 @@ impl LocomotionMachine {
         })
     }
 
-    pub fn is_walking(&self) -> bool {
+    fn is_walking(&self) -> bool {
         let active_transition = self.machine.active_transition();
         self.machine.active_state() == self.walk_state ||
             (active_transition.is_some() && self.machine.transitions().borrow(active_transition).dest() == self.walk_state)
     }
-}
 
-impl CleanUp for LocomotionMachine {
     fn clean_up(&mut self, scene: &mut Scene) {
         clean_machine(&self.machine, scene);
+    }
+
+    fn apply(&mut self, scene: &mut Scene, time: GameTime, in_close_combat: bool, need_jump: bool, has_ground_contact: bool) {
+        self.machine
+            .set_parameter(Self::IDLE_TO_WALK_PARAM, machine::Parameter::Rule(!in_close_combat))
+            .set_parameter(Self::WALK_TO_IDLE_PARAM, machine::Parameter::Rule(in_close_combat))
+            .set_parameter(Self::WALK_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
+            .set_parameter(Self::IDLE_TO_JUMP_PARAM, machine::Parameter::Rule(need_jump))
+            .set_parameter(Self::JUMP_TO_FALLING_PARAM, machine::Parameter::Rule(!has_ground_contact))
+            .set_parameter(Self::FALLING_TO_IDLE_PARAM, machine::Parameter::Rule(has_ground_contact))
+            .evaluate_pose(&scene.animations, time.delta)
+            .apply(&mut scene.graph);
     }
 }
 
@@ -502,12 +355,14 @@ impl Default for DyingMachine {
 }
 
 impl DyingMachine {
+    const DYING_TO_DEAD: &'static str = "DyingToDead";
+
     fn new(
         resource_manager: &mut ResourceManager,
         definition: &BotDefinition,
         model: Handle<Node>,
         scene: &mut Scene,
-        spine: Handle<Node>
+        spine: Handle<Node>,
     ) -> Result<Self, ()> {
         let dying_animation = load_animation(resource_manager, definition.dying_animation, model, scene, spine)?;
         let dead_animation = load_animation(resource_manager, definition.dead_animation, model, scene, spine)?;
@@ -522,12 +377,23 @@ impl DyingMachine {
 
         machine.set_entry_state(dying_state);
 
-        machine.add_transition(machine::Transition::new("Dying->Dead", dying_state, dead_state, 1.5, DYING_TO_DEAD));
+        machine.add_transition(machine::Transition::new("Dying->Dead", dying_state, dead_state, 1.5, Self::DYING_TO_DEAD));
 
         Ok(Self {
             machine,
             dead_state,
         })
+    }
+
+    fn clean_up(&mut self, scene: &mut Scene) {
+        clean_machine(&self.machine, scene);
+    }
+
+    fn apply(&mut self, scene: &mut Scene, time: GameTime, is_dead: bool) {
+        self.machine
+            .set_parameter(Self::DYING_TO_DEAD, machine::Parameter::Rule(is_dead))
+            .evaluate_pose(&scene.animations, time.delta)
+            .apply(&mut scene.graph);
     }
 }
 
@@ -539,12 +405,6 @@ impl Visit for DyingMachine {
         self.dead_state.visit("DeadState", visitor)?;
 
         visitor.leave_region()
-    }
-}
-
-impl CleanUp for DyingMachine {
-    fn clean_up(&mut self, scene: &mut Scene) {
-        clean_machine(&self.machine, scene);
     }
 }
 
@@ -569,12 +429,18 @@ impl Default for CombatMachine {
 impl CombatMachine {
     pub const HIT_SIGNAL: u64 = 1;
 
+    const AIM_TO_WHIP_PARAM: &'static str = "AimToWhip";
+    const WHIP_TO_AIM_PARAM: &'static str = "WhipToAim";
+    const HIT_REACTION_TO_AIM_PARAM: &'static str = "HitReactionToAim";
+    const AIM_TO_HIT_REACTION_PARAM: &'static str = "AimToHitReaction";
+    const WHIP_TO_HIT_REACTION_PARAM: &'static str = "WhipToHitReaction";
+
     fn new(
         resource_manager: &mut ResourceManager,
         definition: &BotDefinition,
         model: Handle<Node>,
         scene: &mut Scene,
-        spine: Handle<Node>
+        spine: Handle<Node>,
     ) -> Result<Self, ()> {
         let aim_animation = load_animation(resource_manager, definition.aim_animation, model, scene, spine)?;
 
@@ -610,11 +476,11 @@ impl CombatMachine {
         let whip_node = machine.add_node(machine::PoseNode::make_play_animation(whip_animation));
         let whip_state = machine.add_state(State::new("Whip", whip_node));
 
-        machine.add_transition(machine::Transition::new("Aim->Whip", aim_state, whip_state, 0.5, AIM_TO_WHIP_PARAM))
-            .add_transition(machine::Transition::new("Whip->Aim", whip_state, aim_state, 0.5, WHIP_TO_AIM_PARAM))
-            .add_transition(machine::Transition::new("Whip->HitReaction", whip_state, hit_reaction_state, 0.2, WHIP_TO_HIT_REACTION_PARAM))
-            .add_transition(machine::Transition::new("Aim->HitReaction", aim_state, hit_reaction_state, 0.2, AIM_TO_HIT_REACTION_PARAM))
-            .add_transition(machine::Transition::new("HitReaction->Aim", hit_reaction_state, aim_state, 0.5, HIT_REACTION_TO_AIM_PARAM));
+        machine.add_transition(machine::Transition::new("Aim->Whip", aim_state, whip_state, 0.5, Self::AIM_TO_WHIP_PARAM))
+            .add_transition(machine::Transition::new("Whip->Aim", whip_state, aim_state, 0.5, Self::WHIP_TO_AIM_PARAM))
+            .add_transition(machine::Transition::new("Whip->HitReaction", whip_state, hit_reaction_state, 0.2, Self::WHIP_TO_HIT_REACTION_PARAM))
+            .add_transition(machine::Transition::new("Aim->HitReaction", aim_state, hit_reaction_state, 0.2, Self::AIM_TO_HIT_REACTION_PARAM))
+            .add_transition(machine::Transition::new("HitReaction->Aim", hit_reaction_state, aim_state, 0.5, Self::HIT_REACTION_TO_AIM_PARAM));
 
         Ok(Self {
             machine,
@@ -623,11 +489,20 @@ impl CombatMachine {
             aim_state,
         })
     }
-}
 
-impl CleanUp for CombatMachine {
     fn clean_up(&mut self, scene: &mut Scene) {
         clean_machine(&self.machine, scene)
+    }
+
+    fn apply(&mut self, scene: &mut Scene, time: GameTime, in_close_combat: bool, was_damaged: bool, can_aim: bool) {
+        self.machine
+            .set_parameter(Self::WHIP_TO_AIM_PARAM, machine::Parameter::Rule(!in_close_combat))
+            .set_parameter(Self::AIM_TO_WHIP_PARAM, machine::Parameter::Rule(in_close_combat))
+            .set_parameter(Self::WHIP_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
+            .set_parameter(Self::AIM_TO_HIT_REACTION_PARAM, machine::Parameter::Rule(was_damaged))
+            .set_parameter(Self::HIT_REACTION_TO_AIM_PARAM, machine::Parameter::Rule(can_aim))
+            .evaluate_pose(&scene.animations, time.delta)
+            .apply(&mut scene.graph);
     }
 }
 
@@ -693,7 +568,7 @@ impl Bot {
                     scale: 0.0085,
                     weapon_scale: 2.5,
                     health: 100.0,
-                    v_aim_angle_hack: 12.0
+                    v_aim_angle_hack: 12.0,
                 };
                 &DEFINITION
             }
@@ -718,7 +593,7 @@ impl Bot {
                     scale: 0.0085,
                     weapon_scale: 2.5,
                     health: 100.0,
-                    v_aim_angle_hack: 16.0
+                    v_aim_angle_hack: 16.0,
                 };
                 &DEFINITION
             }
@@ -805,25 +680,25 @@ impl Bot {
         self.combat_machine.machine.active_state() == self.combat_machine.aim_state
     }
 
-    pub fn select_target(&mut self, self_handle: Handle<Actor>, scene: &Scene, target_descriptors: &[TargetDescriptor]) {
-        let position = self.character.get_position(&scene.physics);
+    fn select_target(&mut self, self_handle: Handle<Actor>, scene: &Scene, targets: &[TargetDescriptor]) {
+        self.target = None;
+        let position = self.character.position(&scene.physics);
         let mut closest_distance = std::f32::MAX;
-        for desc in target_descriptors {
+        for desc in targets {
             if desc.handle != self_handle && self.frustum.is_contains_point(desc.position) {
                 let sqr_d = position.sqr_distance(&desc.position);
                 if sqr_d < closest_distance {
-                    self.target = desc.position;
-                    self.target_actor.set(desc.handle);
+                    self.target = Some(Target { position: desc.position, handle: desc.handle });
                     closest_distance = sqr_d;
                 }
             }
         }
     }
 
-    pub fn select_point_of_interest(&mut self, items: &ItemContainer, scene: &Scene, time: &GameTime) {
-        if time.elapsed - self.last_poi_update_time >= 1.0 {
+    fn select_point_of_interest(&mut self, items: &ItemContainer, scene: &Scene, time: &GameTime) {
+        if time.elapsed - self.last_poi_update_time >= 1.25 {
             // Select closest non-despawned item as point of interest.
-            let self_position = self.character().get_position(&scene.physics);
+            let self_position = self.character().position(&scene.physics);
             let mut closest_distance = std::f32::MAX;
             for item in items.iter() {
                 if !item.is_picked_up() {
@@ -836,6 +711,19 @@ impl Bot {
                 }
             }
             self.last_poi_update_time = time.elapsed;
+        }
+    }
+
+    fn select_weapon(&mut self, weapons: &WeaponContainer) {
+        if self.character.current_weapon().is_some() {
+            if weapons.get(self.character.current_weapon()).get_ammo() == 0 {
+                for (i, handle) in self.character.weapons().iter().enumerate() {
+                    if weapons.get(*handle).get_ammo() > 0 {
+                        self.character.set_current_weapon(i);
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -852,6 +740,204 @@ impl Bot {
 
         debug_renderer.draw_frustum(&self.frustum, Color::from_rgba(0, 200, 0, 255));
     }
+
+    fn update_frustum(&mut self, position: Vec3, graph: &Graph) {
+        let head_pos = position + Vec3::new(0.0, 0.8, 0.0);
+        let up = graph.get(self.model).base().get_up_vector();
+        let look_at = head_pos + graph.get(self.model).base().get_look_vector();
+        let view_matrix = Mat4::look_at(head_pos, look_at, up).unwrap_or_default();
+        let projection_matrix = Mat4::perspective(60.0f32.to_radians(), 16.0 / 9.0, 0.1, 7.0);
+        let view_projection_matrix = projection_matrix * view_matrix;
+        self.frustum = Frustum::from(view_projection_matrix).unwrap();
+    }
+
+    fn aim_vertically(&mut self, look_dir: Vec3, graph: &mut Graph, time: GameTime) {
+        let angle = self.pitch.angle();
+        self.pitch.set_target( look_dir.dot(&Vec3::UP).acos() - std::f32::consts::PI / 2.0 + self.definition.v_aim_angle_hack.to_radians())
+            .update(time.delta);
+
+        if self.spine.is_some() {
+            graph.get_mut(self.spine)
+                .base_mut()
+                .get_local_transform_mut()
+                .set_rotation(Quat::from_axis_angle(Vec3::RIGHT, angle));
+        }
+    }
+
+    fn aim_horizontally(&mut self, look_dir: Vec3, graph: &mut Graph, time: GameTime) {
+        let angle = self.yaw.angle();
+        self.yaw.set_target(look_dir.x.atan2(look_dir.z))
+            .update(time.delta);
+
+        graph.get_mut(self.character.pivot)
+            .base_mut()
+            .get_local_transform_mut()
+            .set_rotation(Quat::from_axis_angle(Vec3::UP, angle))
+    }
+
+    fn rebuild_path(&mut self, position: Vec3, navmesh: &mut Navmesh, time: GameTime) {
+        let from = position - Vec3::new(0.0, 1.0, 0.0);
+        if let Some(from_index) = navmesh.query_closest(from) {
+            if let Some(to_index) = navmesh.query_closest(self.point_of_interest) {
+                self.current_path_point = 0;
+                // Rebuild path if target path vertex has changed.
+                if navmesh.build_path(from_index, to_index, &mut self.path).is_ok() {
+                    self.path.reverse();
+                    self.last_path_rebuild_time = time.elapsed;
+                }
+            }
+        }
+    }
+
+    pub fn update(&mut self, self_handle: Handle<Actor>, context: &mut UpdateContext, targets: &[TargetDescriptor]) {
+        if self.character.is_dead() {
+            self.dying_machine.apply(context.scene, context.time, self.character.is_dead());
+        } else {
+            self.select_target(self_handle, context.scene, targets);
+            self.select_weapon(context.weapons);
+            self.select_point_of_interest(context.items, context.scene, &context.time);
+
+            let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
+            let body = context.scene.physics.borrow_body_mut(self.character.body);
+            let (in_close_combat, look_dir) = match self.target.as_ref() {
+                None => (false, self.point_of_interest - body.get_position()),
+                Some(target) => {
+                    let d = target.position - body.get_position();
+                    let close_combat_threshold = 2.0;
+                    (d.len() <= close_combat_threshold, d)
+                }
+            };
+
+            let position = body.get_position();
+
+            if let Some(path_point) = self.path.get(self.current_path_point) {
+                self.move_target = *path_point;
+                if self.move_target.distance(&position) <= 2.0 {
+                    if self.current_path_point < self.path.len() - 1 {
+                        self.current_path_point += 1;
+                    }
+                }
+            }
+
+            self.update_frustum(position, &context.scene.graph);
+
+
+
+            if let Some(look_dir) = look_dir.normalized() {
+                self.aim_vertically(look_dir, &mut context.scene.graph, context.time);
+                self.aim_horizontally(look_dir, &mut context.scene.graph, context.time);
+
+                if !in_close_combat {
+                    if has_ground_contact {
+                        if let Some(move_dir) = (self.move_target - position).normalized() {
+                            let vel = move_dir.scale(self.definition.walk_speed * context.time.delta);
+                            body.set_x_velocity(vel.x);
+                            body.set_z_velocity(vel.z);
+                            self.last_move_dir = move_dir;
+                        }
+                    } else {
+                        // A bit of air control. This helps jump of ledges when there is jump pad below bot.
+                        let vel = self.last_move_dir.scale(self.definition.walk_speed * context.time.delta);
+                        body.set_x_velocity(vel.x);
+                        body.set_z_velocity(vel.z);
+                    }
+                }
+            }
+
+            let need_jump = look_dir.y >= 0.3 && has_ground_contact && in_close_combat;
+            if need_jump {
+                body.set_y_velocity(0.08);
+            }
+            let was_damaged = self.character.health < self.last_health;
+            if was_damaged {
+                let hit_reaction = context.scene.animations.get_mut(self.combat_machine.hit_reaction_animation);
+                if hit_reaction.has_ended() {
+                    hit_reaction.rewind();
+                }
+                self.restoration_time = 0.8;
+            }
+            let can_aim = self.restoration_time <= 0.0;
+            self.last_health = self.character.health;
+
+            self.locomotion_machine.apply(context.scene, context.time, in_close_combat, need_jump, has_ground_contact);
+            self.combat_machine.apply(context.scene, context.time, in_close_combat, was_damaged, can_aim);
+
+            let sender = self.character
+                .sender
+                .as_ref()
+                .unwrap();
+
+            if !in_close_combat && can_aim && self.can_shoot() && self.target.is_some() {
+                if let Some(weapon) = self.character.weapons.get(self.character.current_weapon as usize) {
+                    sender.send(Message::ShootWeapon {
+                        weapon: *weapon,
+                        initial_velocity: Vec3::ZERO,
+                        direction: Some(look_dir),
+                    }).unwrap();
+                }
+            }
+
+            // Apply damage to target from melee attack
+            if let Some(target) = self.target.as_ref() {
+                while let Some(event) = context.scene.animations.get_mut(self.combat_machine.whip_animation).pop_event() {
+                    if event.signal_id == CombatMachine::HIT_SIGNAL && in_close_combat {
+                        sender.send(Message::DamageActor {
+                            actor: target.handle,
+                            who: Default::default(),
+                            amount: 20.0,
+                        }).unwrap();
+                    }
+                }
+            }
+
+            // Emit step sounds from walking animation.
+            if self.locomotion_machine.is_walking() {
+                while let Some(event) = context.scene.animations.get_mut(self.locomotion_machine.walk_animation).pop_event() {
+                    if event.signal_id == LocomotionMachine::STEP_SIGNAL && has_ground_contact {
+                        let footsteps = [
+                            "data/sounds/footsteps/FootStep_shoe_stone_step1.wav",
+                            "data/sounds/footsteps/FootStep_shoe_stone_step2.wav",
+                            "data/sounds/footsteps/FootStep_shoe_stone_step3.wav",
+                            "data/sounds/footsteps/FootStep_shoe_stone_step4.wav"
+                        ];
+                        sender.send(Message::PlaySound {
+                            path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())].into(),
+                            position,
+                            gain: 1.0,
+                            rolloff_factor: 2.0,
+                            radius: 3.0,
+                        }).unwrap();
+                    }
+                }
+            }
+
+            if context.time.elapsed - self.last_path_rebuild_time >= 1.0 {
+                if let Some(navmesh) = context.navmesh.as_mut() {
+                    self.rebuild_path(position, navmesh, context.time);
+                }
+            }
+            self.restoration_time -= context.time.delta;
+        }
+    }
+
+    pub fn clean_up(&mut self, scene: &mut Scene) {
+        self.combat_machine.clean_up(scene);
+        self.dying_machine.clean_up(scene);
+        self.locomotion_machine.clean_up(scene);
+        self.character.clean_up(scene);
+    }
+
+    pub fn on_actor_removed(&mut self, handle: Handle<Actor>) {
+        if let Some(target) = self.target.as_ref() {
+            if target.handle == handle {
+                self.target = None;
+            }
+        }
+    }
+
+    pub fn set_point_of_interest(&mut self, poi: Vec3) {
+        self.point_of_interest = poi;
+    }
 }
 
 fn clean_machine(machine: &Machine, scene: &mut Scene) {
@@ -859,15 +945,6 @@ fn clean_machine(machine: &Machine, scene: &mut Scene) {
         if let PoseNode::PlayAnimation(node) = node {
             scene.animations.remove(node.animation);
         }
-    }
-}
-
-impl CleanUp for Bot {
-    fn clean_up(&mut self, scene: &mut Scene) {
-        self.combat_machine.clean_up(scene);
-        self.dying_machine.clean_up(scene);
-        self.locomotion_machine.clean_up(scene);
-        self.character.clean_up(scene);
     }
 }
 
@@ -884,10 +961,12 @@ impl Visit for Bot {
         self.definition = Self::get_definition(self.kind);
         self.character.visit("Character", visitor)?;
         self.model.visit("Model", visitor)?;
-        self.target_actor.visit("TargetActor", visitor)?;
+        self.target.visit("Target", visitor)?;
         self.locomotion_machine.visit("LocomotionMachine", visitor)?;
         self.combat_machine.visit("AimMachine", visitor)?;
         self.restoration_time.visit("RestorationTime", visitor)?;
+        self.yaw.visit("Yaw", visitor)?;
+        self.pitch.visit("Pitch", visitor)?;
 
         visitor.leave_region()
     }

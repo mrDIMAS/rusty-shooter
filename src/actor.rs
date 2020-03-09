@@ -6,8 +6,7 @@ use crate::{
         Character,
     },
     level::{
-        LevelUpdateContext,
-        LevelEntity,
+        UpdateContext,
     },
     message::Message,
 };
@@ -32,6 +31,7 @@ use rg3d::{
         base::AsBase,
     },
 };
+use rg3d::scene::Scene;
 
 pub enum Actor {
     Bot(Bot),
@@ -72,6 +72,10 @@ impl Actor {
     pub fn can_be_removed(&self) -> bool {
         static_dispatch!(self, can_be_removed,)
     }
+
+    pub fn clean_up(&mut self, scene: &mut Scene) {
+        static_dispatch!(self, clean_up, scene)
+    }
 }
 
 impl AsCharacter for Actor {
@@ -81,12 +85,6 @@ impl AsCharacter for Actor {
 
     fn character_mut(&mut self) -> &mut Character {
         static_dispatch!(self, character_mut,)
-    }
-}
-
-impl LevelEntity for Actor {
-    fn update(&mut self, context: &mut LevelUpdateContext) {
-        static_dispatch!(self, update, context)
     }
 }
 
@@ -115,6 +113,7 @@ impl Visit for Actor {
 // to array element and iterate over array using immutable borrow.
 pub struct TargetDescriptor {
     pub handle: Handle<Actor>,
+    pub ptr: *const Actor,
     pub health: f32,
     pub position: Vec3,
 }
@@ -148,32 +147,38 @@ impl ActorContainer {
         self.pool.borrow_mut(actor)
     }
 
-    pub fn free(&mut self, actor: Handle<Actor>) {
-        self.pool.free(actor);
+    pub fn free(&mut self, actor_handle: Handle<Actor>) {
+        for actor in self.pool.iter_mut() {
+            if let Actor::Bot(bot) = actor {
+                bot.on_actor_removed(actor_handle);
+            }
+        }
+
+        self.pool.free(actor_handle);
     }
 
     pub fn count(&self) -> usize {
         self.pool.alive_count()
     }
 
-    pub fn update(&mut self, context: &mut LevelUpdateContext) {
+    pub fn update(&mut self, context: &mut UpdateContext) {
         self.target_descriptors.clear();
         for (handle, actor) in self.pool.pair_iter() {
             self.target_descriptors.push(TargetDescriptor {
                 handle,
+                ptr: actor,
                 health: actor.character().health,
-                position: actor.character().get_position(&context.scene.physics)
+                position: actor.character().position(&context.scene.physics)
             });
         }
 
         for (handle, actor) in self.pool.pair_iter_mut() {
             let is_dead = actor.character().is_dead();
 
-            if let Actor::Bot(bot) = actor {
-                bot.select_target(handle, context.scene, &self.target_descriptors);
+            match actor {
+                Actor::Bot(bot) => bot.update(handle, context, &self.target_descriptors),
+                Actor::Player(player) => player.update(context)
             }
-
-            actor.update(context);
 
             let character = actor.character_mut();
 

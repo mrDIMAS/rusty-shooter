@@ -34,7 +34,6 @@ use crate::{
         Weapon,
         WeaponContainer,
     },
-    level::CleanUp,
     message::Message,
     effects::EffectKind
 };
@@ -344,14 +343,7 @@ impl Projectile {
             .base()
             .get_global_position()
     }
-}
 
-struct Hit {
-    actor: Handle<Actor>,
-    who: Handle<Actor>,
-}
-
-impl CleanUp for Projectile {
     fn clean_up(&mut self, scene: &mut Scene) {
         if self.body.is_some() {
             scene.physics.remove_body(self.body);
@@ -360,6 +352,11 @@ impl CleanUp for Projectile {
             scene.graph.remove_node(self.model);
         }
     }
+}
+
+struct Hit {
+    actor: Handle<Actor>,
+    who: Handle<Actor>,
 }
 
 impl Visit for Projectile {

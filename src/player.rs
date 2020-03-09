@@ -5,9 +5,7 @@ use crate::{
         Character,
     },
     level::{
-        LevelUpdateContext,
-        LevelEntity,
-        CleanUp,
+        UpdateContext,
     },
     control_scheme::{
         ControlScheme,
@@ -119,52 +117,6 @@ impl AsCharacter for Player {
     }
 }
 
-impl LevelEntity for Player {
-    fn update(&mut self, context: &mut LevelUpdateContext) {
-        self.update_movement(context);
-
-        if let Some(current_weapon_handle) = self.character.weapons.get(self.character.current_weapon as usize) {
-            let velocity = context.scene
-                .physics
-                .borrow_body(self.character.body)
-                .get_velocity();
-
-            if self.controller.shoot {
-                self.character.sender.as_ref().unwrap().send(Message::ShootWeapon {
-                    weapon: *current_weapon_handle,
-                    initial_velocity: velocity,
-                    direction: None
-                }).unwrap();
-            }
-        }
-
-        if self.path_len > 2.0 {
-            let footsteps = [
-                "data/sounds/footsteps/FootStep_shoe_stone_step1.wav",
-                "data/sounds/footsteps/FootStep_shoe_stone_step2.wav",
-                "data/sounds/footsteps/FootStep_shoe_stone_step3.wav",
-                "data/sounds/footsteps/FootStep_shoe_stone_step4.wav"
-            ];
-            self.character
-                .sender
-                .as_ref()
-                .unwrap()
-                .send(Message::PlaySound {
-                    path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())].into(),
-                    position: self.character.get_position(&context.scene.physics),
-                    gain: 1.0,
-                    rolloff_factor: 2.0,
-                    radius: 3.0
-                })
-                .unwrap();
-
-            self.path_len = 0.0;
-        }
-
-        self.update_listener(context.sound_context.clone());
-    }
-}
-
 impl Default for Player {
     fn default() -> Self {
         Self {
@@ -217,12 +169,6 @@ impl Visit for Player {
         self.camera_dest_offset.visit("CameraDestOffset", visitor)?;
 
         visitor.leave_region()
-    }
-}
-
-impl CleanUp for Player {
-    fn clean_up(&mut self, scene: &mut Scene) {
-        self.character.clean_up(scene)
     }
 }
 
@@ -310,7 +256,7 @@ impl Player {
         self.control_scheme = Some(control_scheme);
     }
 
-    fn update_movement(&mut self, context: &mut LevelUpdateContext) {
+    fn update_movement(&mut self, context: &mut UpdateContext) {
         let pivot = context.scene.graph.get(self.character.pivot).base();
         let look = pivot.get_look_vector();
         let side = pivot.get_side_vector();
@@ -510,5 +456,53 @@ impl Player {
         }
 
         false
+    }
+
+    pub fn update(&mut self, context: &mut UpdateContext) {
+        self.update_movement(context);
+
+        if let Some(current_weapon_handle) = self.character.weapons.get(self.character.current_weapon as usize) {
+            let velocity = context.scene
+                .physics
+                .borrow_body(self.character.body)
+                .get_velocity();
+
+            if self.controller.shoot {
+                self.character.sender.as_ref().unwrap().send(Message::ShootWeapon {
+                    weapon: *current_weapon_handle,
+                    initial_velocity: velocity,
+                    direction: None
+                }).unwrap();
+            }
+        }
+
+        if self.path_len > 2.0 {
+            let footsteps = [
+                "data/sounds/footsteps/FootStep_shoe_stone_step1.wav",
+                "data/sounds/footsteps/FootStep_shoe_stone_step2.wav",
+                "data/sounds/footsteps/FootStep_shoe_stone_step3.wav",
+                "data/sounds/footsteps/FootStep_shoe_stone_step4.wav"
+            ];
+            self.character
+                .sender
+                .as_ref()
+                .unwrap()
+                .send(Message::PlaySound {
+                    path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())].into(),
+                    position: self.character.position(&context.scene.physics),
+                    gain: 1.0,
+                    rolloff_factor: 2.0,
+                    radius: 3.0
+                })
+                .unwrap();
+
+            self.path_len = 0.0;
+        }
+
+        self.update_listener(context.sound_context.clone());
+    }
+
+    pub fn clean_up(&mut self, scene: &mut Scene) {
+        self.character.clean_up(scene)
     }
 }

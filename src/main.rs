@@ -498,7 +498,7 @@ impl Game {
                 let player = level.get_actors().get(player);
                 self.hud.set_health(ui, player.character().get_health());
                 self.hud.set_armor(ui, player.character().get_armor());
-                let current_weapon = player.character().get_current_weapon();
+                let current_weapon = player.character().current_weapon();
                 if current_weapon.is_some() {
                     let current_weapon = level.get_weapons().get(current_weapon);
                     self.hud.set_ammo(ui, current_weapon.get_ammo());

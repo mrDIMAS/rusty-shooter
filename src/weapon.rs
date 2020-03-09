@@ -37,7 +37,6 @@ use crate::{
     projectile::ProjectileKind,
     actor::Actor,
     GameTime,
-    level::CleanUp,
     message::Message,
     character::AsCharacter,
 };
@@ -317,10 +316,8 @@ impl Weapon {
             false
         }
     }
-}
 
-impl CleanUp for Weapon {
-    fn clean_up(&mut self, scene: &mut Scene) {
+    pub fn clean_up(&mut self, scene: &mut Scene) {
         scene.graph.remove_node(self.model);
         scene.graph.remove_node(self.laser_dot);
     }

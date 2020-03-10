@@ -5,7 +5,7 @@ use crate::{
     GameEngine,
     Gui,
     character::Team,
-    message::Message
+    message::Message,
 };
 use rg3d::{
     event::{WindowEvent, ElementState, VirtualKeyCode, Event},
@@ -17,11 +17,11 @@ use rg3d::{
         HorizontalAlignment,
         VerticalAlignment,
         brush::Brush,
-        Control
+        Control,
     },
     core::{
         visitor::{Visit, VisitResult, Visitor},
-        color::Color
+        color::Color,
     },
 };
 
@@ -121,6 +121,34 @@ impl LeaderBoard {
     pub fn values(&self) -> &HashMap<String, PersonalScore> {
         &self.personal_score
     }
+
+    pub fn is_match_over(&self, options: &MatchOptions) -> bool {
+        match options {
+            MatchOptions::DeathMatch(dm) => {
+                if let Some((_, highest_score)) = self.highest_personal_score(None) {
+                    highest_score >= dm.frag_limit
+                } else {
+                    false
+                }
+            }
+            MatchOptions::TeamDeathMatch(tdm) => {
+                for team_score in self.team_score.values() {
+                    if *team_score >= tdm.team_frag_limit {
+                        return true;
+                    }
+                }
+                false
+            }
+            MatchOptions::CaptureTheFlag(ctf) => {
+                for team_score in self.team_score.values() {
+                    if *team_score >= ctf.flag_limit {
+                        return true;
+                    }
+                }
+                false
+            }
+        }
+    }
 }
 
 impl Default for LeaderBoard {
@@ -169,7 +197,7 @@ impl LeaderBoardUI {
         }
     }
 
-    pub fn sync_to_model(&mut self,
+    fn sync_to_model(&mut self,
                          ui: &mut Gui,
                          leader_board: &LeaderBoard,
                          match_options: &MatchOptions,
@@ -344,6 +372,12 @@ impl LeaderBoardUI {
         ui.link_nodes(table, self.root);
     }
 
+    pub fn set_visible(&self, visible: bool, ui: &mut Gui) {
+        ui.node_mut(self.root)
+            .widget_mut()
+            .set_visibility(visible);
+    }
+
     pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             match event {
@@ -362,10 +396,7 @@ impl LeaderBoardUI {
                                 ElementState::Released => false,
                             };
 
-                            engine.user_interface
-                                .node_mut(self.root)
-                                .widget_mut()
-                                .set_visibility(visible);
+                            self.set_visible(visible, &mut engine.user_interface);
                         }
                     }
                 }

@@ -2,7 +2,7 @@
 //! However most of the styles are used from dark theme of rg3d-ui library so there
 //! is not much.
 
-use crate::{Gui, UINodeHandle, GuiMessage};
+use crate::{Gui, UINodeHandle};
 use rg3d::{
     engine::resource_manager::ResourceManager,
     utils,
@@ -19,35 +19,8 @@ use rg3d::{
         Thickness,
         scroll_bar::Orientation,
         scroll_viewer::ScrollViewerBuilder,
-        Control,
-        widget::Widget,
-        node::UINode
     }
 };
-
-#[derive(Debug)]
-pub struct CustomUiMessage {}
-
-#[derive(Debug)]
-pub enum DummyUiNode {}
-
-impl Control<CustomUiMessage, DummyUiNode> for DummyUiNode {
-    fn widget(&self) -> &Widget<CustomUiMessage, DummyUiNode> {
-        unimplemented!()
-    }
-
-    fn widget_mut(&mut self) -> &mut Widget<CustomUiMessage, DummyUiNode> {
-        unimplemented!()
-    }
-
-    fn raw_copy(&self) -> UINode<CustomUiMessage, DummyUiNode> {
-        unimplemented!()
-    }
-
-    fn handle_message(&mut self, _: UINodeHandle, _: &mut Gui, _: &mut GuiMessage) {
-        unimplemented!()
-    }
-}
 
 pub fn create_scroll_bar(ui: &mut Gui, resource_manager: &mut ResourceManager, orientation: Orientation, show_value: bool) -> UINodeHandle {
     let mut wb = WidgetBuilder::new();

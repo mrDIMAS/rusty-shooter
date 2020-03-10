@@ -122,4 +122,5 @@ pub enum Message {
     SetMusicVolume {
         volume: f32
     },
+    EndMatch
 }

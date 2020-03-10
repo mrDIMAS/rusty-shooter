@@ -365,6 +365,10 @@ impl Hud {
         self.leader_board.process_input_event(engine, event);
     }
 
+    pub fn leader_board(&self) -> &LeaderBoardUI {
+        &self.leader_board
+    }
+
     pub fn update(&mut self, ui: &mut Gui, time: &GameTime) {
         self.message_timeout -= time.delta;
 

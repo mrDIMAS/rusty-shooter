@@ -346,6 +346,8 @@ impl LocomotionMachine {
 struct DyingMachine {
     machine: Machine,
     dead_state: Handle<State>,
+    dead_animation: Handle<Animation>,
+    dying_animation: Handle<Animation>,
 }
 
 impl Default for DyingMachine {
@@ -353,6 +355,8 @@ impl Default for DyingMachine {
         Self {
             machine: Default::default(),
             dead_state: Default::default(),
+            dead_animation: Default::default(),
+            dying_animation: Default::default()
         }
     }
 }
@@ -368,7 +372,16 @@ impl DyingMachine {
         spine: Handle<Node>,
     ) -> Result<Self, ()> {
         let dying_animation = load_animation(resource_manager, definition.dying_animation, model, scene, spine)?;
+        scene.animations
+            .get_mut(dying_animation)
+            .set_enabled(false)
+            .set_speed(1.5);
+
         let dead_animation = load_animation(resource_manager, definition.dead_animation, model, scene, spine)?;
+        scene.animations
+            .get_mut(dead_animation)
+            .set_enabled(false)
+            .set_loop(false);
 
         let mut machine = Machine::new();
 
@@ -385,6 +398,8 @@ impl DyingMachine {
         Ok(Self {
             machine,
             dead_state,
+            dead_animation,
+            dying_animation
         })
     }
 
@@ -393,6 +408,13 @@ impl DyingMachine {
     }
 
     fn apply(&mut self, scene: &mut Scene, time: GameTime, is_dead: bool) {
+        scene.animations
+            .get_mut(self.dying_animation)
+            .set_enabled(true);
+        scene.animations
+            .get_mut(self.dead_animation)
+            .set_enabled(true);
+
         self.machine
             .set_parameter(Self::DYING_TO_DEAD, machine::Parameter::Rule(is_dead))
             .evaluate_pose(&scene.animations, time.delta)
@@ -406,6 +428,8 @@ impl Visit for DyingMachine {
 
         self.machine.visit("Machine", visitor)?;
         self.dead_state.visit("DeadState", visitor)?;
+        self.dying_animation.visit("DyingAnimation", visitor)?;
+        self.dead_animation.visit("DeadAnimation", visitor)?;
 
         visitor.leave_region()
     }
@@ -799,7 +823,7 @@ impl Bot {
         graph.get_mut(self.character.pivot)
             .base_mut()
             .get_local_transform_mut()
-            .set_rotation(Quat::from_axis_angle(Vec3::UP, angle))
+            .set_rotation(Quat::from_axis_angle(Vec3::UP, angle));
     }
 
     fn rebuild_path(&mut self, position: Vec3, navmesh: &mut Navmesh, time: GameTime) {

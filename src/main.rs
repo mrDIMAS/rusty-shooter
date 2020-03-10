@@ -33,7 +33,6 @@ use crate::{
     hud::Hud,
     actor::Actor,
     control_scheme::ControlScheme,
-    gui::{CustomUiMessage, DummyUiNode}
 };
 use std::{
     sync::mpsc::{
@@ -73,7 +72,7 @@ use rg3d::{
     },
     gui::{
         widget::WidgetBuilder,
-        node::UINode,
+        node::{UINode, StubNode},
         text::TextBuilder,
         UserInterface,
         message::UiMessage,
@@ -84,10 +83,10 @@ use rg3d::{
 };
 
 // Define type aliases for engine structs.
-pub type UINodeHandle = Handle<UINode<CustomUiMessage, DummyUiNode>>;
-pub type GameEngine = Engine<CustomUiMessage, DummyUiNode>;
-pub type Gui = UserInterface<CustomUiMessage, DummyUiNode>;
-pub type GuiMessage = UiMessage<CustomUiMessage, DummyUiNode>;
+pub type UINodeHandle = Handle<UINode<(), StubNode>>;
+pub type GameEngine = Engine<(), StubNode>;
+pub type Gui = UserInterface<(), StubNode>;
+pub type GuiMessage = UiMessage<(), StubNode>;
 
 pub struct Game {
     menu: Menu,
@@ -541,6 +540,10 @@ impl Game {
                         .source_mut(self.music)
                         .generic_mut()
                         .set_gain(*volume);
+                }
+                Message::EndMatch => {
+                    self.destroy_level();
+                    self.hud.leader_board().set_visible(true, &mut self.engine.user_interface);
                 }
                 _ => ()
             }

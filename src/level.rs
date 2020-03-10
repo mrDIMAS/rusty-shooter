@@ -841,6 +841,15 @@ impl Level {
         }
     }
 
+    fn update_game_ending(&self) {
+        if self.leader_board.is_match_over(&self.options) {
+            self.sender
+                .as_ref()
+                .unwrap()
+                .send(Message::EndMatch).unwrap();
+        }
+    }
+
     pub fn update(&mut self, engine: &mut GameEngine, time: GameTime) {
         self.time += time.delta;
         self.update_respawn(time);
@@ -864,6 +873,7 @@ impl Level {
             navmesh: self.navmesh.as_mut(),
             weapons: &self.weapons,
         });
+        self.update_game_ending();
     }
 
     pub fn respawn_actor(&mut self, engine: &mut GameEngine, actor: Handle<Actor>) {

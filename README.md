@@ -147,7 +147,7 @@ Keep in mind that it can be different from latest version!
 	- [x] Automatic weapon selection
 	- [x] Remove "wall hack" from bots - currently bots can see thru walls and will try to shoot there.
 	- [ ] Make behaviour more natural
-- [ ] Win/loss mechanichs - currently you can't win or loss in game.
+- [x] Win/loss mechanics 
 - [ ] Bots hit reaction - partially done, bots have hit reaction animation but there is still no visual "proof" that is was hit. Some sort of blood splashes should be added as well as hit sound.
 - [ ] Improve sound - many events in game still does not have sound. There are plenty of free sources with sounds, this should be used.
 	- [x] Step sounds

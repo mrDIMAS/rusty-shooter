@@ -186,7 +186,7 @@ impl ActorContainer {
                 for (item_handle, item) in context.items.pair_iter() {
                     let pivot = context.scene.graph.get_mut(item.get_pivot());
                     let body = context.scene.physics.borrow_body(character.get_body());
-                    let distance = (pivot.base().get_global_position() - body.get_position()).len();
+                    let distance = (pivot.base().global_position() - body.get_position()).len();
                     if distance < 1.25 && !item.is_picked_up() {
                         character.sender
                             .as_ref()

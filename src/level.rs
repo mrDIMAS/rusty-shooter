@@ -358,14 +358,14 @@ impl Level {
         let mut death_zones = Vec::new();
         let scene = engine.scenes.get_mut(self.scene);
         for (handle, node) in scene.graph.pair_iter() {
-            let position = node.base().get_global_position();
-            let name = node.base().get_name();
+            let position = node.base().global_position();
+            let name = node.base().name();
             if name.starts_with("JumpPad") {
                 let begin = scene.graph.find_by_name_from_root(format!("{}_Begin", name).as_str());
                 let end = scene.graph.find_by_name_from_root(format!("{}_End", name).as_str());
                 if begin.is_some() && end.is_some() {
-                    let begin = scene.graph.get(begin).base().get_global_position();
-                    let end = scene.graph.get(end).base().get_global_position();
+                    let begin = scene.graph.get(begin).base().global_position();
+                    let end = scene.graph.get(end).base().global_position();
                     let (force, len) = (end - begin).normalized_ex();
                     let force = force.unwrap_or(Vec3::UP).scale(len / 20.0);
                     let shape = utils::mesh_to_static_geometry(node.as_mesh());
@@ -381,7 +381,7 @@ impl Level {
             } else if name.starts_with("Ammo_Plasma") {
                 items.push((ItemKind::Plasma, position));
             } else if name.starts_with("SpawnPoint") {
-                spawn_points.push(node.base().get_global_position())
+                spawn_points.push(node.base().global_position())
             } else if name.starts_with("DeathZone") {
                 if let Node::Mesh(_) = node {
                     death_zones.push(handle);
@@ -397,7 +397,7 @@ impl Level {
             self.death_zones
                 .push(DeathZone {
                     bounds: node.as_mesh()
-                        .calculate_world_bounding_box()
+                        .world_bounding_box()
                 });
         }
         self.spawn_points = spawn_points
@@ -821,9 +821,9 @@ impl Level {
 
     fn update_spectator_camera(&mut self, scene: &mut Scene) {
         if let Node::Camera(spectator_camera) = scene.graph.get_mut(self.spectator_camera) {
-            let mut position = spectator_camera.base().get_global_position();
+            let mut position = spectator_camera.base().global_position();
             position.follow(&self.target_spectator_position, 0.1);
-            spectator_camera.base_mut().get_local_transform_mut().set_position(position);
+            spectator_camera.base_mut().local_transform_mut().set_position(position);
         }
     }
 
@@ -894,12 +894,12 @@ impl Level {
                     // Turn on spectator camera and prepare its target position. Spectator
                     // camera will be used to render world until player is despawned.
                     let scene = engine.scenes.get_mut(self.scene);
-                    let position = scene.graph.get(player.camera()).base().get_global_position();
+                    let position = scene.graph.get(player.camera()).base().global_position();
                     if let Node::Camera(spectator_camera) = scene.graph.get_mut(self.spectator_camera) {
                         spectator_camera
                             .set_enabled(true)
                             .base_mut()
-                            .get_local_transform_mut()
+                            .local_transform_mut()
                             .set_position(position);
                     }
                     // Use ray casting to get target position for spectator camera, it is used to

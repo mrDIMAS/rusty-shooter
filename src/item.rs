@@ -211,7 +211,7 @@ impl Item {
     }
 
     pub fn position(&self, graph: &Graph) -> Vec3 {
-        graph.get(self.pivot).base().get_global_position()
+        graph.get(self.pivot).base().global_position()
     }
 
     pub fn update(&mut self, graph: &mut Graph, time: GameTime) {
@@ -221,11 +221,13 @@ impl Item {
         self.dest_offset = Vec3::new(0.0, amp + amp * self.offset_factor.sin(), 0.0);
         self.offset.follow(&self.dest_offset, 0.2);
 
-        let position = graph.get(self.pivot).base().get_global_position();
+        let position = graph.get(self.pivot).base().global_position();
 
-        let model = graph.get_mut(self.model).base_mut();
-        model.get_local_transform_mut().set_position(self.offset);
-        model.set_visibility(!self.is_picked_up());
+        graph.get_mut(self.model)
+            .base_mut()
+            .set_visibility(!self.is_picked_up())
+            .local_transform_mut()
+            .set_position(self.offset);
 
         if !self.active {
             self.reactivation_timer -= time.delta;

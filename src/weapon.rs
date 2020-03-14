@@ -220,27 +220,27 @@ impl Weapon {
         self.update_laser_sight(&mut scene.graph, &scene.physics, actors);
 
         let node = scene.graph.get_mut(self.model);
-        node.base_mut().get_local_transform_mut().set_position(self.offset);
-        self.shot_position = node.base().get_global_position();
+        node.base_mut().local_transform_mut().set_position(self.offset);
+        self.shot_position = node.base().global_position();
     }
 
     pub fn get_shot_position(&self, graph: &Graph) -> Vec3 {
         if self.shot_point.is_some() {
             graph.get(self.shot_point)
                 .base()
-                .get_global_position()
+                .global_position()
         } else {
             // Fallback
             graph.get(self.model)
                 .base()
-                .get_global_position()
+                .global_position()
         }
     }
 
     pub fn get_shot_direction(&self, graph: &Graph) -> Vec3 {
         graph.get(self.model)
             .base()
-            .get_look_vector()
+            .look_vector()
     }
 
     pub fn get_kind(&self) -> WeaponKind {
@@ -254,8 +254,8 @@ impl Weapon {
     fn update_laser_sight(&self, graph: &mut Graph, physics: &Physics, actors: &ActorContainer) {
         let mut laser_dot_position = Vec3::ZERO;
         let model = graph.get(self.model);
-        let begin = model.base().get_global_position();
-        let end = begin + model.base().get_look_vector().scale(100.0);
+        let begin = model.base().global_position();
+        let end = begin + model.base().look_vector().scale(100.0);
         if let Some(ray) = Ray::from_two_points(&begin, &end) {
             let mut result = Vec::new();
             if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
@@ -276,7 +276,7 @@ impl Weapon {
 
         graph.get_mut(self.laser_dot)
             .base_mut()
-            .get_local_transform_mut()
+            .local_transform_mut()
             .set_position(laser_dot_position);
     }
 

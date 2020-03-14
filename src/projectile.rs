@@ -223,7 +223,7 @@ impl Projectile {
         let position = if self.body.is_some() {
             scene.physics.borrow_body(self.body).get_position()
         } else {
-            scene.graph.get(self.model).base().get_global_position()
+            scene.graph.get(self.model).base().global_position()
         };
 
         let mut hits: Vec<Hit> = Vec::new();
@@ -300,7 +300,7 @@ impl Projectile {
                 // We have just model - move it.
                 scene.graph.get_mut(self.model)
                     .base_mut()
-                    .get_local_transform_mut()
+                    .local_transform_mut()
                     .offset(total_velocity);
             }
         }
@@ -341,7 +341,7 @@ impl Projectile {
     pub fn get_position(&self, graph: &Graph) -> Vec3 {
         graph.get(self.model)
             .base()
-            .get_global_position()
+            .global_position()
     }
 
     fn clean_up(&mut self, scene: &mut Scene) {

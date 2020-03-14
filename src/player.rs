@@ -182,14 +182,14 @@ impl Player {
         let mut camera_pivot = Node::Base(Default::default());
         camera_pivot
             .base_mut()
-            .get_local_transform_mut()
+            .local_transform_mut()
             .set_position(Vec3 { x: 0.0, y: height - 0.20, z: 0.0 });
         let camera_pivot_handle = scene.graph.add_node(camera_pivot);
         scene.graph.link_nodes(camera_handle, camera_pivot_handle);
 
         let mut pivot = Node::Base(Default::default());
         pivot.base_mut()
-            .get_local_transform_mut()
+            .local_transform_mut()
             .set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
 
         let capsule_shape = CapsuleShape::new(0.35, height, Axis::Y);
@@ -203,7 +203,7 @@ impl Player {
         let mut weapon_base_pivot = Node::Base(Default::default());
         weapon_base_pivot
             .base_mut()
-            .get_local_transform_mut()
+            .local_transform_mut()
             .set_position(Vec3::new(-0.065, -0.052, 0.02));
         let weapon_base_pivot_handle = scene.graph.add_node(weapon_base_pivot);
         scene.graph.link_nodes(weapon_base_pivot_handle, camera_handle);
@@ -258,8 +258,8 @@ impl Player {
 
     fn update_movement(&mut self, context: &mut UpdateContext) {
         let pivot = context.scene.graph.get(self.character.pivot).base();
-        let look = pivot.get_look_vector();
-        let side = pivot.get_side_vector();
+        let look = pivot.look_vector();
+        let side = pivot.side_vector();
 
         let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
 
@@ -305,7 +305,7 @@ impl Player {
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
 
         let weapon_pivot = context.scene.graph.get_mut(self.character.weapon_pivot).base_mut();
-        weapon_pivot.get_local_transform_mut().set_position(self.weapon_offset);
+        weapon_pivot.local_transform_mut().set_position(self.weapon_offset);
 
         if self.controller.jump {
             if has_ground_contact {
@@ -326,14 +326,14 @@ impl Player {
         }
 
         let camera_node = context.scene.graph.get_mut(self.camera).base_mut();
-        camera_node.get_local_transform_mut().set_position(self.camera_offset);
+        camera_node.local_transform_mut().set_position(self.camera_offset);
 
-        self.head_position = camera_node.get_global_position();
-        self.look_direction = camera_node.get_look_vector();
-        self.up_direction = camera_node.get_up_vector();
-        self.listener_basis = Mat3::from_vectors(camera_node.get_side_vector(),
-                                                 camera_node.get_up_vector(),
-                                                 -camera_node.get_look_vector());
+        self.head_position = camera_node.global_position();
+        self.look_direction = camera_node.look_vector();
+        self.up_direction = camera_node.up_vector();
+        self.listener_basis = Mat3::from_vectors(camera_node.side_vector(),
+                                                 camera_node.up_vector(),
+                                                 -camera_node.look_vector());
 
         if self.control_scheme.clone().unwrap().borrow().smooth_mouse {
             self.yaw += (self.dest_yaw - self.yaw) * 0.2;
@@ -343,11 +343,19 @@ impl Player {
             self.pitch = self.dest_pitch;
         }
 
-        let pivot_transform = context.scene.graph.get_mut(self.character.pivot).base_mut().get_local_transform_mut();
-        pivot_transform.set_rotation(Quat::from_axis_angle(Vec3::UP, self.yaw.to_radians()));
+        context.scene
+            .graph
+            .get_mut(self.character.pivot)
+            .base_mut()
+            .local_transform_mut()
+            .set_rotation(Quat::from_axis_angle(Vec3::UP, self.yaw.to_radians()));
 
-        let camera_pivot_transform = context.scene.graph.get_mut(self.camera_pivot).base_mut().get_local_transform_mut();
-        camera_pivot_transform.set_rotation(Quat::from_axis_angle(Vec3::RIGHT, self.pitch.to_radians()));
+        context.scene
+            .graph
+            .get_mut(self.camera_pivot)
+            .base_mut()
+            .local_transform_mut()
+            .set_rotation(Quat::from_axis_angle(Vec3::RIGHT, self.pitch.to_radians()));
     }
 
     fn update_listener(&mut self, sound_context: Arc<Mutex<Context>>) {

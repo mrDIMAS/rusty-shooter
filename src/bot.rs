@@ -646,7 +646,7 @@ impl Bot {
         let (pivot, body) = {
             let pivot = scene.graph.add_node(Node::Base(Default::default()));
             scene.graph.link_nodes(model, pivot);
-            let transform = scene.graph.get_mut(model).base_mut().get_local_transform_mut();
+            let transform = scene.graph.get_mut(model).base_mut().local_transform_mut();
             transform.set_position(Vec3::new(0.0, -body_height * 0.5, 0.0));
             transform.set_scale(Vec3::new(definition.scale, definition.scale, definition.scale));
 
@@ -794,8 +794,8 @@ impl Bot {
 
     fn update_frustum(&mut self, position: Vec3, graph: &Graph) {
         let head_pos = position + Vec3::new(0.0, 0.8, 0.0);
-        let up = graph.get(self.model).base().get_up_vector();
-        let look_at = head_pos + graph.get(self.model).base().get_look_vector();
+        let up = graph.get(self.model).base().up_vector();
+        let look_at = head_pos + graph.get(self.model).base().look_vector();
         let view_matrix = Mat4::look_at(head_pos, look_at, up).unwrap_or_default();
         let projection_matrix = Mat4::perspective(60.0f32.to_radians(), 16.0 / 9.0, 0.1, 7.0);
         let view_projection_matrix = projection_matrix * view_matrix;
@@ -810,7 +810,7 @@ impl Bot {
         if self.spine.is_some() {
             graph.get_mut(self.spine)
                 .base_mut()
-                .get_local_transform_mut()
+                .local_transform_mut()
                 .set_rotation(Quat::from_axis_angle(Vec3::RIGHT, angle));
         }
     }
@@ -822,7 +822,7 @@ impl Bot {
 
         graph.get_mut(self.character.pivot)
             .base_mut()
-            .get_local_transform_mut()
+            .local_transform_mut()
             .set_rotation(Quat::from_axis_angle(Vec3::UP, angle));
     }
 

@@ -63,7 +63,7 @@ impl Hud {
 
         let frame_size = engine.renderer.get_frame_size();
         let ui = &mut engine.user_interface;
-        let resource_manager = &mut engine.resource_manager;
+        let resource_manager = &mut engine.resource_manager.lock().unwrap();
 
         let font = Font::from_file(
             Path::new("data/ui/SquaresBold.ttf"),

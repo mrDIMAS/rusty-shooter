@@ -285,6 +285,12 @@ impl Visit for RespawnEntry {
     }
 }
 
+pub struct LevelLoadContext {
+    data: Option<(Scene, Level)>,
+    progress: f32,
+    message: String,
+}
+
 impl Level {
     pub fn new(
         engine: &mut GameEngine,
@@ -303,13 +309,13 @@ impl Level {
                 .build())
         );
 
-        let mut map_root_handle = Handle::NONE;
-        let map_model = engine.resource_manager.request_model(Path::new("data/models/dm6.fbx"));
+        let mut map_root = Handle::NONE;
+        let map_model = engine.resource_manager.lock().unwrap().request_model(Path::new("data/models/dm6.fbx"));
         if map_model.is_some() {
             // Instantiate map
-            map_root_handle = map_model.unwrap().lock().unwrap().instantiate_geometry(&mut scene);
+            map_root = map_model.unwrap().lock().unwrap().instantiate_geometry(&mut scene);
             // Create collision geometry
-            let polygon_handle = scene.graph.find_by_name(map_root_handle, "Polygon");
+            let polygon_handle = scene.graph.find_by_name(map_root, "Polygon");
             if polygon_handle.is_some() {
                 scene.physics.add_static_geometry(utils::mesh_to_static_geometry(scene.graph.get(polygon_handle).as_mesh()));
             } else {
@@ -321,7 +327,7 @@ impl Level {
             scene: engine.scenes.add(scene),
             sender: Some(sender.clone()),
             control_scheme: Some(control_scheme),
-            map_root: map_root_handle,
+            map_root,
             options,
             spectator_camera,
             ..Default::default()
@@ -329,11 +335,10 @@ impl Level {
 
         level.build_navmesh(engine);
         level.analyze(engine);
-
-        sender.send(Message::SpawnPlayer).unwrap();
-        sender.send(Message::SpawnBot { kind: BotKind::Maw, name: "Maw".to_owned() }).unwrap();
-        sender.send(Message::SpawnBot { kind: BotKind::Mutant, name: "Mutant".to_owned() }).unwrap();
-        sender.send(Message::SpawnBot { kind: BotKind::Parasite, name: "Parasite".to_owned() }).unwrap();
+        level.spawn_player(engine);
+        level.spawn_bot(engine, BotKind::Maw, Some("Maw".to_owned()));
+        level.spawn_bot(engine, BotKind::Mutant, Some("Mutant".to_owned()));
+        level.spawn_bot(engine, BotKind::Parasite, Some("Parasite".to_owned()));
 
         level
     }
@@ -389,7 +394,7 @@ impl Level {
             }
         }
         for (kind, position) in items {
-            self.items.add(Item::new(kind, position, scene, &mut engine.resource_manager, self.sender.as_ref().unwrap().clone()));
+            self.items.add(Item::new(kind, position, scene, &mut engine.resource_manager.lock().unwrap(), self.sender.as_ref().unwrap().clone()));
         }
         for handle in death_zones {
             let node = scene.graph.get_mut(handle);
@@ -466,7 +471,7 @@ impl Level {
     fn give_new_weapon(&mut self, engine: &mut GameEngine, actor: Handle<Actor>, kind: WeaponKind) {
         if self.actors.contains(actor) {
             let scene = engine.scenes.get_mut(self.scene);
-            let mut weapon = Weapon::new(kind, &mut engine.resource_manager, scene, self.sender.as_ref().unwrap().clone());
+            let mut weapon = Weapon::new(kind, &mut engine.resource_manager.lock().unwrap(), scene, self.sender.as_ref().unwrap().clone());
             weapon.set_owner(actor);
             let weapon_model = weapon.get_model();
             let actor = self.actors.get_mut(actor);
@@ -485,7 +490,7 @@ impl Level {
 
     fn add_bot(&mut self, engine: &mut GameEngine, kind: BotKind, position: Vec3, name: Option<String>) -> Handle<Actor> {
         let scene = engine.scenes.get_mut(self.scene);
-        let bot = Bot::new(kind, &mut engine.resource_manager, scene, position, self.sender.as_ref().unwrap().clone()).unwrap();
+        let bot = Bot::new(kind, &mut engine.resource_manager.lock().unwrap(), scene, position, self.sender.as_ref().unwrap().clone()).unwrap();
         let name = name.unwrap_or_else(|| format!("Bot {:?} {}", kind, self.actors.count()));
         self.leader_board.get_or_add_actor(&name);
         let bot = self.actors.add(Actor::Bot(bot));
@@ -631,7 +636,7 @@ impl Level {
         let resource_manager = &mut engine.resource_manager;
         let projectile = Projectile::new(
             kind,
-            resource_manager,
+            &mut resource_manager.lock().unwrap(),
             scene,
             direction,
             position,
@@ -644,7 +649,7 @@ impl Level {
 
     fn play_sound<P: AsRef<Path>>(&self, engine: &mut GameEngine, path: P, position: Vec3, gain: f32, rolloff_factor: f32, radius: f32) {
         let mut sound_context = engine.sound_context.lock().unwrap();
-        let shot_buffer = engine.resource_manager.request_sound_buffer(path, false).unwrap();
+        let shot_buffer = engine.resource_manager.lock().unwrap().request_sound_buffer(path, false).unwrap();
         let shot_sound = SpatialSourceBuilder::new(
             GenericSourceBuilder::new(shot_buffer)
                 .with_status(Status::Playing)
@@ -768,7 +773,7 @@ impl Level {
             position
         };
         let scene = engine.scenes.get_mut(self.scene);
-        let resource_manager = &mut engine.resource_manager;
+        let resource_manager = &mut engine.resource_manager.lock().unwrap();
         let mut item = Item::new(kind, position, scene, resource_manager, self.sender.as_ref().unwrap().clone());
         item.set_lifetime(lifetime);
         self.items.add(item);
@@ -972,7 +977,7 @@ impl Level {
             }
             Message::CreateEffect { kind, position } => {
                 let scene = engine.scenes.get_mut(self.scene);
-                effects::create(*kind, &mut scene.graph, &mut engine.resource_manager, *position)
+                effects::create(*kind, &mut scene.graph, &mut engine.resource_manager.lock().unwrap(), *position)
             }
             Message::SpawnPlayer => {
                 self.spawn_player(engine);

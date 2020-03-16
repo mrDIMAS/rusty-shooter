@@ -210,7 +210,7 @@ impl ActorContainer {
                     }
                 }
                 if push {
-                    body.set_velocity(jump_pad.get_force())
+                    body.set_velocity(jump_pad.get_force());
                 }
             }
 

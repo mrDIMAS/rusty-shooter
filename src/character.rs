@@ -142,7 +142,7 @@ impl Character {
     }
 
     pub fn set_position(&mut self, physics: &mut Physics, position: Vec3) {
-        physics.borrow_body_mut(self.get_body()).set_position(position)
+        physics.borrow_body_mut(self.get_body()).set_position(position);
     }
 
     pub fn position(&self, physics: &Physics) -> Vec3 {

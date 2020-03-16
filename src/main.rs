@@ -273,7 +273,7 @@ impl Game {
 
         engine.renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
-        let buffer = engine.resource_manager.request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true).unwrap();
+        let buffer = engine.resource_manager.lock().unwrap().request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true).unwrap();
         let music = engine.sound_context
             .lock()
             .unwrap()
@@ -352,7 +352,7 @@ impl Game {
                     }
 
                     // Render at max speed
-                    game.engine.render().unwrap();
+                    game.engine.render(fixed_timestep).unwrap();
                     // Make sure to cap update rate to 60 FPS.
                     game.limit_fps(fixed_fps as f64);
                 }

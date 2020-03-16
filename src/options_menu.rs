@@ -148,7 +148,7 @@ impl OptionsMenu {
                                 .on_column(1)
                                 .on_row(0)
                                 .with_margin(margin))
-                                .with_scroll_viewer(create_scroll_viewer(ui, &mut engine.resource_manager))
+                                .with_scroll_viewer(create_scroll_viewer(ui, &mut engine.resource_manager.lock().unwrap()))
                                 .with_items({
                                     let mut items = Vec::new();
                                     for video_mode in video_modes.iter() {
@@ -188,7 +188,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            cb_fullscreen = create_check_box(ui, &mut engine.resource_manager);
+                            cb_fullscreen = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_fullscreen) {
                                 check_box.set_checked(Some(false))
                                     .widget_mut()
@@ -208,7 +208,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            cb_spot_shadows = create_check_box(ui, &mut engine.resource_manager);
+                            cb_spot_shadows = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_spot_shadows) {
                                 check_box.set_checked(Some(settings.spot_shadows_enabled))
                                     .widget_mut()
@@ -228,7 +228,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            cb_soft_spot_shadows = create_check_box(ui, &mut engine.resource_manager);
+                            cb_soft_spot_shadows = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_soft_spot_shadows) {
                                 check_box.set_checked(Some(settings.spot_soft_shadows))
                                     .widget_mut()
@@ -248,7 +248,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            sb_spot_shadow_distance = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal, true);
+                            sb_spot_shadow_distance = create_scroll_bar(ui, &mut engine.resource_manager.lock().unwrap(), Orientation::Horizontal, true);
                             if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_spot_shadow_distance) {
                                 scroll_bar.set_min_value(1.0)
                                     .set_max_value(15.0)
@@ -272,7 +272,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            cb_point_shadows = create_check_box(ui, &mut engine.resource_manager);
+                            cb_point_shadows = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_point_shadows) {
                                 check_box.set_checked(Some(settings.point_shadows_enabled))
                                     .widget_mut()
@@ -292,7 +292,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            cb_soft_point_shadows = create_check_box(ui, &mut engine.resource_manager);
+                            cb_soft_point_shadows = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_soft_point_shadows) {
                                 check_box.set_checked(Some(settings.point_soft_shadows))
                                     .widget_mut()
@@ -312,7 +312,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            sb_point_shadow_distance = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal, true);
+                            sb_point_shadow_distance = create_scroll_bar(ui, &mut engine.resource_manager.lock().unwrap(), Orientation::Horizontal, true);
                             if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_point_shadow_distance) {
                                 scroll_bar.set_min_value(1.0)
                                     .set_max_value(15.0)
@@ -356,7 +356,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            sb_sound_volume = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal, true);
+                            sb_sound_volume = create_scroll_bar(ui, &mut engine.resource_manager.lock().unwrap(), Orientation::Horizontal, true);
                             if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_sound_volume) {
                                 scroll_bar.set_min_value(0.0)
                                     .set_max_value(1.0)
@@ -377,7 +377,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            sb_music_volume = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal, true);
+                            sb_music_volume = create_scroll_bar(ui, &mut engine.resource_manager.lock().unwrap(), Orientation::Horizontal, true);
                             if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_music_volume) {
                                 scroll_bar.set_min_value(0.0)
                                     .set_max_value(1.0)
@@ -398,7 +398,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            cb_use_hrtf = create_check_box(ui, &mut engine.resource_manager);
+                            cb_use_hrtf = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_use_hrtf) {
                                 check_box.set_checked(Some(true))
                                     .widget_mut()
@@ -467,7 +467,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            sb_mouse_sens = create_scroll_bar(ui, &mut engine.resource_manager, Orientation::Horizontal, true);
+                            sb_mouse_sens = create_scroll_bar(ui, &mut engine.resource_manager.lock().unwrap(), Orientation::Horizontal, true);
                             if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_mouse_sens) {
                                 scroll_bar.set_min_value(0.05)
                                     .set_max_value(2.0)
@@ -488,7 +488,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            cb_mouse_y_inverse = create_check_box(ui, &mut engine.resource_manager);
+                            cb_mouse_y_inverse = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_mouse_y_inverse) {
                                 check_box.set_checked(Some(control_scheme.borrow().mouse_y_inverse))
                                     .widget_mut()
@@ -505,7 +505,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            cb_smooth_mouse = create_check_box(ui, &mut engine.resource_manager);
+                            cb_smooth_mouse = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_smooth_mouse) {
                                 check_box.set_checked(Some(control_scheme.borrow().smooth_mouse))
                                     .widget_mut()
@@ -522,7 +522,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            cb_shake_camera = create_check_box(ui, &mut engine.resource_manager);
+                            cb_shake_camera = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_shake_camera) {
                                 check_box.set_checked(Some(control_scheme.borrow().shake_camera))
                                     .widget_mut()

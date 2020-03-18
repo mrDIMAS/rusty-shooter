@@ -350,10 +350,6 @@ impl Hud {
     pub fn process_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             if let WindowEvent::Resized(new_size) = event {
-                engine.renderer
-                    .set_frame_size((*new_size).into())
-                    .unwrap();
-
                 engine.user_interface
                     .node_mut(self.root)
                     .widget_mut()

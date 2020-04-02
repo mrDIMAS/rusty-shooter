@@ -70,14 +70,10 @@ use rg3d::{
     physics::RayCastOptions,
     sound::{
         context::Context,
-        source::{
-            generic::GenericSourceBuilder,
-            spatial::SpatialSourceBuilder,
-            Status,
-        },
     },
     renderer::debug_renderer,
 };
+use std::path::PathBuf;
 
 pub const RESPAWN_TIME: f32 = 4.0;
 
@@ -619,7 +615,13 @@ impl Level {
             let position = item.position(&mut scene.graph);
             item.pick_up();
             let kind = item.get_kind();
-            self.play_sound(engine, "data/sounds/item_pickup.ogg", position, 1.0, 3.0, 2.0);
+            self.sender.as_ref().unwrap().send(Message::PlaySound {
+                path: PathBuf::from("data/sounds/item_pickup.ogg"),
+                position,
+                gain: 1.0,
+                rolloff_factor: 3.0,
+                radius: 2.0,
+            }).unwrap();
             self.give_item(engine, actor, kind);
         }
     }
@@ -645,23 +647,6 @@ impl Level {
             self.sender.as_ref().unwrap().clone(),
         );
         self.projectiles.add(projectile);
-    }
-
-    fn play_sound<P: AsRef<Path>>(&self, engine: &mut GameEngine, path: P, position: Vec3, gain: f32, rolloff_factor: f32, radius: f32) {
-        let mut sound_context = engine.sound_context.lock().unwrap();
-        let shot_buffer = engine.resource_manager.lock().unwrap().request_sound_buffer(path, false).unwrap();
-        let shot_sound = SpatialSourceBuilder::new(
-            GenericSourceBuilder::new(shot_buffer)
-                .with_status(Status::Playing)
-                .with_play_once(true)
-                .with_gain(gain)
-                .build()
-                .unwrap())
-            .with_position(position)
-            .with_radius(radius)
-            .with_rolloff_factor(rolloff_factor)
-            .build_source();
-        sound_context.add_source(shot_sound);
     }
 
     fn shoot_weapon(&mut self,
@@ -962,9 +947,6 @@ impl Level {
             }
             Message::CreateProjectile { kind, position, direction, initial_velocity, owner } => {
                 self.create_projectile(engine, *kind, *position, *direction, *initial_velocity, *owner)
-            }
-            Message::PlaySound { path, position, gain, rolloff_factor, radius } => {
-                self.play_sound(engine, path, *position, *gain, *rolloff_factor, *radius)
             }
             Message::ShowWeapon { weapon, state } => {
                 self.show_weapon(engine, *weapon, *state)

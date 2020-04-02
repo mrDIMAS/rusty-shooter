@@ -25,9 +25,7 @@ mod leader_board;
 
 use crate::{
     character::AsCharacter,
-    level::{
-        Level,
-    },
+    level::Level,
     message::Message,
     menu::Menu,
     hud::Hud,
@@ -64,7 +62,10 @@ use rg3d::{
         color::Color,
     },
     sound::{
+        context::Context,
+        effects::{Effect, EffectTrait, BaseEffect, EffectInput},
         source::{
+            spatial::SpatialSourceBuilder,
             Status,
             SoundSource,
             generic::GenericSourceBuilder,
@@ -81,6 +82,8 @@ use rg3d::{
     event_loop::{EventLoop, ControlFlow},
     engine::Engine,
 };
+use std::sync::{Arc, Mutex};
+use rg3d::engine::resource_manager::ResourceManager;
 
 // Define type aliases for engine structs.
 pub type UINodeHandle = Handle<UINode<(), StubNode>>;
@@ -96,12 +99,12 @@ pub struct Game {
     debug_text: UINodeHandle,
     debug_string: String,
     last_tick_time: time::Instant,
-    music: Handle<SoundSource>,
     running: bool,
     control_scheme: Rc<RefCell<ControlScheme>>,
     time: GameTime,
     events_receiver: Receiver<Message>,
     events_sender: Sender<Message>,
+    sound_manager: SoundManager,
 }
 
 #[derive(Copy, Clone)]
@@ -247,6 +250,80 @@ impl Visit for MatchOptions {
     }
 }
 
+pub struct SoundManager {
+    context: Arc<Mutex<Context>>,
+    music: Handle<SoundSource>,
+    reverb: Handle<Effect>,
+}
+
+impl SoundManager {
+    pub fn new(context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager) -> Self {
+        let buffer = resource_manager.request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true).unwrap();
+        let music = context.lock()
+            .unwrap()
+            .add_source(GenericSourceBuilder::new(buffer)
+                .with_looping(true)
+                .with_status(Status::Playing)
+                .with_gain(0.25)
+                .build_source()
+                .unwrap());
+
+        let mut base_effect = BaseEffect::default();
+        base_effect.set_gain(0.7);
+        let mut reverb = rg3d::sound::effects::reverb::Reverb::new(base_effect);
+        reverb.set_decay_time(Duration::from_secs_f32(3.0));
+        let reverb = context.lock()
+            .unwrap()
+            .add_effect(rg3d::sound::effects::Effect::Reverb(reverb));
+
+        Self {
+            context,
+            music,
+            reverb,
+        }
+    }
+
+    pub fn handle_message(&mut self, resource_manager: &mut ResourceManager, message: &Message) {
+        let mut context = self.context.lock().unwrap();
+
+        match message {
+            Message::PlaySound { path, position, gain, rolloff_factor, radius } => {
+                let shot_buffer = resource_manager.request_sound_buffer(path, false).unwrap();
+                let shot_sound = SpatialSourceBuilder::new(
+                    GenericSourceBuilder::new(shot_buffer)
+                        .with_status(Status::Playing)
+                        .with_play_once(true)
+                        .with_gain(*gain)
+                        .build()
+                        .unwrap())
+                    .with_position(*position)
+                    .with_radius(*radius)
+                    .with_rolloff_factor(*rolloff_factor)
+                    .build_source();
+                let source = context.add_source(shot_sound);
+                context.effect_mut(self.reverb).base_mut().add_input(EffectInput::direct(source));
+            }
+            Message::SetMusicVolume { volume } => {
+                context.source_mut(self.music)
+                    .generic_mut()
+                    .set_gain(*volume);
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Visit for SoundManager {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.reverb.visit("Reverb", visitor)?;
+        self.music.visit("Music", visitor)?;
+
+        visitor.leave_region()
+    }
+}
+
 impl Game {
     pub fn run() {
         let events_loop = EventLoop::<()>::new();
@@ -273,23 +350,6 @@ impl Game {
 
         engine.renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
-        let buffer = engine.resource_manager.lock().unwrap().request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true).unwrap();
-        let music = engine.sound_context
-            .lock()
-            .unwrap()
-            .add_source(GenericSourceBuilder::new(buffer)
-                .with_looping(true)
-                .with_status(Status::Playing)
-                .with_gain(0.25)
-                .build_source()
-                .unwrap());
-
-        let mut reverb = rg3d::sound::effects::reverb::Reverb::new();
-        reverb.set_decay_time(Duration::from_secs_f32(5.0));
-        engine.sound_context
-            .lock()
-            .unwrap()
-            .add_effect(rg3d::sound::effects::Effect::Reverb(reverb));
 
         let control_scheme = Rc::new(RefCell::new(ControlScheme::default()));
 
@@ -304,7 +364,10 @@ impl Game {
 
         let (tx, rx) = mpsc::channel();
 
+        let sound_manager = SoundManager::new(engine.sound_context.clone(), &mut engine.resource_manager.lock().unwrap());
+
         let mut game = Game {
+            sound_manager,
             hud: Hud::new(&mut engine),
             running: true,
             menu: Menu::new(&mut engine, control_scheme.clone(), tx.clone()),
@@ -314,7 +377,6 @@ impl Game {
             level: None,
             debug_string: String::new(),
             last_tick_time: time::Instant::now(),
-            music,
             time,
             events_receiver: rx,
             events_sender: tx,
@@ -397,6 +459,8 @@ impl Game {
 
         self.level.visit("Level", &mut visitor)?;
 
+        self.sound_manager.visit("SoundManager", &mut visitor)?;
+
         // Debug output
         if let Ok(mut file) = File::create(Path::new("save.txt")) {
             file.write_all(visitor.save_text().as_bytes()).unwrap();
@@ -405,50 +469,45 @@ impl Game {
         visitor.save_binary(Path::new("save.bin"))
     }
 
-    pub fn load_game(&mut self) {
+    pub fn load_game(&mut self) -> VisitResult {
         println!("Attempting load a save...");
-        match Visitor::load_binary(Path::new("save.bin")) {
-            Ok(mut visitor) => {
-                // Clean up.
-                self.destroy_level();
 
-                // Load engine state first
-                println!("Trying to load engine state...");
-                match self.engine.visit("GameEngine", &mut visitor) {
-                    Ok(_) => {
-                        println!("GameEngine state successfully loaded!");
+        let mut visitor = Visitor::load_binary(Path::new("save.bin"))?;
 
-                        // Then load game state.
-                        match self.level.visit("Level", &mut visitor) {
-                            Ok(_) => {
-                                println!("Game state successfully loaded!");
+        // Clean up.
+        self.destroy_level();
 
-                                // Hide menu only of we successfully loaded a save.
-                                self.set_menu_visible(false);
+        // Load engine state first
+        println!("Trying to load engine state...");
+        self.engine.visit("GameEngine", &mut visitor)?;
 
-                                // Set control scheme for player.
-                                if let Some(level) = &mut self.level {
-                                    level.set_message_sender(self.events_sender.clone());
-                                    level.build_navmesh(&mut self.engine);
-                                    level.control_scheme = Some(self.control_scheme.clone());
-                                    let player = level.get_player();
-                                    if let Actor::Player(player) = level.get_actors_mut().get_mut(player) {
-                                        player.set_control_scheme(self.control_scheme.clone());
-                                    }
-                                }
+        println!("GameEngine state successfully loaded!");
 
-                                self.time.elapsed = self.time.clock.elapsed().as_secs_f64();
-                            }
-                            Err(e) => println!("Failed to load game state! Reason: {}", e)
-                        }
-                    }
-                    Err(e) => println!("Failed to load engine state! Reason: {}", e)
-                }
-            }
-            Err(e) => {
-                println!("failed to load a save, reason: {}", e);
+        // Then load game state.
+        self.level.visit("Level", &mut visitor)?;
+
+        println!("Game state successfully loaded!");
+
+        self.sound_manager.visit("SoundManager", &mut visitor)?;
+        self.sound_manager.context = self.engine.sound_context.clone();
+
+        // Hide menu only of we successfully loaded a save.
+        self.set_menu_visible(false);
+
+        // Set control scheme for player.
+        if let Some(level) = &mut self.level {
+            level.set_message_sender(self.events_sender.clone());
+            level.build_navmesh(&mut self.engine);
+            level.control_scheme = Some(self.control_scheme.clone());
+            let player = level.get_player();
+            if let Actor::Player(player) = level.get_actors_mut().get_mut(player) {
+                player.set_control_scheme(self.control_scheme.clone());
             }
         }
+
+        self.time.elapsed = self.time.clock.elapsed().as_secs_f64();
+
+        Ok(())
     }
 
     fn destroy_level(&mut self) {
@@ -525,20 +584,16 @@ impl Game {
                     }
                 }
                 Message::LoadGame => {
-                    self.load_game();
+                    match self.load_game() {
+                        Err(e) => {
+                            println!("Failed to load saved game. Reason: {:?}", e);
+                        }
+                        _ => (),
+                    }
                 }
                 Message::QuitGame => {
                     self.destroy_level();
                     self.running = false;
-                }
-                Message::SetMusicVolume { volume } => {
-                    self.engine
-                        .sound_context
-                        .lock()
-                        .unwrap()
-                        .source_mut(self.music)
-                        .generic_mut()
-                        .set_gain(*volume);
                 }
                 Message::EndMatch => {
                     self.destroy_level();
@@ -546,6 +601,8 @@ impl Game {
                 }
                 _ => ()
             }
+
+            self.sound_manager.handle_message(&mut self.engine.resource_manager.lock().unwrap(), &message);
 
             if let Some(ref mut level) = self.level {
                 level.handle_message(&mut self.engine, &message, time);

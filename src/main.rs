@@ -432,6 +432,9 @@ impl Game {
                         _ => ()
                     }
                 }
+                Event::LoopDestroyed => {
+                    rg3d::core::profiler::print();
+                }
                 _ => *control_flow = ControlFlow::Poll,
             }
         });

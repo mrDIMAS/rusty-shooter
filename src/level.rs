@@ -346,7 +346,7 @@ impl Level {
             if navmesh_handle.is_some() {
                 let navmesh_node = scene.graph.get_mut(navmesh_handle);
                 navmesh_node.base_mut().set_visibility(false);
-                self.navmesh = Some(utils::mesh_to_navmesh(navmesh_node.as_mesh()));
+                self.navmesh = Some(Navmesh::from_mesh(navmesh_node.as_mesh()));
             } else {
                 println!("Unable to find Navmesh node to build navmesh!")
             }

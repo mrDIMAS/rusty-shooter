@@ -37,11 +37,6 @@ pub struct Character {
     pub team: Team
 }
 
-pub trait AsCharacter {
-    fn character(&self) -> &Character;
-    fn character_mut(&mut self) -> &mut Character;
-}
-
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Team {
     None,

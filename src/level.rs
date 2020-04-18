@@ -34,7 +34,6 @@ use crate::{
     message::Message,
     MatchOptions,
     GameEngine,
-    character::AsCharacter,
     leader_board::LeaderBoard,
 };
 use rg3d::{
@@ -56,10 +55,7 @@ use rg3d::{
     event::Event,
     scene::{
         Scene,
-        base::{
-            AsBase,
-            BaseBuilder,
-        },
+        base::BaseBuilder,
         node::Node,
         camera::CameraBuilder,
     },
@@ -281,12 +277,6 @@ impl Visit for RespawnEntry {
     }
 }
 
-pub struct LevelLoadContext {
-    data: Option<(Scene, Level)>,
-    progress: f32,
-    message: String,
-}
-
 impl Level {
     pub fn new(
         engine: &mut GameEngine,
@@ -307,13 +297,13 @@ impl Level {
 
         let mut map_root = Handle::NONE;
         let map_model = engine.resource_manager.lock().unwrap().request_model(Path::new("data/models/dm6.fbx"));
-        if map_model.is_some() {
+        if let Some(map_model) = map_model {
             // Instantiate map
-            map_root = map_model.unwrap().lock().unwrap().instantiate_geometry(&mut scene);
+            map_root = map_model.lock().unwrap().instantiate_geometry(&mut scene);
             // Create collision geometry
             let polygon_handle = scene.graph.find_by_name(map_root, "Polygon");
             if polygon_handle.is_some() {
-                scene.physics.add_static_geometry(utils::mesh_to_static_geometry(scene.graph.get(polygon_handle).as_mesh()));
+                scene.physics.add_static_geometry(utils::mesh_to_static_geometry(scene.graph[polygon_handle].as_mesh()));
             } else {
                 println!("Unable to find Polygon node to build collision shape for level!");
             }
@@ -321,7 +311,7 @@ impl Level {
 
         let mut level = Level {
             scene: engine.scenes.add(scene),
-            sender: Some(sender.clone()),
+            sender: Some(sender),
             control_scheme: Some(control_scheme),
             map_root,
             options,
@@ -341,11 +331,11 @@ impl Level {
 
     pub fn build_navmesh(&mut self, engine: &mut GameEngine) {
         if self.navmesh.is_none() {
-            let scene = engine.scenes.get_mut(self.scene);
+            let scene = &mut engine.scenes[self.scene];
             let navmesh_handle = scene.graph.find_by_name(self.map_root, "Navmesh");
             if navmesh_handle.is_some() {
-                let navmesh_node = scene.graph.get_mut(navmesh_handle);
-                navmesh_node.base_mut().set_visibility(false);
+                let navmesh_node = &mut scene.graph[navmesh_handle];
+                navmesh_node.set_visibility(false);
                 self.navmesh = Some(Navmesh::from_mesh(navmesh_node.as_mesh()));
             } else {
                 println!("Unable to find Navmesh node to build navmesh!")
@@ -357,16 +347,16 @@ impl Level {
         let mut items = Vec::new();
         let mut spawn_points = Vec::new();
         let mut death_zones = Vec::new();
-        let scene = engine.scenes.get_mut(self.scene);
+        let scene = &mut engine.scenes[self.scene];
         for (handle, node) in scene.graph.pair_iter() {
-            let position = node.base().global_position();
-            let name = node.base().name();
+            let position = node.global_position();
+            let name = node.name();
             if name.starts_with("JumpPad") {
                 let begin = scene.graph.find_by_name_from_root(format!("{}_Begin", name).as_str());
                 let end = scene.graph.find_by_name_from_root(format!("{}_End", name).as_str());
                 if begin.is_some() && end.is_some() {
-                    let begin = scene.graph.get(begin).base().global_position();
-                    let end = scene.graph.get(end).base().global_position();
+                    let begin = scene.graph[begin].global_position();
+                    let end = scene.graph[end].global_position();
                     let (force, len) = (end - begin).normalized_ex();
                     let force = force.unwrap_or(Vec3::UP).scale(len / 20.0);
                     let shape = utils::mesh_to_static_geometry(node.as_mesh());
@@ -382,7 +372,7 @@ impl Level {
             } else if name.starts_with("Ammo_Plasma") {
                 items.push((ItemKind::Plasma, position));
             } else if name.starts_with("SpawnPoint") {
-                spawn_points.push(node.base().global_position())
+                spawn_points.push(node.global_position())
             } else if name.starts_with("DeathZone") {
                 if let Node::Mesh(_) = node {
                     death_zones.push(handle);
@@ -393,8 +383,8 @@ impl Level {
             self.items.add(Item::new(kind, position, scene, &mut engine.resource_manager.lock().unwrap(), self.sender.as_ref().unwrap().clone()));
         }
         for handle in death_zones {
-            let node = scene.graph.get_mut(handle);
-            node.base_mut().set_visibility(false);
+            let node = &mut scene.graph[handle];
+            node.set_visibility(false);
             self.death_zones
                 .push(DeathZone {
                     bounds: node.as_mesh()
@@ -437,7 +427,7 @@ impl Level {
     }
 
     fn pick(&self, engine: &mut GameEngine, from: Vec3, to: Vec3) -> Vec3 {
-        let scene = engine.scenes.get_mut(self.scene);
+        let scene = &engine.scenes[self.scene];
         if let Some(ray) = Ray::from_two_points(&from, &to) {
             let mut intersections = Vec::new();
             let options = RayCastOptions { ignore_bodies: true, ..Default::default() };
@@ -453,27 +443,26 @@ impl Level {
     }
 
     fn remove_weapon(&mut self, engine: &mut GameEngine, weapon: Handle<Weapon>) {
-        let scene = engine.scenes.get_mut(self.scene);
         for projectile in self.projectiles.iter_mut() {
             if projectile.owner == weapon {
                 // Reset owner because handle to weapon will be invalid after weapon freed.
                 projectile.owner = Handle::NONE;
             }
         }
-        self.weapons.get_mut(weapon).clean_up(scene);
+        self.weapons.get_mut(weapon).clean_up(&mut engine.scenes[self.scene]);
         self.weapons.free(weapon);
     }
 
     fn give_new_weapon(&mut self, engine: &mut GameEngine, actor: Handle<Actor>, kind: WeaponKind) {
         if self.actors.contains(actor) {
-            let scene = engine.scenes.get_mut(self.scene);
+            let scene = &mut engine.scenes[self.scene];
             let mut weapon = Weapon::new(kind, &mut engine.resource_manager.lock().unwrap(), scene, self.sender.as_ref().unwrap().clone());
             weapon.set_owner(actor);
             let weapon_model = weapon.get_model();
             let actor = self.actors.get_mut(actor);
             let weapon_handle = self.weapons.add(weapon);
-            actor.character_mut().add_weapon(weapon_handle);
-            scene.graph.link_nodes(weapon_model, actor.character().weapon_pivot());
+            actor.add_weapon(weapon_handle);
+            scene.graph.link_nodes(weapon_model, actor.weapon_pivot());
 
             self.sender
                 .as_ref()
@@ -485,7 +474,7 @@ impl Level {
     }
 
     fn add_bot(&mut self, engine: &mut GameEngine, kind: BotKind, position: Vec3, name: Option<String>) -> Handle<Actor> {
-        let scene = engine.scenes.get_mut(self.scene);
+        let scene = &mut engine.scenes[self.scene];
         let bot = Bot::new(kind, &mut engine.resource_manager.lock().unwrap(), scene, position, self.sender.as_ref().unwrap().clone()).unwrap();
         let name = name.unwrap_or_else(|| format!("Bot {:?} {}", kind, self.actors.count()));
         self.leader_board.get_or_add_actor(&name);
@@ -496,15 +485,12 @@ impl Level {
 
     fn remove_actor(&mut self, engine: &mut GameEngine, actor: Handle<Actor>) {
         if self.actors.contains(actor) {
-            let scene = engine.scenes.get_mut(self.scene);
-            let character = self.actors.get(actor).character();
+            let scene = &mut engine.scenes[self.scene];
+            let character = self.actors.get(actor);
 
             // Make sure to remove weapons and drop appropriate items (items will be temporary).
             let drop_position = character.position(&scene.physics);
-            let weapons = character.weapons()
-                .iter()
-                .map(|h| *h)
-                .collect::<Vec<Handle<Weapon>>>();
+            let weapons = character.weapons().iter().copied().collect::<Vec<Handle<Weapon>>>();
             for weapon in weapons {
                 let item_kind = match self.weapons.get(weapon).get_kind() {
                     WeaponKind::M4 => ItemKind::M4,
@@ -515,7 +501,7 @@ impl Level {
                 self.remove_weapon(engine, weapon);
             }
 
-            let scene = engine.scenes.get_mut(self.scene);
+            let scene = &mut engine.scenes[self.scene];
             self.actors
                 .get_mut(actor)
                 .clean_up(scene);
@@ -532,8 +518,8 @@ impl Level {
         let spawn_position = self.spawn_points
             .get(index)
             .map_or(Vec3::ZERO, |pt| pt.position);
-        let scene = engine.scenes.get_mut(self.scene);
-        if let Node::Camera(spectator_camera) = scene.graph.get_mut(self.spectator_camera) {
+        let scene = &mut engine.scenes[self.scene];
+        if let Node::Camera(spectator_camera) = &mut scene.graph[self.spectator_camera] {
             spectator_camera.set_enabled(false);
         }
         let mut player = Player::new(scene, self.sender.as_ref().unwrap().clone());
@@ -543,7 +529,6 @@ impl Level {
         self.player = self.actors.add(Actor::Player(player));
         self.actors
             .get_mut(self.player)
-            .character_mut()
             .set_position(&mut scene.physics, spawn_position);
 
         self.give_new_weapon(engine, self.player, WeaponKind::M4);
@@ -555,7 +540,7 @@ impl Level {
 
     fn give_item(&mut self, engine: &mut GameEngine, actor: Handle<Actor>, kind: ItemKind) {
         if self.actors.contains(actor) {
-            let character = self.actors.get_mut(actor).character_mut();
+            let character = self.actors.get_mut(actor);
             match kind {
                 ItemKind::Medkit => character.heal(20.0),
                 ItemKind::Ak47 | ItemKind::PlasmaGun | ItemKind::M4 => {
@@ -611,8 +596,8 @@ impl Level {
                     text: format!("Actor picked up item {:?}", item.get_kind())
                 }).unwrap();
 
-            let scene = engine.scenes.get_mut(self.scene);
-            let position = item.position(&mut scene.graph);
+            let scene = &mut engine.scenes[self.scene];
+            let position = item.position(&scene.graph);
             item.pick_up();
             let kind = item.get_kind();
             self.sender.as_ref().unwrap().send(Message::PlaySound {
@@ -634,7 +619,7 @@ impl Level {
                          initial_velocity: Vec3,
                          owner: Handle<Weapon>,
     ) {
-        let scene = engine.scenes.get_mut(self.scene);
+        let scene = &mut engine.scenes[self.scene];
         let resource_manager = &mut engine.resource_manager;
         let projectile = Projectile::new(
             kind,
@@ -657,7 +642,7 @@ impl Level {
                     direction: Option<Vec3>,
     ) {
         if self.weapons.contains(weapon_handle) {
-            let scene = engine.scenes.get_mut(self.scene);
+            let scene = &mut engine.scenes[self.scene];
             let weapon = self.weapons.get_mut(weapon_handle);
             if weapon.try_shoot(scene, time) {
                 let kind = weapon.definition.projectile;
@@ -671,19 +656,18 @@ impl Level {
     }
 
     fn show_weapon(&mut self, engine: &mut GameEngine, weapon_handle: Handle<Weapon>, state: bool) {
-        let scene = engine.scenes.get_mut(self.scene);
-        self.weapons.get(weapon_handle).set_visibility(state, &mut scene.graph)
+        self.weapons.get(weapon_handle).set_visibility(state, &mut engine.scenes[self.scene].graph)
     }
 
     fn find_suitable_spawn_point(&self, engine: &mut GameEngine) -> usize {
         // Find spawn point with least amount of enemies nearby.
-        let scene = engine.scenes.get(self.scene);
+        let scene = &mut engine.scenes[self.scene];
         let mut index = rand::thread_rng().gen_range(0, self.spawn_points.len());
         let mut max_distance = -std::f32::MAX;
         for (i, pt) in self.spawn_points.iter().enumerate() {
             let mut sum_distance = 0.0;
             for actor in self.actors.iter() {
-                let position = actor.character().position(&scene.physics);
+                let position = actor.position(&scene.physics);
                 sum_distance += pt.position.distance(&position);
             }
             if sum_distance > max_distance {
@@ -706,7 +690,7 @@ impl Level {
             .as_ref()
             .unwrap()
             .send(Message::AddNotification {
-                text: format!("Bot {} spawned!", self.actors.get(bot).character().name)
+                text: format!("Bot {} spawned!", self.actors.get(bot).name)
             }).unwrap();
 
         bot
@@ -717,10 +701,10 @@ impl Level {
             let mut who_name = Default::default();
             let message =
                 if who.is_some() {
-                    who_name = self.actors.get(who).character().name.clone();
-                    format!("{} dealt {} damage to {}!", who_name, amount, self.actors.get(actor).character().name)
+                    who_name = self.actors.get(who).name.clone();
+                    format!("{} dealt {} damage to {}!", who_name, amount, self.actors.get(actor).name)
                 } else {
-                    format!("{} took {} damage!", self.actors.get(actor).character().name, amount)
+                    format!("{} took {} damage!", self.actors.get(actor).name, amount)
                 };
 
             self.sender
@@ -732,8 +716,8 @@ impl Level {
 
             let who_position =
                 if who.is_some() {
-                    let scene = engine.scenes.get(self.scene);
-                    Some(self.actors.get(who).character().position(&scene.physics))
+                    let scene = &engine.scenes[self.scene];
+                    Some(self.actors.get(who).position(&scene.physics))
                 } else {
                     None
                 };
@@ -743,9 +727,9 @@ impl Level {
                     bot.set_point_of_interest(who_position, time);
                 }
             }
-            let was_dead = actor.character().is_dead();
-            actor.character_mut().damage(amount);
-            if !was_dead && actor.character().is_dead() && who.is_some() {
+            let was_dead = actor.is_dead();
+            actor.damage(amount);
+            if !was_dead && actor.is_dead() && who.is_some() {
                 self.leader_board.add_frag(who_name)
             }
         }
@@ -757,7 +741,7 @@ impl Level {
         } else {
             position
         };
-        let scene = engine.scenes.get_mut(self.scene);
+        let scene = &mut engine.scenes[self.scene];
         let resource_manager = &mut engine.resource_manager.lock().unwrap();
         let mut item = Item::new(kind, position, scene, resource_manager, self.sender.as_ref().unwrap().clone());
         item.set_lifetime(lifetime);
@@ -810,17 +794,17 @@ impl Level {
     }
 
     fn update_spectator_camera(&mut self, scene: &mut Scene) {
-        if let Node::Camera(spectator_camera) = scene.graph.get_mut(self.spectator_camera) {
-            let mut position = spectator_camera.base().global_position();
+        if let Node::Camera(spectator_camera) = &mut scene.graph[self.spectator_camera] {
+            let mut position = spectator_camera.global_position();
             position.follow(&self.target_spectator_position, 0.1);
-            spectator_camera.base_mut().local_transform_mut().set_position(position);
+            spectator_camera.local_transform_mut().set_position(position);
         }
     }
 
     fn update_death_zones(&mut self, scene: &Scene) {
         for (handle, actor) in self.actors.pair_iter_mut() {
             for death_zone in self.death_zones.iter() {
-                if death_zone.bounds.is_contains_point(actor.character().position(&scene.physics)) {
+                if death_zone.bounds.is_contains_point(actor.position(&scene.physics)) {
                     self.sender
                         .as_ref()
                         .unwrap()
@@ -843,13 +827,13 @@ impl Level {
     pub fn update(&mut self, engine: &mut GameEngine, time: GameTime) {
         self.time += time.delta;
         self.update_respawn(time);
-        let scene = engine.scenes.get_mut(self.scene);
+        let scene = &mut engine.scenes[self.scene];
         self.update_spectator_camera(scene);
         self.update_death_zones(scene);
         self.weapons.update(scene, &self.actors);
         self.projectiles.update(
             scene,
-            &mut self.actors,
+            &self.actors,
             &self.weapons,
             time,
         );
@@ -868,7 +852,7 @@ impl Level {
 
     pub fn respawn_actor(&mut self, engine: &mut GameEngine, actor: Handle<Actor>) {
         if self.actors.contains(actor) {
-            let name = self.actors.get(actor).character().name.clone();
+            let name = self.actors.get(actor).name.clone();
 
             self.leader_board.add_death(&name);
 
@@ -883,12 +867,11 @@ impl Level {
                 Actor::Player(player) => {
                     // Turn on spectator camera and prepare its target position. Spectator
                     // camera will be used to render world until player is despawned.
-                    let scene = engine.scenes.get_mut(self.scene);
-                    let position = scene.graph.get(player.camera()).base().global_position();
-                    if let Node::Camera(spectator_camera) = scene.graph.get_mut(self.spectator_camera) {
+                    let scene = &mut engine.scenes[self.scene];
+                    let position = scene.graph[player.camera()].global_position();
+                    if let Node::Camera(spectator_camera) = &mut scene.graph[self.spectator_camera] {
                         spectator_camera
                             .set_enabled(true)
-                            .base_mut()
                             .local_transform_mut()
                             .set_position(position);
                     }
@@ -958,8 +941,7 @@ impl Level {
                 self.damage_actor(engine, *actor, *who, *amount, time);
             }
             Message::CreateEffect { kind, position } => {
-                let scene = engine.scenes.get_mut(self.scene);
-                effects::create(*kind, &mut scene.graph, &mut engine.resource_manager.lock().unwrap(), *position)
+                effects::create(*kind, &mut engine.scenes[self.scene].graph, &mut engine.resource_manager.lock().unwrap(), *position)
             }
             Message::SpawnPlayer => {
                 self.spawn_player(engine);
@@ -979,7 +961,7 @@ impl Level {
 
         // Attach new sender to all event sources.
         for actor in self.actors.iter_mut() {
-            actor.character_mut().sender = Some(sender.clone());
+            actor.sender = Some(sender.clone());
         }
         for weapon in self.weapons.iter_mut() {
             weapon.sender = Some(sender.clone());

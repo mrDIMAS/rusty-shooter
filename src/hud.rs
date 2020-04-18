@@ -25,13 +25,12 @@ use rg3d::{
         Thickness,
         brush::Brush,
         node::UINode,
-        Control,
     },
 };
 use crate::{
     leader_board::{
         LeaderBoard,
-        LeaderBoardUI
+        LeaderBoardUI,
     },
     GameTime,
     message::Message,
@@ -322,7 +321,6 @@ impl Hud {
 
     pub fn set_visible(&mut self, ui: &mut Gui, visible: bool) {
         ui.node_mut(self.root)
-            .widget_mut()
             .set_visibility(visible);
     }
 
@@ -338,7 +336,6 @@ impl Hud {
 
     pub fn set_is_died(&mut self, ui: &mut Gui, is_died: bool) {
         ui.node_mut(self.died)
-            .widget_mut()
             .set_visibility(is_died);
     }
 
@@ -352,7 +349,6 @@ impl Hud {
             if let WindowEvent::Resized(new_size) = event {
                 engine.user_interface
                     .node_mut(self.root)
-                    .widget_mut()
                     .set_width_mut(new_size.width as f32)
                     .set_height_mut(new_size.height as f32);
             }
@@ -375,10 +371,8 @@ impl Hud {
                 }
 
                 self.message_timeout = 1.25;
-            } else {
-                if let UINode::Text(text) = ui.node_mut(self.message) {
-                    text.set_text("");
-                }
+            } else if let UINode::Text(text) = ui.node_mut(self.message) {
+                text.set_text("");
             }
         }
     }

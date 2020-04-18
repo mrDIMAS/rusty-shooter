@@ -1,13 +1,8 @@
 use crate::{
     bot::Bot,
     player::Player,
-    character::{
-        AsCharacter,
-        Character,
-    },
-    level::{
-        UpdateContext,
-    },
+    character::Character,
+    level::UpdateContext,
     message::Message,
 };
 use rg3d::{
@@ -18,21 +13,20 @@ use rg3d::{
             PoolIterator,
             PoolIteratorMut,
             PoolPairIterator,
-            PoolPairIteratorMut
+            PoolPairIteratorMut,
         },
         visitor::{
             Visit,
             Visitor,
             VisitResult,
         },
-        math::vec3::Vec3
-    },
-    scene::{
-        base::AsBase,
+        math::vec3::Vec3,
     },
 };
 use rg3d::scene::Scene;
+use std::ops::{Deref, DerefMut};
 
+#[allow(clippy::large_enum_variant)]
 pub enum Actor {
     Bot(Bot),
     Player(Player),
@@ -78,13 +72,23 @@ impl Actor {
     }
 }
 
-impl AsCharacter for Actor {
-    fn character(&self) -> &Character {
-        static_dispatch!(self, character,)
-    }
+impl Deref for Actor {
+    type Target = Character;
 
-    fn character_mut(&mut self) -> &mut Character {
-        static_dispatch!(self, character_mut,)
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Actor::Bot(v) => v,
+            Actor::Player(v) => v,
+        }
+    }
+}
+
+impl DerefMut for Actor {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            Actor::Bot(v) => v,
+            Actor::Player(v) => v,
+        }
     }
 }
 
@@ -118,16 +122,17 @@ pub struct TargetDescriptor {
     pub position: Vec3,
 }
 
+#[derive(Default)]
 pub struct ActorContainer {
     pool: Pool<Actor>,
-    target_descriptors: Vec<TargetDescriptor>
+    target_descriptors: Vec<TargetDescriptor>,
 }
 
 impl ActorContainer {
     pub fn new() -> Self {
         Self {
             pool: Default::default(),
-            target_descriptors: Default::default()
+            target_descriptors: Default::default(),
         }
     }
 
@@ -167,28 +172,24 @@ impl ActorContainer {
             self.target_descriptors.push(TargetDescriptor {
                 handle,
                 ptr: actor,
-                health: actor.character().health,
-                position: actor.character().position(&context.scene.physics)
+                health: actor.health,
+                position: actor.position(&context.scene.physics),
             });
         }
 
         for (handle, actor) in self.pool.pair_iter_mut() {
-            let is_dead = actor.character().is_dead();
+            let is_dead = actor.is_dead();
 
             match actor {
                 Actor::Bot(bot) => bot.update(handle, context, &self.target_descriptors),
                 Actor::Player(player) => player.update(context)
             }
-
-            let character = actor.character_mut();
-
             if !is_dead {
                 for (item_handle, item) in context.items.pair_iter() {
-                    let pivot = context.scene.graph.get_mut(item.get_pivot());
-                    let body = context.scene.physics.borrow_body(character.get_body());
-                    let distance = (pivot.base().global_position() - body.get_position()).len();
+                    let body = context.scene.physics.borrow_body(actor.get_body());
+                    let distance = (context.scene.graph[item.get_pivot()].global_position() - body.get_position()).len();
                     if distance < 1.25 && !item.is_picked_up() {
-                        character.sender
+                        actor.sender
                             .as_ref()
                             .unwrap()
                             .send(Message::PickUpItem {
@@ -201,7 +202,7 @@ impl ActorContainer {
 
             // Actors can jump on jump pads.
             for jump_pad in context.jump_pads.iter() {
-                let body = context.scene.physics.borrow_body_mut(character.get_body());
+                let body = context.scene.physics.borrow_body_mut(actor.get_body());
                 let mut push = false;
                 for contact in body.get_contacts() {
                     if contact.static_geom == jump_pad.get_shape() {
@@ -216,8 +217,7 @@ impl ActorContainer {
 
             if actor.can_be_removed() {
                 // Abuse the fact that actor has sender and use it to send message.
-                actor.character()
-                    .sender
+                actor.sender
                     .clone()
                     .as_ref()
                     .unwrap()

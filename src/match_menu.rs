@@ -21,7 +21,6 @@ use rg3d::{
             ButtonMessage,
         },
         button::ButtonBuilder,
-        Control,
         node::UINode,
         text_box::TextBoxBuilder,
         decorator::DecoratorBuilder,
@@ -99,7 +98,6 @@ impl MatchMenu {
                             .set_min_value(5.0)
                             .set_max_value(60.0)
                             .set_step(1.0)
-                            .widget_mut()
                             .set_row(1)
                             .set_column(1)
                             .set_margin(Thickness::uniform(2.0));
@@ -118,7 +116,6 @@ impl MatchMenu {
                             .set_step(1.0)
                             .set_min_value(10.0)
                             .set_max_value(200.0)
-                            .widget_mut()
                             .set_row(2)
                             .set_column(1)
                             .set_margin(Thickness::uniform(2.0));

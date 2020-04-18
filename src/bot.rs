@@ -3,7 +3,7 @@ use std::{
     sync::mpsc::Sender,
 };
 use crate::{
-    character::{Character, AsCharacter},
+    character::Character,
     level::UpdateContext,
     message::Message,
     actor::{
@@ -50,7 +50,7 @@ use rg3d::{
     scene::{
         node::Node,
         Scene,
-        base::{AsBase, BaseBuilder},
+        base::BaseBuilder,
         transform::TransformBuilder,
         graph::Graph,
     },
@@ -60,6 +60,7 @@ use rg3d::{
     utils::navmesh::Navmesh,
 };
 use rand::Rng;
+use std::ops::{Deref, DerefMut};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum BotKind {
@@ -80,7 +81,7 @@ impl BotKind {
         }
     }
 
-    pub fn id(&self) -> i32 {
+    pub fn id(self) -> i32 {
         match self {
             BotKind::Mutant => 0,
             BotKind::Parasite => 1,
@@ -138,12 +139,16 @@ pub struct Bot {
     pitch: SmoothAngle,
 }
 
-impl AsCharacter for Bot {
-    fn character(&self) -> &Character {
+impl Deref for Bot {
+    type Target = Character;
+
+    fn deref(&self) -> &Self::Target {
         &self.character
     }
+}
 
-    fn character_mut(&mut self) -> &mut Character {
+impl DerefMut for Bot {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.character
     }
 }
@@ -356,7 +361,7 @@ impl Default for DyingMachine {
             machine: Default::default(),
             dead_state: Default::default(),
             dead_animation: Default::default(),
-            dying_animation: Default::default()
+            dying_animation: Default::default(),
         }
     }
 }
@@ -399,7 +404,7 @@ impl DyingMachine {
             machine,
             dead_state,
             dead_animation,
-            dying_animation
+            dying_animation,
         })
     }
 
@@ -483,14 +488,14 @@ impl CombatMachine {
             .set_speed(2.0);
 
         // These animations must *not* affect legs, because legs animated using locomotion machine
-        disable_leg_tracks(scene.animations.get_mut(aim_animation), model, definition.left_leg_name, &mut scene.graph);
-        disable_leg_tracks(scene.animations.get_mut(aim_animation), model, definition.right_leg_name, &mut scene.graph);
+        disable_leg_tracks(scene.animations.get_mut(aim_animation), model, definition.left_leg_name, &scene.graph);
+        disable_leg_tracks(scene.animations.get_mut(aim_animation), model, definition.right_leg_name, &scene.graph);
 
-        disable_leg_tracks(scene.animations.get_mut(whip_animation), model, definition.left_leg_name, &mut scene.graph);
-        disable_leg_tracks(scene.animations.get_mut(whip_animation), model, definition.right_leg_name, &mut scene.graph);
+        disable_leg_tracks(scene.animations.get_mut(whip_animation), model, definition.left_leg_name, &scene.graph);
+        disable_leg_tracks(scene.animations.get_mut(whip_animation), model, definition.right_leg_name, &scene.graph);
 
-        disable_leg_tracks(scene.animations.get_mut(hit_reaction_animation), model, definition.left_leg_name, &mut scene.graph);
-        disable_leg_tracks(scene.animations.get_mut(hit_reaction_animation), model, definition.right_leg_name, &mut scene.graph);
+        disable_leg_tracks(scene.animations.get_mut(hit_reaction_animation), model, definition.left_leg_name, &scene.graph);
+        disable_leg_tracks(scene.animations.get_mut(hit_reaction_animation), model, definition.right_leg_name, &scene.graph);
 
         let mut machine = Machine::new();
 
@@ -646,7 +651,7 @@ impl Bot {
         let (pivot, body) = {
             let pivot = scene.graph.add_node(Node::Base(Default::default()));
             scene.graph.link_nodes(model, pivot);
-            let transform = scene.graph.get_mut(model).base_mut().local_transform_mut();
+            let transform = scene.graph[model].local_transform_mut();
             transform.set_position(Vec3::new(0.0, -body_height * 0.5, 0.0));
             transform.set_scale(Vec3::new(definition.scale, definition.scale, definition.scale));
 
@@ -749,7 +754,7 @@ impl Bot {
     fn select_point_of_interest(&mut self, items: &ItemContainer, scene: &Scene, time: &GameTime) {
         if time.elapsed - self.last_poi_update_time >= 1.25 {
             // Select closest non-despawned item as point of interest.
-            let self_position = self.character().position(&scene.physics);
+            let self_position = self.position(&scene.physics);
             let mut closest_distance = std::f32::MAX;
             for item in items.iter() {
                 if !item.is_picked_up() {
@@ -766,13 +771,11 @@ impl Bot {
     }
 
     fn select_weapon(&mut self, weapons: &WeaponContainer) {
-        if self.character.current_weapon().is_some() {
-            if weapons.get(self.character.current_weapon()).get_ammo() == 0 {
-                for (i, handle) in self.character.weapons().iter().enumerate() {
-                    if weapons.get(*handle).get_ammo() > 0 {
-                        self.character.set_current_weapon(i);
-                        break;
-                    }
+        if self.character.current_weapon().is_some() && weapons.get(self.character.current_weapon()).get_ammo() == 0 {
+            for (i, handle) in self.character.weapons().iter().enumerate() {
+                if weapons.get(*handle).get_ammo() > 0 {
+                    self.character.set_current_weapon(i);
+                    break;
                 }
             }
         }
@@ -794,8 +797,8 @@ impl Bot {
 
     fn update_frustum(&mut self, position: Vec3, graph: &Graph) {
         let head_pos = position + Vec3::new(0.0, 0.8, 0.0);
-        let up = graph.get(self.model).base().up_vector();
-        let look_at = head_pos + graph.get(self.model).base().look_vector();
+        let up = graph[self.model].up_vector();
+        let look_at = head_pos + graph[self.model].look_vector();
         let view_matrix = Mat4::look_at(head_pos, look_at, up).unwrap_or_default();
         let projection_matrix = Mat4::perspective(60.0f32.to_radians(), 16.0 / 9.0, 0.1, 7.0);
         let view_projection_matrix = projection_matrix * view_matrix;
@@ -808,8 +811,7 @@ impl Bot {
             .update(time.delta);
 
         if self.spine.is_some() {
-            graph.get_mut(self.spine)
-                .base_mut()
+            graph[self.spine]
                 .local_transform_mut()
                 .set_rotation(Quat::from_axis_angle(Vec3::RIGHT, angle));
         }
@@ -820,8 +822,7 @@ impl Bot {
         self.yaw.set_target(look_dir.x.atan2(look_dir.z))
             .update(time.delta);
 
-        graph.get_mut(self.character.pivot)
-            .base_mut()
+        graph[self.character.pivot]
             .local_transform_mut()
             .set_rotation(Quat::from_axis_angle(Vec3::UP, angle));
     }
@@ -863,10 +864,8 @@ impl Bot {
 
             if let Some(path_point) = self.path.get(self.current_path_point) {
                 self.move_target = *path_point;
-                if self.move_target.distance(&position) <= 2.0 {
-                    if self.current_path_point < self.path.len() - 1 {
-                        self.current_path_point += 1;
-                    }
+                if self.move_target.distance(&position) <= 2.0 && self.current_path_point < self.path.len() - 1 {
+                    self.current_path_point += 1;
                 }
             }
 

@@ -17,7 +17,6 @@ use rg3d::{
         HorizontalAlignment,
         VerticalAlignment,
         brush::Brush,
-        Control,
     },
     core::{
         visitor::{Visit, VisitResult, Visitor},
@@ -60,11 +59,7 @@ impl LeaderBoard {
     pub fn get_or_add_actor<P: AsRef<str>>(&mut self, actor_name: P) -> &mut PersonalScore {
         self.personal_score
             .entry(actor_name.as_ref().to_owned())
-            .or_insert(Default::default())
-    }
-
-    pub fn remove_actor<P: AsRef<str>>(&mut self, actor_name: P) {
-        self.personal_score.remove(actor_name.as_ref());
+            .or_insert_with(Default::default)
     }
 
     pub fn add_frag<P: AsRef<str>>(&mut self, actor_name: P) {
@@ -73,17 +68,6 @@ impl LeaderBoard {
 
     pub fn add_death<P: AsRef<str>>(&mut self, actor_name: P) {
         self.get_or_add_actor(actor_name).deaths += 1;
-    }
-
-    pub fn score_of<P: AsRef<str>>(&self, actor_name: P) -> u32 {
-        match self.personal_score.get(actor_name.as_ref()) {
-            None => 0,
-            Some(value) => value.kills,
-        }
-    }
-
-    pub fn add_team_frag(&mut self, team: Team) {
-        *self.team_score.entry(team).or_insert(0) += 1;
     }
 
     pub fn team_score(&self, team: Team) -> u32 {
@@ -198,9 +182,9 @@ impl LeaderBoardUI {
     }
 
     fn sync_to_model(&mut self,
-                         ui: &mut Gui,
-                         leader_board: &LeaderBoard,
-                         match_options: &MatchOptions,
+                     ui: &mut Gui,
+                     leader_board: &LeaderBoard,
+                     match_options: &MatchOptions,
     ) {
         // Rebuild entire table, this is far from ideal but it is simplest solution.
         // Shouldn't be a big problem because this method should be called once anything
@@ -365,7 +349,7 @@ impl LeaderBoardUI {
             .add_row(Row::stretch())
             .build(ui);
 
-        if let Some(table) = ui.node(self.root).widget().children().first() {
+        if let Some(table) = ui.node(self.root).children().first() {
             let table = *table;
             ui.remove_node(table);
         }
@@ -373,9 +357,7 @@ impl LeaderBoardUI {
     }
 
     pub fn set_visible(&self, visible: bool, ui: &mut Gui) {
-        ui.node_mut(self.root)
-            .widget_mut()
-            .set_visibility(visible);
+        ui.node_mut(self.root).set_visibility(visible);
     }
 
     pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
@@ -384,7 +366,6 @@ impl LeaderBoardUI {
                 WindowEvent::Resized(new_size) => {
                     engine.user_interface
                         .node_mut(self.root)
-                        .widget_mut()
                         .set_width_mut(new_size.width as f32)
                         .set_height_mut(new_size.height as f32);
                 }

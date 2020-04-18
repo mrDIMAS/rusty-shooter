@@ -4,17 +4,14 @@ use rg3d::{
             Handle,
             Pool,
             PoolPairIterator,
-            PoolIterator
+            PoolIterator,
         },
         visitor::{Visit, Visitor, VisitResult},
         math::vec3::Vec3,
     },
     engine::resource_manager::ResourceManager,
     scene::{
-        base::{
-            BaseBuilder,
-            AsBase,
-        },
+        base::BaseBuilder,
         Scene,
         node::Node,
         transform::TransformBuilder,
@@ -60,7 +57,7 @@ impl ItemKind {
         }
     }
 
-    fn id(&self) -> u32 {
+    fn id(self) -> u32 {
         match self {
             ItemKind::Medkit => 0,
             ItemKind::Plasma => 1,
@@ -211,7 +208,7 @@ impl Item {
     }
 
     pub fn position(&self, graph: &Graph) -> Vec3 {
-        graph.get(self.pivot).base().global_position()
+        graph[self.pivot].global_position()
     }
 
     pub fn update(&mut self, graph: &mut Graph, time: GameTime) {
@@ -221,10 +218,9 @@ impl Item {
         self.dest_offset = Vec3::new(0.0, amp + amp * self.offset_factor.sin(), 0.0);
         self.offset.follow(&self.dest_offset, 0.2);
 
-        let position = graph.get(self.pivot).base().global_position();
+        let position = graph[self.pivot].global_position();
 
-        graph.get_mut(self.model)
-            .base_mut()
+        graph[self.model]
             .set_visibility(!self.is_picked_up())
             .local_transform_mut()
             .set_position(self.offset);

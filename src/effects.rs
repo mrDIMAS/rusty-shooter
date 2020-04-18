@@ -64,7 +64,7 @@ impl CylinderEmitter {
 
 impl CustomEmitter for CylinderEmitter {
     fn box_clone(&self) -> Box<dyn CustomEmitter> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 
     fn get_kind(&self) -> i32 {
@@ -86,12 +86,12 @@ impl Visit for CylinderEmitter {
 impl Emit for CylinderEmitter {
     fn emit(&self, _emitter: &Emitter, _particle_system: &ParticleSystem, particle: &mut Particle) {
         // Disk point picking extended in 3D - http://mathworld.wolfram.com/DiskPointPicking.html
-        let s: f32 = rand::thread_rng().gen_range(0.0, 1.0);
+        let scale: f32 = rand::thread_rng().gen_range(0.0, 1.0);
         let theta = rand::thread_rng().gen_range(0.0, 2.0 * std::f32::consts::PI);
         let z = rand::thread_rng().gen_range(0.0, self.height);
-        let r = s.sqrt() * self.radius;
-        let x = r * theta.cos();
-        let y = r * theta.sin();
+        let radius = scale.sqrt() * self.radius;
+        let x = radius * theta.cos();
+        let y = radius * theta.sin();
         particle.position = Vec3::new(x, y, z);
     }
 }

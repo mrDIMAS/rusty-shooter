@@ -1,15 +1,10 @@
 use rand::Rng;
 use crate::{
-    character::{
-        AsCharacter,
-        Character,
-    },
-    level::{
-        UpdateContext,
-    },
+    character::Character,
+    level::UpdateContext,
     control_scheme::{
         ControlScheme,
-        ControlButton
+        ControlButton,
     },
     message::Message,
 };
@@ -32,25 +27,25 @@ use rg3d::{
         DeviceEvent,
         Event,
         MouseScrollDelta,
-        ElementState
+        ElementState,
     },
     scene::{
         node::Node,
         Scene,
-        base::AsBase,
         camera::CameraBuilder,
-        base::BaseBuilder
+        base::BaseBuilder,
     },
     sound::context::Context,
     physics::{
         convex_shape::{
             ConvexShape,
             CapsuleShape,
-            Axis
+            Axis,
         },
         rigid_body::RigidBody,
     },
 };
+use std::ops::{Deref, DerefMut};
 
 pub struct Controller {
     move_forward: bool,
@@ -107,12 +102,16 @@ pub struct Player {
     control_scheme: Option<Rc<RefCell<ControlScheme>>>,
 }
 
-impl AsCharacter for Player {
-    fn character(&self) -> &Character {
+impl Deref for Player {
+    type Target = Character;
+
+    fn deref(&self) -> &Self::Target {
         &self.character
     }
+}
 
-    fn character_mut(&mut self) -> &mut Character {
+impl DerefMut for Player {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.character
     }
 }
@@ -181,15 +180,13 @@ impl Player {
         let height = Self::default().stand_body_height;
         let mut camera_pivot = Node::Base(Default::default());
         camera_pivot
-            .base_mut()
             .local_transform_mut()
             .set_position(Vec3 { x: 0.0, y: height - 0.20, z: 0.0 });
         let camera_pivot_handle = scene.graph.add_node(camera_pivot);
         scene.graph.link_nodes(camera_handle, camera_pivot_handle);
 
         let mut pivot = Node::Base(Default::default());
-        pivot.base_mut()
-            .local_transform_mut()
+        pivot.local_transform_mut()
             .set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
 
         let capsule_shape = CapsuleShape::new(0.35, height, Axis::Y);
@@ -202,7 +199,6 @@ impl Player {
 
         let mut weapon_base_pivot = Node::Base(Default::default());
         weapon_base_pivot
-            .base_mut()
             .local_transform_mut()
             .set_position(Vec3::new(-0.065, -0.052, 0.02));
         let weapon_base_pivot_handle = scene.graph.add_node(weapon_base_pivot);
@@ -257,7 +253,7 @@ impl Player {
     }
 
     fn update_movement(&mut self, context: &mut UpdateContext) {
-        let pivot = context.scene.graph.get(self.character.pivot).base();
+        let pivot = &context.scene.graph[self.character.pivot];
         let look = pivot.look_vector();
         let side = pivot.side_vector();
 
@@ -304,8 +300,10 @@ impl Player {
 
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
 
-        let weapon_pivot = context.scene.graph.get_mut(self.character.weapon_pivot).base_mut();
-        weapon_pivot.local_transform_mut().set_position(self.weapon_offset);
+        context.scene
+            .graph[self.character.weapon_pivot]
+            .local_transform_mut()
+            .set_position(self.weapon_offset);
 
         if self.controller.jump {
             if has_ground_contact {
@@ -325,7 +323,7 @@ impl Player {
             self.camera_offset = Vec3::ZERO;
         }
 
-        let camera_node = context.scene.graph.get_mut(self.camera).base_mut();
+        let camera_node = &mut context.scene.graph[self.camera];
         camera_node.local_transform_mut().set_position(self.camera_offset);
 
         self.head_position = camera_node.global_position();
@@ -344,16 +342,12 @@ impl Player {
         }
 
         context.scene
-            .graph
-            .get_mut(self.character.pivot)
-            .base_mut()
+            .graph[self.character.pivot]
             .local_transform_mut()
             .set_rotation(Quat::from_axis_angle(Vec3::UP, self.yaw.to_radians()));
 
         context.scene
-            .graph
-            .get_mut(self.camera_pivot)
-            .base_mut()
+            .graph[self.camera_pivot]
             .local_transform_mut()
             .set_rotation(Quat::from_axis_angle(Vec3::RIGHT, self.pitch.to_radians()));
     }
@@ -369,6 +363,7 @@ impl Player {
         self.character.is_dead()
     }
 
+    #[allow(clippy::cognitive_complexity)]
     pub fn process_input_event(&mut self, event: &Event<()>) -> bool {
         if let Event::DeviceEvent { event, .. } = event {
             if let Some(control_scheme) = self.control_scheme.clone() {
@@ -410,9 +405,9 @@ impl Player {
                     DeviceEvent::MouseWheel { delta } => {
                         if let MouseScrollDelta::LineDelta(_, y) = delta {
                             if *y < 0.0 {
-                                self.character_mut().prev_weapon();
+                                self.prev_weapon();
                             } else if *y > 0.0 {
-                                self.character_mut().next_weapon();
+                                self.next_weapon();
                             }
                         }
                     }
@@ -479,7 +474,7 @@ impl Player {
                 self.character.sender.as_ref().unwrap().send(Message::ShootWeapon {
                     weapon: *current_weapon_handle,
                     initial_velocity: velocity,
-                    direction: None
+                    direction: None,
                 }).unwrap();
             }
         }
@@ -500,7 +495,7 @@ impl Player {
                     position: self.character.position(&context.scene.physics),
                     gain: 1.0,
                     rolloff_factor: 2.0,
-                    radius: 3.0
+                    radius: 3.0,
                 })
                 .unwrap();
 

@@ -15,7 +15,7 @@ use rg3d::{
             LightBuilder,
             PointLight,
         },
-        base::{BaseBuilder, AsBase},
+        base::BaseBuilder,
     },
     core::{
         pool::{
@@ -38,7 +38,6 @@ use crate::{
     actor::Actor,
     GameTime,
     message::Message,
-    character::AsCharacter,
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -49,7 +48,7 @@ pub enum WeaponKind {
 }
 
 impl WeaponKind {
-    pub fn id(&self) -> u32 {
+    pub fn id(self) -> u32 {
         match self {
             WeaponKind::M4 => 0,
             WeaponKind::Ak47 => 1,
@@ -62,7 +61,7 @@ impl WeaponKind {
             0 => Ok(WeaponKind::M4),
             1 => Ok(WeaponKind::Ak47),
             2 => Ok(WeaponKind::PlasmaRifle),
-            _ => return Err(format!("unknown weapon kind {}", id))
+            _ => Err(format!("unknown weapon kind {}", id))
         }
     }
 }
@@ -202,12 +201,8 @@ impl Weapon {
     }
 
     pub fn set_visibility(&self, visibility: bool, graph: &mut Graph) {
-        graph.get_mut(self.model)
-            .base_mut()
-            .set_visibility(visibility);
-        graph.get_mut(self.laser_dot)
-            .base_mut()
-            .set_visibility(visibility);
+        graph[self.model].set_visibility(visibility);
+        graph[self.laser_dot].set_visibility(visibility);
     }
 
     pub fn get_model(&self) -> Handle<Node> {
@@ -219,28 +214,22 @@ impl Weapon {
 
         self.update_laser_sight(&mut scene.graph, &scene.physics, actors);
 
-        let node = scene.graph.get_mut(self.model);
-        node.base_mut().local_transform_mut().set_position(self.offset);
-        self.shot_position = node.base().global_position();
+        let node = &mut scene.graph[self.model];
+        node.local_transform_mut().set_position(self.offset);
+        self.shot_position = node.global_position();
     }
 
     pub fn get_shot_position(&self, graph: &Graph) -> Vec3 {
         if self.shot_point.is_some() {
-            graph.get(self.shot_point)
-                .base()
-                .global_position()
+            graph[self.shot_point].global_position()
         } else {
             // Fallback
-            graph.get(self.model)
-                .base()
-                .global_position()
+            graph[self.model].global_position()
         }
     }
 
     pub fn get_shot_direction(&self, graph: &Graph) -> Vec3 {
-        graph.get(self.model)
-            .base()
-            .look_vector()
+        graph[self.model].look_vector()
     }
 
     pub fn get_kind(&self) -> WeaponKind {
@@ -253,9 +242,9 @@ impl Weapon {
 
     fn update_laser_sight(&self, graph: &mut Graph, physics: &Physics, actors: &ActorContainer) {
         let mut laser_dot_position = Vec3::ZERO;
-        let model = graph.get(self.model);
-        let begin = model.base().global_position();
-        let end = begin + model.base().look_vector().scale(100.0);
+        let model = &graph[self.model];
+        let begin = model.global_position();
+        let end = begin + model.look_vector().scale(100.0);
         if let Some(ray) = Ray::from_two_points(&begin, &end) {
             let mut result = Vec::new();
             if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
@@ -263,7 +252,7 @@ impl Weapon {
                     // Filter hit with owner capsule
                     if let HitKind::Body(body) = hit.kind {
                         for (handle, actor) in actors.pair_iter() {
-                            if self.owner == handle && actor.character().body == body {
+                            if self.owner == handle && actor.body == body {
                                 continue 'hit_loop;
                             }
                         }
@@ -274,8 +263,7 @@ impl Weapon {
             }
         }
 
-        graph.get_mut(self.laser_dot)
-            .base_mut()
+        graph[self.laser_dot]
             .local_transform_mut()
             .set_position(laser_dot_position);
     }
@@ -307,7 +295,7 @@ impl Weapon {
                     position,
                     gain: 1.0,
                     rolloff_factor: 5.0,
-                    radius: 3.0
+                    radius: 3.0,
                 }).unwrap();
             }
 
@@ -323,6 +311,7 @@ impl Weapon {
     }
 }
 
+#[derive(Default)]
 pub struct WeaponContainer {
     pool: Pool<Weapon>
 }

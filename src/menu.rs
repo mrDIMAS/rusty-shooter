@@ -26,7 +26,6 @@ use rg3d::{
     },
     gui::{
         ttf::Font,
-        Control,
         grid::{
             GridBuilder,
             Row,
@@ -136,7 +135,7 @@ impl Menu {
                             .on_row(4)
                             .with_margin(Thickness::uniform(4.0)))
                             .with_text("Quit")
-                            .with_font(font.clone())
+                            .with_font(font)
                             .build(ui);
                         btn_quit_game
                     }))
@@ -164,15 +163,13 @@ impl Menu {
             btn_save_game,
             btn_load_game,
             btn_quit_game,
-            options_menu: OptionsMenu::new(engine, control_scheme.clone(), sender.clone()),
+            options_menu: OptionsMenu::new(engine, control_scheme, sender.clone()),
             match_menu: MatchMenu::new(&mut engine.user_interface, &mut engine.resource_manager.lock().unwrap(), sender),
         }
     }
 
     pub fn set_visible(&mut self, ui: &mut Gui, visible: bool) {
-        ui.node_mut(self.root)
-            .widget_mut()
-            .set_visibility(visible);
+        ui.node_mut(self.root)            .set_visibility(visible);
 
         if !visible {
             ui.post_message(UiMessage::targeted(self.options_menu.window, UiMessageData::Window(WindowMessage::Closed)));
@@ -181,9 +178,7 @@ impl Menu {
     }
 
     pub fn is_visible(&self, ui: &Gui) -> bool {
-        ui.node(self.root)
-            .widget()
-            .visibility()
+        ui.node(self.root)            .visibility()
     }
 
     pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
@@ -191,7 +186,6 @@ impl Menu {
             if let WindowEvent::Resized(new_size) = event {
                 engine.user_interface
                     .node_mut(self.root)
-                    .widget_mut()
                     .set_width_mut(new_size.width as f32)
                     .set_height_mut(new_size.height as f32);
             }

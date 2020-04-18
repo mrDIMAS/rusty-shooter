@@ -24,7 +24,6 @@ mod gui;
 mod leader_board;
 
 use crate::{
-    character::AsCharacter,
     level::Level,
     message::Message,
     menu::Menu,
@@ -63,7 +62,7 @@ use rg3d::{
     },
     sound::{
         context::Context,
-        effects::{Effect, EffectTrait, BaseEffect, EffectInput},
+        effects::{Effect, BaseEffect, EffectInput},
         source::{
             spatial::SpatialSourceBuilder,
             Status,
@@ -114,8 +113,10 @@ pub struct GameTime {
     delta: f32,
 }
 
+// Disable false-positive lint, isize *is* portable.
+#[allow(clippy::enum_clike_unportable_variant)]
 pub enum CollisionGroups {
-    Generic = 1 << 0,
+    Generic = 1,
     Projectile = 1 << 1,
     Actor = 1 << 2,
     All = std::isize::MAX,
@@ -301,11 +302,10 @@ impl SoundManager {
                     .with_rolloff_factor(*rolloff_factor)
                     .build_source();
                 let source = context.add_source(shot_sound);
-                context.effect_mut(self.reverb).base_mut().add_input(EffectInput::direct(source));
+                context.effect_mut(self.reverb).add_input(EffectInput::direct(source));
             }
             Message::SetMusicVolume { volume } => {
                 context.source_mut(self.music)
-                    .generic_mut()
                     .set_gain(*volume);
             }
             _ => {}
@@ -394,8 +394,8 @@ impl Game {
                         dt -= fixed_timestep as f64;
                         game.time.elapsed += fixed_timestep as f64;
 
-                        while let Some(mut ui_event) = game.engine.get_ui_mut().poll_message() {
-                            game.menu.handle_ui_event(&mut game.engine, &mut ui_event);
+                        while let Some(ui_event) = game.engine.get_ui_mut().poll_message() {
+                            game.menu.handle_ui_event(&mut game.engine, &ui_event);
                         }
 
                         game.update(game.time);
@@ -556,9 +556,9 @@ impl Game {
             if player.is_some() {
                 // Sync hud with player state.
                 let player = level.get_actors().get(player);
-                self.hud.set_health(ui, player.character().get_health());
-                self.hud.set_armor(ui, player.character().get_armor());
-                let current_weapon = player.character().current_weapon();
+                self.hud.set_health(ui, player.get_health());
+                self.hud.set_armor(ui, player.get_armor());
+                let current_weapon = player.current_weapon();
                 if current_weapon.is_some() {
                     let current_weapon = level.get_weapons().get(current_weapon);
                     self.hud.set_ammo(ui, current_weapon.get_ammo());
@@ -587,11 +587,8 @@ impl Game {
                     }
                 }
                 Message::LoadGame => {
-                    match self.load_game() {
-                        Err(e) => {
-                            println!("Failed to load saved game. Reason: {:?}", e);
-                        }
-                        _ => (),
+                    if let Err(e) = self.load_game() {
+                        println!("Failed to load saved game. Reason: {:?}", e);
                     }
                 }
                 Message::QuitGame => {

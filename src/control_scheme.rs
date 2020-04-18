@@ -9,7 +9,7 @@ pub enum ControlButton {
 }
 
 impl ControlButton {
-    pub fn name(&self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             ControlButton::Mouse(index) => {
                 match index {
@@ -21,7 +21,7 @@ impl ControlButton {
                     _ => "Unknown"
                 }
             }
-            ControlButton::Key(code) => rg3d::utils::virtual_key_code_name(*code),
+            ControlButton::Key(code) => rg3d::utils::virtual_key_code_name(code),
             ControlButton::WheelUp => "Wheel Up",
             ControlButton::WheelDown => "Wheel Down",
         }

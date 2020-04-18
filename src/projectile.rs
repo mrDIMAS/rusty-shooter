@@ -6,7 +6,7 @@ use rg3d::{
         Scene,
         node::Node,
         graph::Graph,
-        base::{BaseBuilder, AsBase},
+        base::BaseBuilder,
         light::{LightBuilder, LightKind, PointLight},
         transform::TransformBuilder,
     },
@@ -29,13 +29,12 @@ use crate::{
         Actor,
     },
     CollisionGroups,
-    character::AsCharacter,
     weapon::{
         Weapon,
         WeaponContainer,
     },
     message::Message,
-    effects::EffectKind
+    effects::EffectKind,
 };
 use std::{
     path::Path,
@@ -58,7 +57,7 @@ impl ProjectileKind {
         }
     }
 
-    pub fn id(&self) -> u32 {
+    pub fn id(self) -> u32 {
         match self {
             ProjectileKind::Plasma => 0,
             ProjectileKind::Bullet => 1,
@@ -138,6 +137,7 @@ impl Projectile {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new(kind: ProjectileKind,
                resource_manager: &mut ResourceManager,
                scene: &mut Scene,
@@ -223,7 +223,7 @@ impl Projectile {
         let position = if self.body.is_some() {
             scene.physics.borrow_body(self.body).get_position()
         } else {
-            scene.graph.get(self.model).base().global_position()
+            scene.graph[self.model].global_position()
         };
 
         let mut hits: Vec<Hit> = Vec::new();
@@ -238,7 +238,7 @@ impl Projectile {
                 'hit_loop: for hit in result.iter() {
                     if let HitKind::Body(body) = hit.kind {
                         for (actor_handle, actor) in actors.pair_iter() {
-                            if actor.character().get_body() == body && self.owner.is_some() {
+                            if actor.get_body() == body && self.owner.is_some() {
                                 let weapon = weapons.get(self.owner);
                                 // Ignore intersections with owners of weapon.
                                 if weapon.get_owner() != actor_handle {
@@ -273,7 +273,7 @@ impl Projectile {
 
                     // Check if we got contact with any actor and damage it then.
                     for (actor_handle, actor) in actors.pair_iter() {
-                        if contact.body == actor.character().get_body() && self.owner.is_some() {
+                        if contact.body == actor.get_body() && self.owner.is_some() {
                             // Prevent self-damage.
                             let weapon = weapons.get(self.owner);
                             if weapon.get_owner() != actor_handle {
@@ -298,14 +298,13 @@ impl Projectile {
                 scene.physics.borrow_body_mut(self.body).offset_by(total_velocity);
             } else {
                 // We have just model - move it.
-                scene.graph.get_mut(self.model)
-                    .base_mut()
+                scene.graph[self.model]
                     .local_transform_mut()
                     .offset(total_velocity);
             }
         }
 
-        if let Node::Sprite(sprite) = scene.graph.get_mut(self.model) {
+        if let Node::Sprite(sprite) = &mut scene.graph[self.model] {
             sprite.set_rotation(self.rotation_angle);
             self.rotation_angle += 1.5;
         }
@@ -319,7 +318,7 @@ impl Projectile {
         if self.lifetime <= 0.0 {
             self.sender.as_ref().unwrap().send(Message::CreateEffect {
                 kind: EffectKind::BulletImpact,
-                position: effect_position.unwrap_or(self.get_position(&scene.graph)),
+                position: effect_position.unwrap_or_else(|| self.get_position(&scene.graph)),
             }).unwrap();
         }
 
@@ -339,9 +338,7 @@ impl Projectile {
     }
 
     pub fn get_position(&self, graph: &Graph) -> Vec3 {
-        graph.get(self.model)
-            .base()
-            .global_position()
+        graph[self.model].global_position()
     }
 
     fn clean_up(&mut self, scene: &mut Scene) {

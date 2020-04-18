@@ -54,7 +54,6 @@ use rg3d::{
         scroll_bar::Orientation,
         widget::WidgetBuilder,
         HorizontalAlignment,
-        Control,
         tab_control::{
             TabControlBuilder,
             TabDefinition,
@@ -191,7 +190,6 @@ impl OptionsMenu {
                             cb_fullscreen = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_fullscreen) {
                                 check_box.set_checked(Some(false))
-                                    .widget_mut()
                                     .set_row(1)
                                     .set_column(1);
                             }
@@ -211,7 +209,6 @@ impl OptionsMenu {
                             cb_spot_shadows = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_spot_shadows) {
                                 check_box.set_checked(Some(settings.spot_shadows_enabled))
-                                    .widget_mut()
                                     .set_row(2)
                                     .set_column(1);
                             }
@@ -231,7 +228,6 @@ impl OptionsMenu {
                             cb_soft_spot_shadows = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_soft_spot_shadows) {
                                 check_box.set_checked(Some(settings.spot_soft_shadows))
-                                    .widget_mut()
                                     .set_row(3)
                                     .set_column(1);
                             }
@@ -254,7 +250,6 @@ impl OptionsMenu {
                                     .set_max_value(15.0)
                                     .set_value(settings.spot_shadows_distance)
                                     .set_step(0.25)
-                                    .widget_mut()
                                     .set_row(4)
                                     .set_column(1)
                                     .set_margin(Thickness::uniform(2.0));
@@ -275,7 +270,6 @@ impl OptionsMenu {
                             cb_point_shadows = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_point_shadows) {
                                 check_box.set_checked(Some(settings.point_shadows_enabled))
-                                    .widget_mut()
                                     .set_row(5)
                                     .set_column(1);
                             }
@@ -295,7 +289,6 @@ impl OptionsMenu {
                             cb_soft_point_shadows = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_soft_point_shadows) {
                                 check_box.set_checked(Some(settings.point_soft_shadows))
-                                    .widget_mut()
                                     .set_row(6)
                                     .set_column(1);
                             }
@@ -318,7 +311,6 @@ impl OptionsMenu {
                                     .set_max_value(15.0)
                                     .set_value(settings.point_shadows_distance)
                                     .set_step(0.25)
-                                    .widget_mut()
                                     .set_row(7)
                                     .set_column(1)
                                     .set_margin(Thickness::uniform(2.0));
@@ -362,7 +354,6 @@ impl OptionsMenu {
                                     .set_max_value(1.0)
                                     .set_value(1.0)
                                     .set_step(0.025)
-                                    .widget_mut()
                                     .set_row(0)
                                     .set_column(1)
                                     .set_margin(Thickness::uniform(2.0));
@@ -383,7 +374,6 @@ impl OptionsMenu {
                                     .set_max_value(1.0)
                                     .set_value(0.0)
                                     .set_step(0.025)
-                                    .widget_mut()
                                     .set_row(1)
                                     .set_column(1)
                                     .set_margin(Thickness::uniform(2.0));
@@ -401,7 +391,6 @@ impl OptionsMenu {
                             cb_use_hrtf = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_use_hrtf) {
                                 check_box.set_checked(Some(true))
-                                    .widget_mut()
                                     .set_row(2)
                                     .set_column(1);
                             }
@@ -473,7 +462,6 @@ impl OptionsMenu {
                                     .set_max_value(2.0)
                                     .set_value(control_scheme.borrow().mouse_sens)
                                     .set_step(0.05)
-                                    .widget_mut()
                                     .set_row(0)
                                     .set_column(1)
                                     .set_margin(Thickness::uniform(2.0));
@@ -491,7 +479,6 @@ impl OptionsMenu {
                             cb_mouse_y_inverse = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_mouse_y_inverse) {
                                 check_box.set_checked(Some(control_scheme.borrow().mouse_y_inverse))
-                                    .widget_mut()
                                     .set_row(1)
                                     .set_column(1);
                             }
@@ -508,7 +495,6 @@ impl OptionsMenu {
                             cb_smooth_mouse = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_smooth_mouse) {
                                 check_box.set_checked(Some(control_scheme.borrow().smooth_mouse))
-                                    .widget_mut()
                                     .set_row(2)
                                     .set_column(1);
                             }
@@ -525,7 +511,6 @@ impl OptionsMenu {
                             cb_shake_camera = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
                             if let UINode::CheckBox(check_box) = ui.node_mut(cb_shake_camera) {
                                 check_box.set_checked(Some(control_scheme.borrow().shake_camera))
-                                    .widget_mut()
                                     .set_row(3)
                                     .set_column(1);
                             }
@@ -685,6 +670,7 @@ impl OptionsMenu {
         }
     }
 
+    #[allow(clippy::cognitive_complexity)]
     pub fn handle_ui_event(&mut self, engine: &mut GameEngine, message: &GuiMessage) {
         let old_settings = engine.renderer.get_quality_settings();
         let mut settings = old_settings;

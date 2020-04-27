@@ -771,9 +771,9 @@ impl Bot {
     }
 
     fn select_weapon(&mut self, weapons: &WeaponContainer) {
-        if self.character.current_weapon().is_some() && weapons.get(self.character.current_weapon()).get_ammo() == 0 {
+        if self.character.current_weapon().is_some() && weapons[self.character.current_weapon()].ammo() == 0 {
             for (i, handle) in self.character.weapons().iter().enumerate() {
-                if weapons.get(*handle).get_ammo() > 0 {
+                if weapons[*handle].ammo() > 0 {
                     self.character.set_current_weapon(i);
                     break;
                 }

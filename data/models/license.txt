@@ -2,3 +2,9 @@ mutant.FBX - Mixamo
 parasite.FBX - Mixamo
 maw.FBX - Mixamo
 plasma_rifle.fbx - Enshin, sketchfab.com
+
+//
+3d model name = RPG 7
+maked by TDG Soft Srilanka
+email:- tdgwold@mail.com
+Blog -3dislands.blogspot.com

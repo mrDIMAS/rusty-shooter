@@ -1,7 +1,10 @@
 use std::{
-    path::Path,
+    path::{
+        Path,
+        PathBuf
+    },
     sync::mpsc::Sender,
-    path::PathBuf,
+    ops::{Index, IndexMut}
 };
 use rg3d::{
     physics::{RayCastOptions, HitKind, Physics},
@@ -29,7 +32,7 @@ use rg3d::{
             VisitResult,
             Visitor,
         },
-        math::{vec3::Vec3, ray::Ray},
+        math::{vec3::Vec3, ray::Ray, mat3::Mat3},
     },
 };
 use crate::{
@@ -45,6 +48,7 @@ pub enum WeaponKind {
     M4,
     Ak47,
     PlasmaRifle,
+    RocketLauncher,
 }
 
 impl WeaponKind {
@@ -52,7 +56,8 @@ impl WeaponKind {
         match self {
             WeaponKind::M4 => 0,
             WeaponKind::Ak47 => 1,
-            WeaponKind::PlasmaRifle => 2
+            WeaponKind::PlasmaRifle => 2,
+            WeaponKind::RocketLauncher => 3
         }
     }
 
@@ -61,6 +66,7 @@ impl WeaponKind {
             0 => Ok(WeaponKind::M4),
             1 => Ok(WeaponKind::Ak47),
             2 => Ok(WeaponKind::PlasmaRifle),
+            3 => Ok(WeaponKind::RocketLauncher),
             _ => Err(format!("unknown weapon kind {}", id))
         }
     }
@@ -147,7 +153,7 @@ impl Weapon {
             WeaponKind::Ak47 => {
                 static DEFINITION: WeaponDefinition = WeaponDefinition {
                     model: "data/models/ak47.FBX",
-                    shot_sound: "data/sounds/m4_shot.ogg",
+                    shot_sound: "data/sounds/ak47.ogg",
                     ammo: 200,
                     projectile: ProjectileKind::Bullet,
                     shoot_interval: 0.15,
@@ -161,6 +167,16 @@ impl Weapon {
                     ammo: 100,
                     projectile: ProjectileKind::Plasma,
                     shoot_interval: 0.25,
+                };
+                &DEFINITION
+            }
+            WeaponKind::RocketLauncher => {
+                static DEFINITION: WeaponDefinition = WeaponDefinition {
+                    model: "data/models/Rpg7.FBX",
+                    shot_sound: "data/sounds/grenade_launcher_fire.ogg",
+                    ammo: 100,
+                    projectile: ProjectileKind::Rocket,
+                    shoot_interval: 1.5,
                 };
                 &DEFINITION
             }
@@ -179,6 +195,7 @@ impl Weapon {
         let laser_dot = scene.graph.add_node(Node::Light(
             LightBuilder::new(LightKind::Point(PointLight::new(0.5)), BaseBuilder::new())
                 .with_color(Color::opaque(255, 0, 0))
+                .with_scatter_enabled(false)
                 .cast_shadows(false)
                 .build()));
 
@@ -236,6 +253,10 @@ impl Weapon {
         self.kind
     }
 
+    pub fn world_basis(&self, graph: &Graph) -> Mat3 {
+        graph[self.model].global_transform().basis()
+    }
+
     pub fn add_ammo(&mut self, amount: u32) {
         self.ammo += amount;
     }
@@ -259,6 +280,7 @@ impl Weapon {
                     }
                     let offset = hit.normal.normalized().unwrap_or_default().scale(0.2);
                     laser_dot_position = hit.position + offset;
+                    break 'hit_loop;
                 }
             }
         }
@@ -268,11 +290,11 @@ impl Weapon {
             .set_position(laser_dot_position);
     }
 
-    pub fn get_ammo(&self) -> u32 {
+    pub fn ammo(&self) -> u32 {
         self.ammo
     }
 
-    pub fn get_owner(&self) -> Handle<Actor> {
+    pub fn owner(&self) -> Handle<Actor> {
         self.owner
     }
 
@@ -339,18 +361,24 @@ impl WeaponContainer {
         self.pool.iter_mut()
     }
 
-    pub fn get(&self, handle: Handle<Weapon>) -> &Weapon {
-        self.pool.borrow(handle)
-    }
-
-    pub fn get_mut(&mut self, handle: Handle<Weapon>) -> &mut Weapon {
-        self.pool.borrow_mut(handle)
-    }
-
     pub fn update(&mut self, scene: &mut Scene, actors: &ActorContainer) {
         for weapon in self.pool.iter_mut() {
             weapon.update(scene, actors)
         }
+    }
+}
+
+impl Index<Handle<Weapon>> for WeaponContainer {
+    type Output = Weapon;
+
+    fn index(&self, index: Handle<Weapon>) -> &Self::Output {
+        &self.pool[index]
+    }
+}
+
+impl IndexMut<Handle<Weapon>> for WeaponContainer {
+    fn index_mut(&mut self, index: Handle<Weapon>) -> &mut Self::Output {
+        &mut self.pool[index]
     }
 }
 

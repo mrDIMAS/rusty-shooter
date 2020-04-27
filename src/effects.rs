@@ -47,7 +47,7 @@ pub fn create(kind: EffectKind, graph: &mut Graph, resource_manager: &mut Resour
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct CylinderEmitter {
     height: f32,
     radius: f32,

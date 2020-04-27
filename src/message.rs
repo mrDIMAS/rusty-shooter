@@ -27,6 +27,7 @@ use std::path::PathBuf;
 use rg3d::core::{
     pool::Handle,
     math::vec3::Vec3,
+    math::mat3::Mat3
 };
 
 #[derive(Debug)]
@@ -74,6 +75,7 @@ pub enum Message {
         direction: Vec3,
         initial_velocity: Vec3,
         owner: Handle<Weapon>,
+        basis: Mat3
     },
     ShootWeapon {
         weapon: Handle<Weapon>,

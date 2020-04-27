@@ -19,7 +19,7 @@ use rg3d::{
         visitor::{Visit, VisitResult, Visitor},
         pool::{Handle, Pool, PoolIteratorMut},
         color::Color,
-        math::{vec3::Vec3, ray::Ray},
+        math::{vec3::Vec3, ray::Ray, quat::Quat, mat3::Mat3},
     },
 };
 use crate::{
@@ -37,15 +37,16 @@ use crate::{
     effects::EffectKind,
 };
 use std::{
-    path::Path,
     sync::mpsc::Sender,
 };
 use rand::Rng;
+use std::path::PathBuf;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ProjectileKind {
     Plasma,
     Bullet,
+    Rocket,
 }
 
 impl ProjectileKind {
@@ -53,6 +54,7 @@ impl ProjectileKind {
         match id {
             0 => Ok(ProjectileKind::Plasma),
             1 => Ok(ProjectileKind::Bullet),
+            2 => Ok(ProjectileKind::Rocket),
             _ => Err(format!("Invalid projectile kind id {}", id))
         }
     }
@@ -61,6 +63,7 @@ impl ProjectileKind {
         match self {
             ProjectileKind::Plasma => 0,
             ProjectileKind::Bullet => 1,
+            ProjectileKind::Rocket => 2,
         }
     }
 }
@@ -111,6 +114,7 @@ pub struct ProjectileDefinition {
     /// Means that movement of projectile controlled by code, not physics.
     /// However projectile still could have rigid body to detect collisions.
     is_kinematic: bool,
+    impact_sound: &'static str
 }
 
 impl Projectile {
@@ -122,6 +126,7 @@ impl Projectile {
                     speed: 0.15,
                     lifetime: 10.0,
                     is_kinematic: true,
+                    impact_sound: "data/sounds/bullet_impact_concrete.ogg"
                 };
                 &DEFINITION
             }
@@ -131,6 +136,17 @@ impl Projectile {
                     speed: 0.75,
                     lifetime: 10.0,
                     is_kinematic: true,
+                    impact_sound: "data/sounds/bullet_impact_concrete.ogg"
+                };
+                &DEFINITION
+            }
+            ProjectileKind::Rocket => {
+                static DEFINITION: ProjectileDefinition = ProjectileDefinition {
+                    damage: 30.0,
+                    speed: 0.5,
+                    lifetime: 10.0,
+                    is_kinematic: true,
+                    impact_sound: "data/sounds/explosion.ogg"
                 };
                 &DEFINITION
             }
@@ -145,7 +161,9 @@ impl Projectile {
                position: Vec3,
                owner: Handle<Weapon>,
                initial_velocity: Vec3,
-               sender: Sender<Message>) -> Self {
+               sender: Sender<Message>,
+               basis: Mat3
+    ) -> Self {
         let definition = Self::get_definition(kind);
 
         let (model, body) = {
@@ -157,7 +175,7 @@ impl Projectile {
                     let model = scene.graph.add_node(Node::Sprite(SpriteBuilder::new(BaseBuilder::new())
                         .with_size(size)
                         .with_color(color)
-                        .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/light_01.png"), TextureKind::R8))
+                        .with_opt_texture(resource_manager.request_texture("data/particles/light_01.png", TextureKind::R8))
                         .build()));
 
                     let light = scene.graph.add_node(Node::Light(LightBuilder::new(
@@ -183,9 +201,23 @@ impl Projectile {
                             .with_local_position(position)
                             .build()))
                         .with_size(0.05)
-                        .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/light_01.png"), TextureKind::R8))
+                        .with_opt_texture(resource_manager.request_texture("data/particles/light_01.png", TextureKind::R8))
                         .build()));
 
+                    (model, Handle::NONE)
+                }
+                ProjectileKind::Rocket => {
+                    let resource = resource_manager.request_model("data/models/rocket.FBX").unwrap();
+                    let model = resource.lock().unwrap().instantiate_geometry(scene);
+                    scene.graph[model]
+                        .local_transform_mut()
+                        .set_rotation(Quat::from(basis))
+                        .set_position(position);
+                    let light = scene.graph.add_node(Node::Light(LightBuilder::new(
+                        LightKind::Point(PointLight::new(1.5)), BaseBuilder::new())
+                        .with_color(Color::opaque(255, 127, 0))
+                        .build()));
+                    scene.graph.link_nodes(light, model);
                     (model, Handle::NONE)
                 }
             }
@@ -239,12 +271,12 @@ impl Projectile {
                     if let HitKind::Body(body) = hit.kind {
                         for (actor_handle, actor) in actors.pair_iter() {
                             if actor.get_body() == body && self.owner.is_some() {
-                                let weapon = weapons.get(self.owner);
+                                let weapon = &weapons[self.owner];
                                 // Ignore intersections with owners of weapon.
-                                if weapon.get_owner() != actor_handle {
+                                if weapon.owner() != actor_handle {
                                     hits.push(Hit {
                                         actor: actor_handle,
-                                        who: weapon.get_owner(),
+                                        who: weapon.owner(),
                                     });
 
                                     self.kill();
@@ -275,11 +307,11 @@ impl Projectile {
                     for (actor_handle, actor) in actors.pair_iter() {
                         if contact.body == actor.get_body() && self.owner.is_some() {
                             // Prevent self-damage.
-                            let weapon = weapons.get(self.owner);
-                            if weapon.get_owner() != actor_handle {
+                            let weapon = &weapons[self.owner];
+                            if weapon.owner() != actor_handle {
                                 hits.push(Hit {
                                     actor: actor_handle,
-                                    who: weapon.get_owner(),
+                                    who: weapon.owner(),
                                 });
                             } else {
                                 // Make sure that projectile won't die on contact with owner.
@@ -316,9 +348,19 @@ impl Projectile {
         self.lifetime -= time.delta;
 
         if self.lifetime <= 0.0 {
+            let pos = effect_position.unwrap_or_else(|| self.get_position(&scene.graph));
+
             self.sender.as_ref().unwrap().send(Message::CreateEffect {
                 kind: EffectKind::BulletImpact,
-                position: effect_position.unwrap_or_else(|| self.get_position(&scene.graph)),
+                position: pos,
+            }).unwrap();
+
+            self.sender.as_ref().unwrap().send(Message::PlaySound {
+                path: PathBuf::from(self.definition.impact_sound),
+                position: pos,
+                gain: 1.0,
+                rolloff_factor: 4.0,
+                radius: 3.0
             }).unwrap();
         }
 

@@ -42,6 +42,7 @@ use rg3d::{
             PositionProvider,
             vec3::*,
             ray::Ray,
+            mat3::Mat3,
             aabb::AxisAlignedBoundingBox,
         },
         color::Color,
@@ -414,15 +415,15 @@ impl Level {
         false
     }
 
-    pub fn get_actors(&self) -> &ActorContainer {
+    pub fn actors(&self) -> &ActorContainer {
         &self.actors
     }
 
-    pub fn get_actors_mut(&mut self) -> &mut ActorContainer {
+    pub fn actors_mut(&mut self) -> &mut ActorContainer {
         &mut self.actors
     }
 
-    pub fn get_weapons(&self) -> &WeaponContainer {
+    pub fn weapons(&self) -> &WeaponContainer {
         &self.weapons
     }
 
@@ -449,7 +450,7 @@ impl Level {
                 projectile.owner = Handle::NONE;
             }
         }
-        self.weapons.get_mut(weapon).clean_up(&mut engine.scenes[self.scene]);
+        self.weapons[weapon].clean_up(&mut engine.scenes[self.scene]);
         self.weapons.free(weapon);
     }
 
@@ -492,10 +493,11 @@ impl Level {
             let drop_position = character.position(&scene.physics);
             let weapons = character.weapons().iter().copied().collect::<Vec<Handle<Weapon>>>();
             for weapon in weapons {
-                let item_kind = match self.weapons.get(weapon).get_kind() {
+                let item_kind = match self.weapons[weapon].get_kind() {
                     WeaponKind::M4 => ItemKind::M4,
                     WeaponKind::Ak47 => ItemKind::Ak47,
                     WeaponKind::PlasmaRifle => ItemKind::PlasmaGun,
+                    WeaponKind::RocketLauncher => ItemKind::RocketLauncher,
                 };
                 self.spawn_item(engine, item_kind, drop_position, true, Some(20.0));
                 self.remove_weapon(engine, weapon);
@@ -534,6 +536,7 @@ impl Level {
         self.give_new_weapon(engine, self.player, WeaponKind::M4);
         self.give_new_weapon(engine, self.player, WeaponKind::Ak47);
         self.give_new_weapon(engine, self.player, WeaponKind::PlasmaRifle);
+        self.give_new_weapon(engine, self.player, WeaponKind::RocketLauncher);
 
         self.player
     }
@@ -543,17 +546,18 @@ impl Level {
             let character = self.actors.get_mut(actor);
             match kind {
                 ItemKind::Medkit => character.heal(20.0),
-                ItemKind::Ak47 | ItemKind::PlasmaGun | ItemKind::M4 => {
+                ItemKind::Ak47 | ItemKind::PlasmaGun | ItemKind::M4 | ItemKind::RocketLauncher => {
                     let weapon_kind = match kind {
                         ItemKind::Ak47 => WeaponKind::Ak47,
                         ItemKind::PlasmaGun => WeaponKind::PlasmaRifle,
                         ItemKind::M4 => WeaponKind::M4,
+                        ItemKind::RocketLauncher => WeaponKind::RocketLauncher,
                         _ => unreachable!()
                     };
 
                     let mut found = false;
                     for weapon_handle in character.weapons() {
-                        let weapon = self.weapons.get_mut(*weapon_handle);
+                        let weapon = &mut self.weapons[*weapon_handle];
                         // If actor already has weapon of given kind, then just add ammo to it.
                         if weapon.get_kind() == weapon_kind {
                             found = true;
@@ -568,7 +572,7 @@ impl Level {
                 }
                 ItemKind::Plasma | ItemKind::Ak47Ammo | ItemKind::M4Ammo => {
                     for weapon in character.weapons() {
-                        let weapon = self.weapons.get_mut(*weapon);
+                        let weapon = &mut self.weapons[*weapon];
                         let (weapon_kind, ammo) = match kind {
                             ItemKind::Plasma => (WeaponKind::PlasmaRifle, 200),
                             ItemKind::Ak47Ammo => (WeaponKind::Ak47, 200),
@@ -618,6 +622,7 @@ impl Level {
                          direction: Vec3,
                          initial_velocity: Vec3,
                          owner: Handle<Weapon>,
+                         basis: Mat3,
     ) {
         let scene = &mut engine.scenes[self.scene];
         let resource_manager = &mut engine.resource_manager;
@@ -630,6 +635,7 @@ impl Level {
             owner,
             initial_velocity,
             self.sender.as_ref().unwrap().clone(),
+            basis
         );
         self.projectiles.add(projectile);
     }
@@ -643,20 +649,21 @@ impl Level {
     ) {
         if self.weapons.contains(weapon_handle) {
             let scene = &mut engine.scenes[self.scene];
-            let weapon = self.weapons.get_mut(weapon_handle);
+            let weapon = &mut self.weapons[weapon_handle];
             if weapon.try_shoot(scene, time) {
                 let kind = weapon.definition.projectile;
                 let position = weapon.get_shot_position(&scene.graph);
                 let direction = direction.unwrap_or_else(|| weapon.get_shot_direction(&scene.graph))
                     .normalized()
                     .unwrap_or_else(|| Vec3::LOOK);
-                self.create_projectile(engine, kind, position, direction, initial_velocity, weapon_handle);
+                let basis = weapon.world_basis(&scene.graph);
+                self.create_projectile(engine, kind, position, direction, initial_velocity, weapon_handle, basis);
             }
         }
     }
 
     fn show_weapon(&mut self, engine: &mut GameEngine, weapon_handle: Handle<Weapon>, state: bool) {
-        self.weapons.get(weapon_handle).set_visibility(state, &mut engine.scenes[self.scene].graph)
+        self.weapons[weapon_handle].set_visibility(state, &mut engine.scenes[self.scene].graph)
     }
 
     fn find_suitable_spawn_point(&self, engine: &mut GameEngine) -> usize {
@@ -910,47 +917,47 @@ impl Level {
 
     pub fn handle_message(&mut self, engine: &mut GameEngine, message: &Message, time: GameTime) {
         match message {
-            Message::GiveNewWeapon { actor, kind } => {
-                self.give_new_weapon(engine, *actor, *kind);
+            &Message::GiveNewWeapon { actor, kind } => {
+                self.give_new_weapon(engine, actor, kind);
             }
             Message::AddBot { kind, position, name } => {
                 self.add_bot(engine, *kind, *position, name.clone());
             }
-            Message::RemoveActor { actor } => {
-                self.remove_actor(engine, *actor)
+            &Message::RemoveActor { actor } => {
+                self.remove_actor(engine, actor)
             }
-            Message::GiveItem { actor, kind } => {
-                self.give_item(engine, *actor, *kind);
+            &Message::GiveItem { actor, kind } => {
+                self.give_item(engine, actor, kind);
             }
-            Message::PickUpItem { actor, item } => {
-                self.pickup_item(engine, *actor, *item);
+            &Message::PickUpItem { actor, item } => {
+                self.pickup_item(engine, actor, item);
             }
-            Message::ShootWeapon { weapon, initial_velocity, direction } => {
-                self.shoot_weapon(engine, *weapon, *initial_velocity, time, direction.clone())
+            &Message::ShootWeapon { weapon, initial_velocity, direction } => {
+                self.shoot_weapon(engine, weapon, initial_velocity, time, direction)
             }
-            Message::CreateProjectile { kind, position, direction, initial_velocity, owner } => {
-                self.create_projectile(engine, *kind, *position, *direction, *initial_velocity, *owner)
+            &Message::CreateProjectile { kind, position, direction, initial_velocity, owner , basis} => {
+                self.create_projectile(engine, kind, position, direction, initial_velocity, owner, basis)
             }
-            Message::ShowWeapon { weapon, state } => {
-                self.show_weapon(engine, *weapon, *state)
+            &Message::ShowWeapon { weapon, state } => {
+                self.show_weapon(engine, weapon, state)
             }
             Message::SpawnBot { kind, name } => {
                 self.spawn_bot(engine, *kind, Some(name.clone()));
             }
-            Message::DamageActor { actor, who, amount } => {
-                self.damage_actor(engine, *actor, *who, *amount, time);
+            &Message::DamageActor { actor, who, amount } => {
+                self.damage_actor(engine, actor, who, amount, time);
             }
-            Message::CreateEffect { kind, position } => {
-                effects::create(*kind, &mut engine.scenes[self.scene].graph, &mut engine.resource_manager.lock().unwrap(), *position)
+            &Message::CreateEffect { kind, position } => {
+                effects::create(kind, &mut engine.scenes[self.scene].graph, &mut engine.resource_manager.lock().unwrap(), position)
             }
             Message::SpawnPlayer => {
                 self.spawn_player(engine);
             }
-            Message::SpawnItem { kind, position, adjust_height, lifetime } => {
-                self.spawn_item(engine, *kind, *position, *adjust_height, *lifetime)
+            &Message::SpawnItem { kind, position, adjust_height, lifetime } => {
+                self.spawn_item(engine, kind, position, adjust_height, lifetime)
             }
-            Message::RespawnActor { actor } => {
-                self.respawn_actor(engine, *actor)
+            &Message::RespawnActor { actor } => {
+                self.respawn_actor(engine, actor)
             }
             _ => ()
         }

@@ -503,7 +503,7 @@ impl Game {
             level.build_navmesh(&mut self.engine);
             level.control_scheme = Some(self.control_scheme.clone());
             let player = level.get_player();
-            if let Actor::Player(player) = level.get_actors_mut().get_mut(player) {
+            if let Actor::Player(player) = level.actors_mut().get_mut(player) {
                 player.set_control_scheme(self.control_scheme.clone());
             }
         }
@@ -555,13 +555,12 @@ impl Game {
             let player = level.get_player();
             if player.is_some() {
                 // Sync hud with player state.
-                let player = level.get_actors().get(player);
+                let player = level.actors().get(player);
                 self.hud.set_health(ui, player.get_health());
                 self.hud.set_armor(ui, player.get_armor());
                 let current_weapon = player.current_weapon();
                 if current_weapon.is_some() {
-                    let current_weapon = level.get_weapons().get(current_weapon);
-                    self.hud.set_ammo(ui, current_weapon.get_ammo());
+                    self.hud.set_ammo(ui, level.weapons()[current_weapon].ammo());
                 }
                 self.hud.set_is_died(ui, false);
             } else {

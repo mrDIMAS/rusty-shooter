@@ -41,6 +41,7 @@ pub enum ItemKind {
     PlasmaGun,
     Ak47,
     M4,
+    RocketLauncher
 }
 
 impl ItemKind {
@@ -53,6 +54,7 @@ impl ItemKind {
             4 => Ok(ItemKind::PlasmaGun),
             5 => Ok(ItemKind::Ak47),
             6 => Ok(ItemKind::M4),
+            7 => Ok(ItemKind::RocketLauncher),
             _ => Err(format!("Unknown item kind {}", id))
         }
     }
@@ -66,6 +68,7 @@ impl ItemKind {
             ItemKind::PlasmaGun => 4,
             ItemKind::Ak47 => 5,
             ItemKind::M4 => 6,
+            ItemKind::RocketLauncher => 7,
         }
     }
 }
@@ -162,6 +165,14 @@ impl Item {
             ItemKind::M4 => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
                     model: "data/models/m4.FBX",
+                    scale: 3.0,
+                    reactivation_interval: 30.0,
+                };
+                &DEFINITION
+            }
+            ItemKind::RocketLauncher => {
+                static DEFINITION: ItemDefinition = ItemDefinition {
+                    model: "data/models/Rpg7.FBX",
                     scale: 3.0,
                     reactivation_interval: 30.0,
                 };

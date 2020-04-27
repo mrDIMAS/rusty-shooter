@@ -408,11 +408,9 @@ impl Hud {
             Message::AddNotification { text } => {
                 self.add_message(text)
             }
-            Message::AddBot { .. } => self.update_leader_board_overview(ui, leader_board, match_options),
-            Message::RemoveActor { .. } => self.update_leader_board_overview(ui, leader_board, match_options),
-            Message::SpawnBot { .. } => self.update_leader_board_overview(ui, leader_board, match_options),
-            Message::SpawnPlayer => self.update_leader_board_overview(ui, leader_board, match_options),
-            Message::RespawnActor { .. } => self.update_leader_board_overview(ui, leader_board, match_options),
+            Message::AddBot { .. } | Message::RemoveActor { .. } | Message::RespawnActor { .. } | Message::SpawnBot { .. } | Message::SpawnPlayer => {
+                self.update_leader_board_overview(ui, leader_board, match_options)
+            }
             _ => ()
         }
 

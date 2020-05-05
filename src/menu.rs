@@ -169,16 +169,24 @@ impl Menu {
     }
 
     pub fn set_visible(&mut self, ui: &mut Gui, visible: bool) {
-        ui.node_mut(self.root)            .set_visibility(visible);
+        ui.node_mut(self.root).set_visibility(visible);
 
         if !visible {
-            ui.post_message(UiMessage::targeted(self.options_menu.window, UiMessageData::Window(WindowMessage::Closed)));
-            ui.post_message(UiMessage::targeted(self.match_menu.window, UiMessageData::Window(WindowMessage::Closed)));
+            ui.post_message(UiMessage {
+                destination: self.options_menu.window,
+                data: UiMessageData::Window(WindowMessage::Closed),
+                ..Default::default()
+            });
+            ui.post_message(UiMessage {
+                destination: self.match_menu.window,
+                data: UiMessageData::Window(WindowMessage::Closed),
+                ..Default::default()
+            });
         }
     }
 
     pub fn is_visible(&self, ui: &Gui) -> bool {
-        ui.node(self.root)            .visibility()
+        ui.node(self.root).visibility()
     }
 
     pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
@@ -194,49 +202,56 @@ impl Menu {
         self.options_menu.process_input_event(engine, event);
     }
 
-    pub fn handle_ui_event(&mut self, engine: &mut GameEngine, event: &GuiMessage) {
-        if let UiMessageData::Button(msg) = &event.data {
+    pub fn handle_ui_event(&mut self, engine: &mut GameEngine, message: &GuiMessage) {
+        if let UiMessageData::Button(msg) = &message.data {
             if let ButtonMessage::Click = msg {
-                if event.source() == self.btn_new_game {
+                if message.destination == self.btn_new_game {
                     engine.user_interface
-                        .post_message(UiMessage::targeted(
-                            self.match_menu.window, UiMessageData::Window(WindowMessage::Opened)));
+                        .post_message(UiMessage {
+                            destination: self.match_menu.window,
+                            data: UiMessageData::Window(WindowMessage::Opened),
+                            ..Default::default()
+                        });
                     engine.user_interface
                         .post_message(
-                            UiMessage::targeted(
-                                self.match_menu.window,
-                                UiMessageData::Widget(
-                                    WidgetMessage::Property(
-                                        WidgetProperty::DesiredPosition(Vec2::new(400.0, 0.0))))))
-                } else if event.source() == self.btn_save_game {
+                            UiMessage {
+                                destination: self.match_menu.window,
+                                data: UiMessageData::Widget(WidgetMessage::Property(
+                                    WidgetProperty::DesiredPosition(Vec2::new(400.0, 0.0)))),
+                                ..Default::default()
+                            })
+                } else if message.destination == self.btn_save_game {
                     self.sender
                         .send(Message::SaveGame)
                         .unwrap();
-                } else if event.source() == self.btn_load_game {
+                } else if message.destination == self.btn_load_game {
                     self.sender
                         .send(Message::LoadGame)
                         .unwrap();
-                } else if event.source() == self.btn_quit_game {
+                } else if message.destination == self.btn_quit_game {
                     self.sender
                         .send(Message::QuitGame)
                         .unwrap();
-                } else if event.source() == self.btn_settings {
+                } else if message.destination == self.btn_settings {
                     engine.user_interface
-                        .post_message(UiMessage::targeted(
-                            self.options_menu.window,
-                            UiMessageData::Window(WindowMessage::Opened)));
+                        .post_message(UiMessage {
+                            destination: self.options_menu.window,
+                            data: UiMessageData::Window(WindowMessage::Opened),
+                            ..Default::default()
+                        });
                     engine.user_interface
-                        .post_message(
-                            UiMessage::targeted(
-                                self.options_menu.window,
-                                UiMessageData::Widget(
-                                    WidgetMessage::Property(
-                                        WidgetProperty::DesiredPosition(Vec2::new(200.0, 200.0))))))
+                        .post_message(UiMessage {
+                            destination: self.options_menu.window,
+                            data: UiMessageData::Widget(
+                                WidgetMessage::Property(
+                                    WidgetProperty::DesiredPosition(Vec2::new(200.0, 200.0)))),
+                            ..Default::default()
+                        })
                 }
             }
         }
 
-        self.options_menu.handle_ui_event(engine, event);
-        self.match_menu.handle_ui_event(engine, event);
+        self.options_menu.handle_ui_event(engine, message);
+        self.match_menu.handle_ui_event(engine, message);
     }
 }

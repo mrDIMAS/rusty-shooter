@@ -2,7 +2,7 @@ use rg3d::{
     gui::{
         HorizontalAlignment,
         VerticalAlignment,
-        combobox::ComboBoxBuilder,
+        dropdown_list::DropdownListBuilder,
         Thickness,
         window::{
             WindowBuilder,
@@ -65,7 +65,7 @@ impl MatchMenu {
                     .on_column(0))
                     .with_text("Match Type")
                     .build(ui))
-                .with_child(ComboBoxBuilder::new(WidgetBuilder::new()
+                .with_child(DropdownListBuilder::new(WidgetBuilder::new()
                     .on_column(1)
                     .on_row(0))
                     .with_items({
@@ -167,7 +167,7 @@ impl MatchMenu {
 
         if let UiMessageData::Button(msg) = &message.data {
             if let ButtonMessage::Click = msg {
-                if message.source() == self.start_button {
+                if message.destination == self.start_button {
                     let time_limit_minutes =
                         if let UINode::ScrollBar(scroll_bar) = ui.node(self.sb_time_limit) {
                             scroll_bar.value()

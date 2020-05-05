@@ -28,7 +28,7 @@ use rg3d::{
     monitor::VideoMode,
     window::Fullscreen,
     gui::{
-        items_control::ItemsControlBuilder,
+        list_view::ListViewBuilder,
         grid::{
             GridBuilder,
             Row,
@@ -47,7 +47,7 @@ use rg3d::{
         message::{
             UiMessageData,
             ScrollBarMessage,
-            ItemsControlMessage,
+            ListViewMessage,
             CheckBoxMessage,
             ButtonMessage,
         },
@@ -143,7 +143,7 @@ impl OptionsMenu {
                             .with_vertical_text_alignment(VerticalAlignment::Center)
                             .build(ui))
                         .with_child({
-                            lb_video_modes = ItemsControlBuilder::new(WidgetBuilder::new()
+                            lb_video_modes = ListViewBuilder::new(WidgetBuilder::new()
                                 .on_column(1)
                                 .on_row(0)
                                 .with_margin(margin))
@@ -678,17 +678,17 @@ impl OptionsMenu {
         match &message.data {
             UiMessageData::ScrollBar(prop) => {
                 if let ScrollBarMessage::Value(new_value) = prop {
-                    if message.source() == self.sb_sound_volume {
+                    if message.destination == self.sb_sound_volume {
                         engine.sound_context.lock().unwrap().set_master_gain(*new_value)
-                    } else if message.source() == self.sb_point_shadow_distance {
+                    } else if message.destination == self.sb_point_shadow_distance {
                         settings.point_shadows_distance = *new_value;
-                    } else if message.source() == self.sb_spot_shadow_distance {
+                    } else if message.destination == self.sb_spot_shadow_distance {
                         settings.spot_shadows_distance = *new_value;
-                    } else if message.source() == self.sb_mouse_sens {
+                    } else if message.destination == self.sb_mouse_sens {
                         self.control_scheme
                             .borrow_mut()
                             .mouse_sens = *new_value;
-                    } else if message.source() == self.sb_music_volume {
+                    } else if message.destination == self.sb_music_volume {
                         self.sender
                             .send(Message::SetMusicVolume {
                                 volume: *new_value
@@ -697,9 +697,9 @@ impl OptionsMenu {
                     }
                 }
             }
-            UiMessageData::ItemsControl(msg) => {
-                if let ItemsControlMessage::SelectionChanged(new_value) = msg {
-                    if message.source() == self.lb_video_modes {
+            UiMessageData::ListView(msg) => {
+                if let ListViewMessage::SelectionChanged(new_value) = msg {
+                    if message.destination == self.lb_video_modes {
                         if let Some(index) = new_value {
                             let video_mode = self.video_modes[*index].clone();
                             engine.get_window().set_fullscreen(Some(Fullscreen::Exclusive(video_mode)))
@@ -710,35 +710,35 @@ impl OptionsMenu {
             UiMessageData::CheckBox(msg) => {
                 if let CheckBoxMessage::Checked(value) = msg {
                     let mut control_scheme = self.control_scheme.borrow_mut();
-                    if message.source() == self.cb_point_shadows {
+                    if message.destination == self.cb_point_shadows {
                         settings.point_shadows_enabled = value.unwrap_or(false);
-                    } else if message.source() == self.cb_spot_shadows {
+                    } else if message.destination == self.cb_spot_shadows {
                         settings.spot_shadows_enabled = value.unwrap_or(false);
-                    } else if message.source() == self.cb_soft_spot_shadows {
+                    } else if message.destination == self.cb_soft_spot_shadows {
                         settings.spot_soft_shadows = value.unwrap_or(false);
-                    } else if message.source() == self.cb_soft_point_shadows {
+                    } else if message.destination == self.cb_soft_point_shadows {
                         settings.point_soft_shadows = value.unwrap_or(false);
-                    } else if message.source() == self.cb_mouse_y_inverse {
+                    } else if message.destination == self.cb_mouse_y_inverse {
                         control_scheme.mouse_y_inverse = value.unwrap_or(false);
-                    } else if message.source() == self.cb_smooth_mouse {
+                    } else if message.destination == self.cb_smooth_mouse {
                         control_scheme.smooth_mouse = value.unwrap_or(false);
-                    } else if message.source() == self.cb_shake_camera {
+                    } else if message.destination == self.cb_shake_camera {
                         control_scheme.shake_camera = value.unwrap_or(false);
                     }
                 }
             }
             UiMessageData::Button(msg) => {
                 if let ButtonMessage::Click = msg {
-                    if message.source() == self.btn_reset_control_scheme {
+                    if message.destination == self.btn_reset_control_scheme {
                         self.control_scheme.borrow_mut().reset();
                         self.sync_to_model(engine);
-                    } else if message.source() == self.btn_reset_audio_settings {
+                    } else if message.destination == self.btn_reset_audio_settings {
                         engine.sound_context.lock().unwrap().set_master_gain(1.0);
                         self.sync_to_model(engine);
                     }
 
                     for (i, button) in self.control_scheme_buttons.iter().enumerate() {
-                        if message.source() == *button {
+                        if message.destination == *button {
                             if let UINode::Button(button) = engine.user_interface.node(*button) {
                                 let text = button.content();
                                 if let UINode::Text(text) = engine.user_interface.node_mut(text) {

@@ -172,15 +172,15 @@ impl Menu {
         ui.node_mut(self.root).set_visibility(visible);
 
         if !visible {
-            ui.post_message(UiMessage {
+            ui.send_message(UiMessage {
                 destination: self.options_menu.window,
                 data: UiMessageData::Window(WindowMessage::Closed),
-                ..Default::default()
+                handled: false,
             });
-            ui.post_message(UiMessage {
+            ui.send_message(UiMessage {
                 destination: self.match_menu.window,
                 data: UiMessageData::Window(WindowMessage::Closed),
-                ..Default::default()
+                handled: false,
             });
         }
     }
@@ -207,19 +207,18 @@ impl Menu {
             if let ButtonMessage::Click = msg {
                 if message.destination == self.btn_new_game {
                     engine.user_interface
-                        .post_message(UiMessage {
+                        .send_message(UiMessage {
                             destination: self.match_menu.window,
                             data: UiMessageData::Window(WindowMessage::Opened),
-                            ..Default::default()
+                            handled: false,
                         });
                     engine.user_interface
-                        .post_message(
-                            UiMessage {
-                                destination: self.match_menu.window,
-                                data: UiMessageData::Widget(WidgetMessage::Property(
-                                    WidgetProperty::DesiredPosition(Vec2::new(400.0, 0.0)))),
-                                ..Default::default()
-                            })
+                        .send_message(UiMessage {
+                            destination: self.match_menu.window,
+                            data: UiMessageData::Widget(WidgetMessage::Property(
+                                WidgetProperty::DesiredPosition(Vec2::new(400.0, 0.0)))),
+                            handled: false,
+                        })
                 } else if message.destination == self.btn_save_game {
                     self.sender
                         .send(Message::SaveGame)
@@ -234,18 +233,18 @@ impl Menu {
                         .unwrap();
                 } else if message.destination == self.btn_settings {
                     engine.user_interface
-                        .post_message(UiMessage {
+                        .send_message(UiMessage {
                             destination: self.options_menu.window,
                             data: UiMessageData::Window(WindowMessage::Opened),
-                            ..Default::default()
+                            handled: false
                         });
                     engine.user_interface
-                        .post_message(UiMessage {
+                        .send_message(UiMessage {
                             destination: self.options_menu.window,
                             data: UiMessageData::Widget(
                                 WidgetMessage::Property(
                                     WidgetProperty::DesiredPosition(Vec2::new(200.0, 200.0)))),
-                            ..Default::default()
+                            handled: false
                         })
                 }
             }

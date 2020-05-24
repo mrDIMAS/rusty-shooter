@@ -20,11 +20,11 @@ use rg3d::{
         text::TextBuilder,
         stack_panel::StackPanelBuilder,
         image::ImageBuilder,
-        scroll_bar::Orientation,
         VerticalAlignment,
         Thickness,
         brush::Brush,
         node::UINode,
+        Orientation
     },
 };
 use crate::{

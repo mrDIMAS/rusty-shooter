@@ -14,7 +14,7 @@ use rg3d::{
             Row,
             Column,
         },
-        scroll_bar::Orientation,
+        Orientation,
         text::TextBuilder,
         message::{
             UiMessageData,

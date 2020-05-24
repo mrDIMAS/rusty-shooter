@@ -17,7 +17,7 @@ use rg3d::{
         widget::WidgetBuilder,
         image::ImageBuilder,
         Thickness,
-        scroll_bar::Orientation,
+        Orientation,
         scroll_viewer::ScrollViewerBuilder,
     }
 };

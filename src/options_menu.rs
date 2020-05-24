@@ -51,7 +51,7 @@ use rg3d::{
             CheckBoxMessage,
             ButtonMessage,
         },
-        scroll_bar::Orientation,
+        Orientation,
         widget::WidgetBuilder,
         HorizontalAlignment,
         tab_control::{

@@ -708,7 +708,7 @@ impl OptionsMenu {
                 }
             }
             UiMessageData::CheckBox(msg) => {
-                if let CheckBoxMessage::Checked(value) = msg {
+                if let CheckBoxMessage::Check(value) = msg {
                     let mut control_scheme = self.control_scheme.borrow_mut();
                     if message.destination == self.cb_point_shadows {
                         settings.point_shadows_enabled = value.unwrap_or(false);

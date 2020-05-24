@@ -174,12 +174,12 @@ impl Menu {
         if !visible {
             ui.send_message(UiMessage {
                 destination: self.options_menu.window,
-                data: UiMessageData::Window(WindowMessage::Closed),
+                data: UiMessageData::Window(WindowMessage::Close),
                 handled: false,
             });
             ui.send_message(UiMessage {
                 destination: self.match_menu.window,
-                data: UiMessageData::Window(WindowMessage::Closed),
+                data: UiMessageData::Window(WindowMessage::Close),
                 handled: false,
             });
         }
@@ -209,7 +209,7 @@ impl Menu {
                     engine.user_interface
                         .send_message(UiMessage {
                             destination: self.match_menu.window,
-                            data: UiMessageData::Window(WindowMessage::Opened),
+                            data: UiMessageData::Window(WindowMessage::Open),
                             handled: false,
                         });
                     engine.user_interface
@@ -235,7 +235,7 @@ impl Menu {
                     engine.user_interface
                         .send_message(UiMessage {
                             destination: self.options_menu.window,
-                            data: UiMessageData::Window(WindowMessage::Opened),
+                            data: UiMessageData::Window(WindowMessage::Open),
                             handled: false
                         });
                     engine.user_interface

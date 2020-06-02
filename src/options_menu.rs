@@ -540,7 +540,7 @@ impl OptionsMenu {
 
         let options_window: UINodeHandle = WindowBuilder::new(WidgetBuilder::new()
             .with_width(500.0))
-            .with_title(WindowTitle::Text("Options"))
+            .with_title(WindowTitle::text("Options"))
             .open(false)
             .with_content(tab_control)
             .build(ui);

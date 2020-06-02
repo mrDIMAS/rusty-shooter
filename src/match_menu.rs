@@ -57,7 +57,7 @@ impl MatchMenu {
         let start_button;
         let window = WindowBuilder::new(WidgetBuilder::new()
             .with_width(500.0))
-            .with_title(WindowTitle::Text("Match Options"))
+            .with_title(WindowTitle::text("Match Options"))
             .open(false)
             .with_content(GridBuilder::new(WidgetBuilder::new()
                 .with_child(TextBuilder::new(WidgetBuilder::new()

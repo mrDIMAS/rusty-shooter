@@ -84,9 +84,10 @@ impl Menu {
             .with_child(WindowBuilder::new(WidgetBuilder::new()
                 .on_row(1)
                 .on_column(1))
+                .can_resize(false)
                 .can_minimize(false)
                 .can_close(false)
-                .with_title(WindowTitle::Text("Rusty Shooter"))
+                .with_title(WindowTitle::text("Rusty Shooter"))
                 .with_content(GridBuilder::new(WidgetBuilder::new()
                     .with_margin(Thickness::uniform(20.0))
                     .with_child({

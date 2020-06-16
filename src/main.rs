@@ -71,6 +71,7 @@ use rg3d::{
         },
     },
     gui::{
+        message::TextMessage,
         widget::WidgetBuilder,
         node::{UINode, StubNode},
         text::TextBuilder,
@@ -85,10 +86,12 @@ use std::sync::{Arc, Mutex};
 use rg3d::engine::resource_manager::ResourceManager;
 
 // Define type aliases for engine structs.
-pub type UINodeHandle = Handle<UINode<(), StubNode>>;
+pub type UiNode = UINode<(), StubNode>;
+pub type UINodeHandle = Handle<UiNode>;
 pub type GameEngine = Engine<(), StubNode>;
 pub type Gui = UserInterface<(), StubNode>;
 pub type GuiMessage = UiMessage<(), StubNode>;
+pub type BuildContext<'a> = rg3d::gui::BuildContext<'a, (), StubNode>;
 
 pub struct Game {
     menu: Menu,
@@ -394,11 +397,11 @@ impl Game {
                         dt -= fixed_timestep as f64;
                         game.time.elapsed += fixed_timestep as f64;
 
-                        while let Some(ui_event) = game.engine.get_ui_mut().poll_message() {
+                        game.update(game.time);
+
+                        while let Some(ui_event) = game.engine.user_interface.poll_message() {
                             game.menu.handle_ui_event(&mut game.engine, &ui_event);
                         }
-
-                        game.update(game.time);
                     }
                     if !game.running {
                         *control_flow = ControlFlow::Exit;
@@ -451,7 +454,7 @@ impl Game {
     pub fn create_debug_ui(&mut self) {
         self.debug_text = TextBuilder::new(WidgetBuilder::new()
             .with_width(400.0))
-            .build(&mut self.engine.user_interface);
+            .build(&mut self.engine.user_interface.build_ctx());
     }
 
     pub fn save_game(&mut self) -> VisitResult {
@@ -634,9 +637,7 @@ impl Game {
                self.engine.ui_time
         ).unwrap();
 
-        if let UINode::Text(text) = self.engine.user_interface.node_mut(self.debug_text) {
-            text.set_text(self.debug_string.as_str());
-        }
+        self.engine.user_interface.send_message(TextMessage::text(self.debug_text, self.debug_string.clone()));
     }
 
     pub fn limit_fps(&mut self, value: f64) {

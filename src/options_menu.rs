@@ -15,7 +15,7 @@ use crate::{
     gui::{
         create_check_box,
         create_scroll_bar,
-        create_scroll_viewer
+        create_scroll_viewer,
     },
 };
 use rg3d::{
@@ -59,8 +59,10 @@ use rg3d::{
             TabDefinition,
         },
         node::UINode,
+        message::TextMessage,
     },
 };
+use crate::gui::ScrollBarData;
 
 pub struct OptionsMenu {
     pub window: UINodeHandle,
@@ -97,7 +99,8 @@ impl OptionsMenu {
                 vm.size().height > 600 && vm.bit_depth() == 32)
             .collect();
 
-        let ui = &mut engine.user_interface;
+        let ctx = &mut engine.user_interface.build_ctx();
+        let resource_manager = &mut engine.resource_manager.lock().unwrap();
 
         let common_row = Row::strict(36.0);
 
@@ -130,7 +133,7 @@ impl OptionsMenu {
                         .with_width(100.0)
                         .with_height(30.0))
                         .with_text("Graphics")
-                        .build(ui)
+                        .build(ctx)
                 },
                 content: {
                     GridBuilder::new(WidgetBuilder::new()
@@ -141,13 +144,13 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Resolution")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
                             lb_video_modes = ListViewBuilder::new(WidgetBuilder::new()
                                 .on_column(1)
                                 .on_row(0)
                                 .with_margin(margin))
-                                .with_scroll_viewer(create_scroll_viewer(ui, &mut engine.resource_manager.lock().unwrap()))
+                                .with_scroll_viewer(create_scroll_viewer(ctx, resource_manager))
                                 .with_items({
                                     let mut items = Vec::new();
                                     for video_mode in video_modes.iter() {
@@ -163,19 +166,19 @@ impl OptionsMenu {
                                                         .with_text(format!("{} x {} @ {}Hz", size.width, size.height, rate).as_str())
                                                         .with_vertical_text_alignment(VerticalAlignment::Center)
                                                         .with_horizontal_text_alignment(HorizontalAlignment::Center)
-                                                        .build(ui))
+                                                        .build(ctx))
                                             ).with_stroke_thickness(Thickness {
                                                 left: 1.0,
                                                 top: 0.0,
                                                 right: 1.0,
                                                 bottom: 1.0,
                                             }))
-                                            .build(ui);
+                                            .build(ctx);
                                         items.push(item)
                                     }
                                     items
                                 })
-                                .build(ui);
+                                .build(ctx);
                             lb_video_modes
                         })
 
@@ -185,14 +188,9 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Fullscreen")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            cb_fullscreen = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
-                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_fullscreen) {
-                                check_box.set_checked(Some(false))
-                                    .set_row(1)
-                                    .set_column(1);
-                            }
+                            cb_fullscreen = create_check_box(ctx, resource_manager, 1, 1, false);
                             cb_fullscreen
                         })
 
@@ -204,14 +202,9 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Spot Shadows")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            cb_spot_shadows = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
-                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_spot_shadows) {
-                                check_box.set_checked(Some(settings.spot_shadows_enabled))
-                                    .set_row(2)
-                                    .set_column(1);
-                            }
+                            cb_spot_shadows = create_check_box(ctx, resource_manager, 2, 1, settings.spot_shadows_enabled);
                             cb_spot_shadows
                         })
 
@@ -223,14 +216,9 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Soft Spot Shadows")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            cb_soft_spot_shadows = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
-                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_soft_spot_shadows) {
-                                check_box.set_checked(Some(settings.spot_soft_shadows))
-                                    .set_row(3)
-                                    .set_column(1);
-                            }
+                            cb_soft_spot_shadows = create_check_box(ctx, resource_manager, 3, 1, settings.spot_soft_shadows);
                             cb_soft_spot_shadows
                         })
 
@@ -242,18 +230,19 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Spot Shadows Distance")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            sb_spot_shadow_distance = create_scroll_bar(ui, &mut engine.resource_manager.lock().unwrap(), Orientation::Horizontal, true);
-                            if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_spot_shadow_distance) {
-                                scroll_bar.set_min_value(1.0)
-                                    .set_max_value(15.0)
-                                    .set_value(settings.spot_shadows_distance)
-                                    .set_step(0.25)
-                                    .set_row(4)
-                                    .set_column(1)
-                                    .set_margin(Thickness::uniform(2.0));
-                            }
+                            sb_spot_shadow_distance = create_scroll_bar(ctx, resource_manager, ScrollBarData {
+                                min: 1.0,
+                                max: 15.0,
+                                value: settings.spot_shadows_distance,
+                                step: 0.25,
+                                row: 4,
+                                column: 1,
+                                margin,
+                                show_value: true,
+                                orientation: Orientation::Horizontal,
+                            });
                             sb_spot_shadow_distance
                         })
 
@@ -265,14 +254,9 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Point Shadows")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            cb_point_shadows = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
-                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_point_shadows) {
-                                check_box.set_checked(Some(settings.point_shadows_enabled))
-                                    .set_row(5)
-                                    .set_column(1);
-                            }
+                            cb_point_shadows = create_check_box(ctx, resource_manager, 5, 1, settings.point_shadows_enabled);
                             cb_point_shadows
                         })
 
@@ -284,14 +268,9 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Soft Point Shadows")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            cb_soft_point_shadows = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
-                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_soft_point_shadows) {
-                                check_box.set_checked(Some(settings.point_soft_shadows))
-                                    .set_row(6)
-                                    .set_column(1);
-                            }
+                            cb_soft_point_shadows = create_check_box(ctx, resource_manager, 6, 1, settings.point_soft_shadows);
                             cb_soft_point_shadows
                         })
 
@@ -303,18 +282,19 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Point Shadows Distance")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            sb_point_shadow_distance = create_scroll_bar(ui, &mut engine.resource_manager.lock().unwrap(), Orientation::Horizontal, true);
-                            if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_point_shadow_distance) {
-                                scroll_bar.set_min_value(1.0)
-                                    .set_max_value(15.0)
-                                    .set_value(settings.point_shadows_distance)
-                                    .set_step(0.25)
-                                    .set_row(7)
-                                    .set_column(1)
-                                    .set_margin(Thickness::uniform(2.0));
-                            }
+                            sb_point_shadow_distance = create_scroll_bar(ctx, resource_manager, ScrollBarData {
+                                min: 1.0,
+                                max: 15.0,
+                                value: settings.point_shadows_distance,
+                                step: 0.25,
+                                row: 7,
+                                column: 1,
+                                margin,
+                                show_value: true,
+                                orientation: Orientation::Horizontal,
+                            });
                             sb_point_shadow_distance
                         }))
                         .add_row(Row::strict(200.0))
@@ -327,7 +307,7 @@ impl OptionsMenu {
                         .add_row(common_row)
                         .add_column(Column::strict(250.0))
                         .add_column(Column::stretch())
-                        .build(ui)
+                        .build(ctx)
                 },
             })
             .with_tab(TabDefinition {
@@ -336,7 +316,7 @@ impl OptionsMenu {
                         .with_width(100.0)
                         .with_height(30.0))
                         .with_text("Sound")
-                        .build(ui)
+                        .build(ctx)
                 },
                 content: {
                     GridBuilder::new(WidgetBuilder::new()
@@ -346,18 +326,19 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Sound Volume")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            sb_sound_volume = create_scroll_bar(ui, &mut engine.resource_manager.lock().unwrap(), Orientation::Horizontal, true);
-                            if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_sound_volume) {
-                                scroll_bar.set_min_value(0.0)
-                                    .set_max_value(1.0)
-                                    .set_value(1.0)
-                                    .set_step(0.025)
-                                    .set_row(0)
-                                    .set_column(1)
-                                    .set_margin(Thickness::uniform(2.0));
-                            }
+                            sb_sound_volume = create_scroll_bar(ctx, resource_manager, ScrollBarData {
+                                min: 0.0,
+                                max: 1.0,
+                                value: 1.0,
+                                step: 0.025,
+                                row: 0,
+                                column: 1,
+                                margin,
+                                show_value: true,
+                                orientation: Orientation::Horizontal,
+                            });
                             sb_sound_volume
                         })
                         .with_child(TextBuilder::new(WidgetBuilder::new()
@@ -366,18 +347,19 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Music Volume")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            sb_music_volume = create_scroll_bar(ui, &mut engine.resource_manager.lock().unwrap(), Orientation::Horizontal, true);
-                            if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_music_volume) {
-                                scroll_bar.set_min_value(0.0)
-                                    .set_max_value(1.0)
-                                    .set_value(0.0)
-                                    .set_step(0.025)
-                                    .set_row(1)
-                                    .set_column(1)
-                                    .set_margin(Thickness::uniform(2.0));
-                            }
+                            sb_music_volume = create_scroll_bar(ctx, resource_manager, ScrollBarData {
+                                min: 0.0,
+                                max: 1.0,
+                                value: 0.0,
+                                step: 0.025,
+                                row: 1,
+                                column: 1,
+                                margin,
+                                show_value: true,
+                                orientation: Orientation::Horizontal,
+                            });
                             sb_music_volume
                         })
                         .with_child(TextBuilder::new(WidgetBuilder::new()
@@ -386,14 +368,9 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Use HRTF")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            cb_use_hrtf = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
-                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_use_hrtf) {
-                                check_box.set_checked(Some(true))
-                                    .set_row(2)
-                                    .set_column(1);
-                            }
+                            cb_use_hrtf = create_check_box(ctx, resource_manager, 2, 1, true);
                             cb_use_hrtf
                         })
                         .with_child({
@@ -401,7 +378,7 @@ impl OptionsMenu {
                                 .on_row(3)
                                 .with_margin(margin))
                                 .with_text("Reset")
-                                .build(ui);
+                                .build(ctx);
                             btn_reset_audio_settings
                         }))
                         .add_row(common_row)
@@ -410,7 +387,7 @@ impl OptionsMenu {
                         .add_row(common_row)
                         .add_column(Column::strict(250.0))
                         .add_column(Column::stretch())
-                        .build(ui)
+                        .build(ctx)
                 },
             })
             .with_tab(TabDefinition {
@@ -419,7 +396,7 @@ impl OptionsMenu {
                         .with_width(100.0)
                         .with_height(30.0))
                         .with_text("Controls")
-                        .build(ui)
+                        .build(ctx)
                 },
                 content: {
                     let mut children = Vec::new();
@@ -434,7 +411,7 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text(button.description.as_str())
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui);
+                            .build(ctx);
                         children.push(text);
 
                         let button = ButtonBuilder::new(WidgetBuilder::new()
@@ -442,7 +419,7 @@ impl OptionsMenu {
                             .on_row(row)
                             .on_column(1))
                             .with_text(button.button.name())
-                            .build(ui);
+                            .build(ctx);
                         children.push(button);
                         control_scheme_buttons.push(button);
                     }
@@ -454,18 +431,19 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Mouse Sensitivity")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            sb_mouse_sens = create_scroll_bar(ui, &mut engine.resource_manager.lock().unwrap(), Orientation::Horizontal, true);
-                            if let UINode::ScrollBar(scroll_bar) = ui.node_mut(sb_mouse_sens) {
-                                scroll_bar.set_min_value(0.05)
-                                    .set_max_value(2.0)
-                                    .set_value(control_scheme.borrow().mouse_sens)
-                                    .set_step(0.05)
-                                    .set_row(0)
-                                    .set_column(1)
-                                    .set_margin(Thickness::uniform(2.0));
-                            }
+                            sb_mouse_sens = create_scroll_bar(ctx, resource_manager, ScrollBarData {
+                                min: 0.05,
+                                max: 2.0,
+                                value: control_scheme.borrow().mouse_sens,
+                                step: 0.05,
+                                row: 0,
+                                column: 1,
+                                margin,
+                                show_value: true,
+                                orientation: Orientation::Horizontal,
+                            });
                             sb_mouse_sens
                         })
                         .with_child(TextBuilder::new(WidgetBuilder::new()
@@ -474,14 +452,9 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Inverse Mouse Y")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            cb_mouse_y_inverse = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
-                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_mouse_y_inverse) {
-                                check_box.set_checked(Some(control_scheme.borrow().mouse_y_inverse))
-                                    .set_row(1)
-                                    .set_column(1);
-                            }
+                            cb_mouse_y_inverse = create_check_box(ctx, resource_manager, 1, 1, control_scheme.borrow().mouse_y_inverse);
                             cb_mouse_y_inverse
                         })
                         .with_child(TextBuilder::new(WidgetBuilder::new()
@@ -490,14 +463,9 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Smooth Mouse")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            cb_smooth_mouse = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
-                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_smooth_mouse) {
-                                check_box.set_checked(Some(control_scheme.borrow().smooth_mouse))
-                                    .set_row(2)
-                                    .set_column(1);
-                            }
+                            cb_smooth_mouse = create_check_box(ctx, resource_manager, 2, 1, control_scheme.borrow().smooth_mouse);
                             cb_smooth_mouse
                         })
                         .with_child(TextBuilder::new(WidgetBuilder::new()
@@ -506,14 +474,9 @@ impl OptionsMenu {
                             .with_margin(margin))
                             .with_text("Shake Camera")
                             .with_vertical_text_alignment(VerticalAlignment::Center)
-                            .build(ui))
+                            .build(ctx))
                         .with_child({
-                            cb_shake_camera = create_check_box(ui, &mut engine.resource_manager.lock().unwrap());
-                            if let UINode::CheckBox(check_box) = ui.node_mut(cb_shake_camera) {
-                                check_box.set_checked(Some(control_scheme.borrow().shake_camera))
-                                    .set_row(3)
-                                    .set_column(1);
-                            }
+                            cb_shake_camera = create_check_box(ctx, resource_manager, 3, 1, control_scheme.borrow().shake_camera);
                             cb_shake_camera
                         })
                         .with_child({
@@ -521,7 +484,7 @@ impl OptionsMenu {
                                 .on_row(4 + control_scheme.borrow().buttons().len())
                                 .with_margin(margin))
                                 .with_text("Reset")
-                                .build(ui);
+                                .build(ctx);
                             btn_reset_control_scheme
                         })
                         .with_children(&children))
@@ -533,17 +496,17 @@ impl OptionsMenu {
                         .add_row(common_row)
                         .add_rows((0..control_scheme.borrow().buttons().len()).map(|_| common_row).collect())
                         .add_row(common_row)
-                        .build(ui)
+                        .build(ctx)
                 },
             })
-            .build(ui);
+            .build(ctx);
 
         let options_window: UINodeHandle = WindowBuilder::new(WidgetBuilder::new()
             .with_width(500.0))
             .with_title(WindowTitle::text("Options"))
             .open(false)
             .with_content(tab_control)
-            .build(ui);
+            .build(ctx);
 
         Self {
             sender,
@@ -577,10 +540,8 @@ impl OptionsMenu {
         let control_scheme = self.control_scheme.borrow();
         let settings = engine.renderer.get_quality_settings();
 
-        let mut sync_check_box = |handle: UINodeHandle, value: bool| {
-            if let UINode::CheckBox(check_box) = ui.node_mut(handle) {
-                check_box.set_checked(Some(value));
-            }
+        let sync_check_box = |handle: UINodeHandle, value: bool| {
+            ui.send_message(CheckBoxMessage::check(handle, Some(value)));
         };
         sync_check_box(self.cb_spot_shadows, settings.spot_shadows_enabled);
         sync_check_box(self.cb_soft_spot_shadows, settings.spot_soft_shadows);
@@ -596,10 +557,8 @@ impl OptionsMenu {
         };
         sync_check_box(self.cb_use_hrtf, is_hrtf);
 
-        let mut sync_scroll_bar = |handle: UINodeHandle, value: f32| {
-            if let UINode::ScrollBar(scroll_bar) = ui.node_mut(handle) {
-                scroll_bar.set_value(value);
-            }
+        let sync_scroll_bar = |handle: UINodeHandle, value: f32| {
+            ui.send_message(ScrollBarMessage::value(handle, value));
         };
         sync_scroll_bar(self.sb_point_shadow_distance, settings.point_shadows_distance);
         sync_scroll_bar(self.sb_spot_shadow_distance, settings.spot_shadows_distance);
@@ -608,10 +567,7 @@ impl OptionsMenu {
 
         for (btn, def) in self.control_scheme_buttons.iter().zip(self.control_scheme.borrow().buttons().iter()) {
             if let UINode::Button(button) = ui.node(*btn) {
-                let text = button.content();
-                if let UINode::Text(text) = ui.node_mut(text) {
-                    text.set_text(def.button.name());
-                }
+                ui.send_message(TextMessage::text(button.content(), def.button.name().to_owned()));
             }
         }
     }
@@ -652,11 +608,8 @@ impl OptionsMenu {
 
             if let Some(control_button) = control_button {
                 if let Some(active_control_button) = self.active_control_button {
-                    if let UINode::Button(button) = engine.user_interface.node_mut(self.control_scheme_buttons[active_control_button]) {
-                        let button_txt = button.content();
-                        if let UINode::Text(button_txt) = engine.user_interface.node_mut(button_txt) {
-                            button_txt.set_text(control_button.name());
-                        }
+                    if let UINode::Button(button) = engine.user_interface.node(self.control_scheme_buttons[active_control_button]) {
+                        engine.user_interface.send_message(TextMessage::text(button.content(), control_button.name().to_owned()));
                     }
 
                     self.control_scheme
@@ -740,10 +693,7 @@ impl OptionsMenu {
                     for (i, button) in self.control_scheme_buttons.iter().enumerate() {
                         if message.destination == *button {
                             if let UINode::Button(button) = engine.user_interface.node(*button) {
-                                let text = button.content();
-                                if let UINode::Text(text) = engine.user_interface.node_mut(text) {
-                                    text.set_text("[WAITING INPUT]");
-                                }
+                                engine.user_interface.send_message(TextMessage::text(button.content(), "[WAITING INPUT]".to_owned()))
                             }
 
                             self.active_control_button = Some(i);

@@ -19,7 +19,6 @@ use crate::{
     control_scheme::ControlScheme,
 };
 use rg3d::{
-    core::math::vec2::Vec2,
     event::{
         WindowEvent,
         Event,
@@ -38,12 +37,10 @@ use rg3d::{
         },
         button::ButtonBuilder,
         message::{
-            UiMessage,
             UiMessageData,
             WindowMessage,
             ButtonMessage,
             WidgetMessage,
-            WidgetProperty,
         },
         widget::WidgetBuilder,
     },
@@ -71,7 +68,7 @@ impl Menu {
             Font::default_char_set()).unwrap();
         let font = Arc::new(Mutex::new(font));
 
-        let ui = &mut engine.user_interface;
+        let ctx = &mut engine.user_interface.build_ctx();
 
         let btn_new_game;
         let btn_settings;
@@ -97,7 +94,7 @@ impl Menu {
                             .with_margin(Thickness::uniform(4.0)))
                             .with_text("New Game")
                             .with_font(font.clone())
-                            .build(ui);
+                            .build(ctx);
                         btn_new_game
                     })
                     .with_child({
@@ -107,7 +104,7 @@ impl Menu {
                             .with_margin(Thickness::uniform(4.0)))
                             .with_text("Save Game")
                             .with_font(font.clone())
-                            .build(ui);
+                            .build(ctx);
                         btn_save_game
                     })
                     .with_child({
@@ -117,7 +114,7 @@ impl Menu {
                             .with_margin(Thickness::uniform(4.0)))
                             .with_text("Load Game")
                             .with_font(font.clone())
-                            .build(ui);
+                            .build(ctx);
                         btn_load_game
                     })
                     .with_child({
@@ -127,7 +124,7 @@ impl Menu {
                             .with_margin(Thickness::uniform(4.0)))
                             .with_text("Settings")
                             .with_font(font.clone())
-                            .build(ui);
+                            .build(ctx);
                         btn_settings
                     })
                     .with_child({
@@ -137,7 +134,7 @@ impl Menu {
                             .with_margin(Thickness::uniform(4.0)))
                             .with_text("Quit")
                             .with_font(font)
-                            .build(ui);
+                            .build(ctx);
                         btn_quit_game
                     }))
                     .add_column(Column::stretch())
@@ -146,15 +143,15 @@ impl Menu {
                     .add_row(Row::strict(75.0))
                     .add_row(Row::strict(75.0))
                     .add_row(Row::strict(75.0))
-                    .build(ui))
-                .build(ui)))
+                    .build(ctx))
+                .build(ctx)))
             .add_row(Row::stretch())
             .add_row(Row::strict(500.0))
             .add_row(Row::stretch())
             .add_column(Column::stretch())
             .add_column(Column::strict(400.0))
             .add_column(Column::stretch())
-            .build(ui);
+            .build(ctx);
 
         Self {
             sender: sender.clone(),
@@ -170,19 +167,10 @@ impl Menu {
     }
 
     pub fn set_visible(&mut self, ui: &mut Gui, visible: bool) {
-        ui.node_mut(self.root).set_visibility(visible);
-
+        ui.send_message(WidgetMessage::visibility(self.root, visible));
         if !visible {
-            ui.send_message(UiMessage {
-                destination: self.options_menu.window,
-                data: UiMessageData::Window(WindowMessage::Close),
-                handled: false,
-            });
-            ui.send_message(UiMessage {
-                destination: self.match_menu.window,
-                data: UiMessageData::Window(WindowMessage::Close),
-                handled: false,
-            });
+            ui.send_message(WindowMessage::close(self.options_menu.window));
+            ui.send_message(WindowMessage::close(self.match_menu.window));
         }
     }
 
@@ -193,10 +181,8 @@ impl Menu {
     pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             if let WindowEvent::Resized(new_size) = event {
-                engine.user_interface
-                    .node_mut(self.root)
-                    .set_width_mut(new_size.width as f32)
-                    .set_height_mut(new_size.height as f32);
+                engine.user_interface.send_message(WidgetMessage::width(self.root, new_size.width as f32));
+                engine.user_interface.send_message(WidgetMessage::height(self.root, new_size.height as f32));
             }
         }
 
@@ -207,19 +193,8 @@ impl Menu {
         if let UiMessageData::Button(msg) = &message.data {
             if let ButtonMessage::Click = msg {
                 if message.destination == self.btn_new_game {
-                    engine.user_interface
-                        .send_message(UiMessage {
-                            destination: self.match_menu.window,
-                            data: UiMessageData::Window(WindowMessage::Open),
-                            handled: false,
-                        });
-                    engine.user_interface
-                        .send_message(UiMessage {
-                            destination: self.match_menu.window,
-                            data: UiMessageData::Widget(WidgetMessage::Property(
-                                WidgetProperty::DesiredPosition(Vec2::new(400.0, 0.0)))),
-                            handled: false,
-                        })
+                    engine.user_interface.send_message(WindowMessage::open(self.match_menu.window));
+                    engine.user_interface.send_message(WidgetMessage::center(self.match_menu.window));
                 } else if message.destination == self.btn_save_game {
                     self.sender
                         .send(Message::SaveGame)
@@ -233,20 +208,8 @@ impl Menu {
                         .send(Message::QuitGame)
                         .unwrap();
                 } else if message.destination == self.btn_settings {
-                    engine.user_interface
-                        .send_message(UiMessage {
-                            destination: self.options_menu.window,
-                            data: UiMessageData::Window(WindowMessage::Open),
-                            handled: false
-                        });
-                    engine.user_interface
-                        .send_message(UiMessage {
-                            destination: self.options_menu.window,
-                            data: UiMessageData::Widget(
-                                WidgetMessage::Property(
-                                    WidgetProperty::DesiredPosition(Vec2::new(200.0, 200.0)))),
-                            handled: false
-                        })
+                    engine.user_interface.send_message(WindowMessage::open(self.options_menu.window));
+                    engine.user_interface.send_message(WidgetMessage::center(self.options_menu.window));
                 }
             }
         }

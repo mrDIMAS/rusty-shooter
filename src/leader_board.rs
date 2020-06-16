@@ -17,6 +17,7 @@ use rg3d::{
         HorizontalAlignment,
         VerticalAlignment,
         brush::Brush,
+        message::WidgetMessage,
     },
     core::{
         visitor::{Visit, VisitResult, Visitor},
@@ -175,7 +176,7 @@ impl LeaderBoardUI {
             .add_column(Column::stretch())
             .add_column(Column::strict(500.0))
             .add_column(Column::stretch())
-            .build(ui);
+            .build(&mut ui.build_ctx());
         Self {
             root
         }
@@ -191,6 +192,8 @@ impl LeaderBoardUI {
         // changes in leader board.
         // TODO: Remove unnecessary rebuild of table.
 
+        let ctx = &mut ui.build_ctx();
+
         let row_template = Row::strict(30.0);
 
         let mut children = Vec::new();
@@ -203,21 +206,21 @@ impl LeaderBoardUI {
                 .on_row(row)
                 .on_column(0))
                 .with_text(name)
-                .build(ui));
+                .build(ctx));
 
             children.push(TextBuilder::new(WidgetBuilder::new()
                 .with_margin(Thickness::uniform(3.0))
                 .on_row(row)
                 .on_column(1))
                 .with_text(format!("{}", score.kills))
-                .build(ui));
+                .build(ctx));
 
             children.push(TextBuilder::new(WidgetBuilder::new()
                 .with_margin(Thickness::uniform(3.0))
                 .on_row(row)
                 .on_column(2))
                 .with_text(format!("{}", score.deaths))
-                .build(ui));
+                .build(ctx));
 
             let kd = if score.deaths != 0 {
                 format!("{}", score.kills as f32 / score.deaths as f32)
@@ -230,7 +233,7 @@ impl LeaderBoardUI {
                 .on_row(row)
                 .on_column(3))
                 .with_text(kd)
-                .build(ui));
+                .build(ctx));
         }
 
         let table = GridBuilder::new(WidgetBuilder::new()
@@ -258,7 +261,7 @@ impl LeaderBoardUI {
                         MatchOptions::CaptureTheFlag(_) => format!("Capture The Flag - Time Limit {:02}:{:02}:{:02}", hours, minutes, seconds),
                     }
                 })
-                .build(ui))
+                .build(ctx))
             .with_child({
                 match match_options {
                     MatchOptions::DeathMatch(dm) => {
@@ -273,7 +276,7 @@ impl LeaderBoardUI {
                             .on_column(0)
                             .on_row(1))
                             .with_text(text)
-                            .build(ui)
+                            .build(ctx)
                     }
                     MatchOptions::TeamDeathMatch(tdm) => {
                         let red_score = leader_board.team_score(Team::Red);
@@ -286,7 +289,7 @@ impl LeaderBoardUI {
                             .on_row(1))
                             .with_text(format!("{} team leads\nRed {} - {} Blue\nPlaying until {} frags",
                                                if red_score > blue_score { "Red" } else { "Blue" }, red_score, blue_score, tdm.team_frag_limit))
-                            .build(ui)
+                            .build(ctx)
                     }
                     MatchOptions::CaptureTheFlag(ctf) => {
                         // TODO - implement when CTF mode implemented
@@ -296,7 +299,7 @@ impl LeaderBoardUI {
                             .on_column(0)
                             .on_row(1))
                             .with_text(format!("Red team leads\nRed 0 - 0 Blue\nPlaying until {} flags", ctf.flag_limit))
-                            .build(ui)
+                            .build(ctx)
                     }
                 }
             })
@@ -310,28 +313,28 @@ impl LeaderBoardUI {
                     .on_column(0)
                     .on_row(0))
                     .with_text("Name")
-                    .build(ui))
+                    .build(ctx))
                 .with_child(TextBuilder::new(WidgetBuilder::new()
                     .with_horizontal_alignment(HorizontalAlignment::Center)
                     .with_vertical_alignment(VerticalAlignment::Center)
                     .on_column(1)
                     .on_row(0))
                     .with_text("Kills")
-                    .build(ui))
+                    .build(ctx))
                 .with_child(TextBuilder::new(WidgetBuilder::new()
                     .with_horizontal_alignment(HorizontalAlignment::Center)
                     .with_vertical_alignment(VerticalAlignment::Center)
                     .on_column(2)
                     .on_row(0))
                     .with_text("Deaths")
-                    .build(ui))
+                    .build(ctx))
                 .with_child(TextBuilder::new(WidgetBuilder::new()
                     .with_horizontal_alignment(HorizontalAlignment::Center)
                     .with_vertical_alignment(VerticalAlignment::Center)
                     .on_column(3)
                     .on_row(0))
                     .with_text("K/D")
-                    .build(ui))
+                    .build(ctx))
                 .with_children(&children))
                 .with_border_thickness(2.0)
                 .add_row(Row::strict(30.0))
@@ -342,32 +345,30 @@ impl LeaderBoardUI {
                 .add_column(Column::stretch())
                 .add_column(Column::stretch())
                 .draw_border(true)
-                .build(ui)))
+                .build(ctx)))
             .add_column(Column::auto())
             .add_row(Row::auto())
             .add_row(Row::auto())
             .add_row(Row::stretch())
-            .build(ui);
+            .build(ctx);
 
-        if let Some(table) = ui.node(self.root).children().first() {
+        if let Some(table) = ctx[self.root].children().first() {
             let table = *table;
-            ui.remove_node(table);
+            ui.send_message(WidgetMessage::remove(table));
         }
-        ui.link_nodes(table, self.root);
+        ui.send_message( WidgetMessage::link(table, self.root));
     }
 
     pub fn set_visible(&self, visible: bool, ui: &mut Gui) {
-        ui.node_mut(self.root).set_visibility(visible);
+        ui.send_message(WidgetMessage::visibility(self.root, visible));
     }
 
     pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             match event {
                 WindowEvent::Resized(new_size) => {
-                    engine.user_interface
-                        .node_mut(self.root)
-                        .set_width_mut(new_size.width as f32)
-                        .set_height_mut(new_size.height as f32);
+                    engine.user_interface.send_message(WidgetMessage::width(self.root, new_size.width as f32));
+                    engine.user_interface.send_message(WidgetMessage::height(self.root, new_size.height as f32));
                 }
                 WindowEvent::KeyboardInput { input, .. } => {
                     if let Some(vk) = input.virtual_keycode {

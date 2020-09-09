@@ -1,46 +1,33 @@
-use rg3d::{
-    engine::resource_manager::ResourceManager,
-    resource::texture::TextureKind,
-    scene::{
-        sprite::SpriteBuilder,
-        Scene,
-        node::Node,
-        graph::Graph,
-        base::BaseBuilder,
-        light::{LightBuilder, LightKind, PointLight},
-        transform::TransformBuilder,
-    },
-    physics::{
-        convex_shape::{ConvexShape, SphereShape},
-        RayCastOptions, rigid_body::{RigidBody, CollisionFlags},
-        HitKind,
-    },
-    core::{
-        visitor::{Visit, VisitResult, Visitor},
-        pool::{Handle, Pool, PoolIteratorMut},
-        color::Color,
-        math::{vec3::Vec3, ray::Ray, quat::Quat, mat3::Mat3},
-    },
-};
 use crate::{
-    GameTime,
-    actor::{
-        ActorContainer,
-        Actor,
-    },
-    CollisionGroups,
-    weapon::{
-        Weapon,
-        WeaponContainer,
-    },
-    message::Message,
+    actor::{Actor, ActorContainer},
     effects::EffectKind,
-};
-use std::{
-    sync::mpsc::Sender,
+    message::Message,
+    weapon::{Weapon, WeaponContainer},
+    CollisionGroups, GameTime,
 };
 use rand::Rng;
+use rg3d::scene::light::{BaseLightBuilder, PointLightBuilder};
+use rg3d::{
+    core::{
+        color::Color,
+        math::{mat3::Mat3, quat::Quat, ray::Ray, vec3::Vec3},
+        pool::{Handle, Pool, PoolIteratorMut},
+        visitor::{Visit, VisitResult, Visitor},
+    },
+    engine::resource_manager::ResourceManager,
+    physics::{
+        convex_shape::{ConvexShape, SphereShape},
+        rigid_body::{CollisionFlags, RigidBody},
+        HitKind, RayCastOptions,
+    },
+    resource::texture::TextureKind,
+    scene::{
+        base::BaseBuilder, graph::Graph, node::Node, sprite::SpriteBuilder,
+        transform::TransformBuilder, Scene,
+    },
+};
 use std::path::PathBuf;
+use std::sync::mpsc::Sender;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ProjectileKind {
@@ -55,7 +42,7 @@ impl ProjectileKind {
             0 => Ok(ProjectileKind::Plasma),
             1 => Ok(ProjectileKind::Bullet),
             2 => Ok(ProjectileKind::Rocket),
-            _ => Err(format!("Invalid projectile kind id {}", id))
+            _ => Err(format!("Invalid projectile kind id {}", id)),
         }
     }
 
@@ -114,7 +101,7 @@ pub struct ProjectileDefinition {
     /// Means that movement of projectile controlled by code, not physics.
     /// However projectile still could have rigid body to detect collisions.
     is_kinematic: bool,
-    impact_sound: &'static str
+    impact_sound: &'static str,
 }
 
 impl Projectile {
@@ -126,7 +113,7 @@ impl Projectile {
                     speed: 0.15,
                     lifetime: 10.0,
                     is_kinematic: true,
-                    impact_sound: "data/sounds/bullet_impact_concrete.ogg"
+                    impact_sound: "data/sounds/bullet_impact_concrete.ogg",
                 };
                 &DEFINITION
             }
@@ -136,7 +123,7 @@ impl Projectile {
                     speed: 0.75,
                     lifetime: 10.0,
                     is_kinematic: true,
-                    impact_sound: "data/sounds/bullet_impact_concrete.ogg"
+                    impact_sound: "data/sounds/bullet_impact_concrete.ogg",
                 };
                 &DEFINITION
             }
@@ -146,7 +133,7 @@ impl Projectile {
                     speed: 0.5,
                     lifetime: 10.0,
                     is_kinematic: true,
-                    impact_sound: "data/sounds/explosion.ogg"
+                    impact_sound: "data/sounds/explosion.ogg",
                 };
                 &DEFINITION
             }
@@ -154,15 +141,16 @@ impl Projectile {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn new(kind: ProjectileKind,
-               resource_manager: &mut ResourceManager,
-               scene: &mut Scene,
-               dir: Vec3,
-               position: Vec3,
-               owner: Handle<Weapon>,
-               initial_velocity: Vec3,
-               sender: Sender<Message>,
-               basis: Mat3
+    pub fn new(
+        kind: ProjectileKind,
+        resource_manager: &mut ResourceManager,
+        scene: &mut Scene,
+        dir: Vec3,
+        position: Vec3,
+        owner: Handle<Weapon>,
+        initial_velocity: Vec3,
+        sender: Sender<Message>,
+        basis: Mat3,
     ) -> Self {
         let definition = Self::get_definition(kind);
 
@@ -172,16 +160,25 @@ impl Projectile {
                     let size = rand::thread_rng().gen_range(0.09, 0.12);
 
                     let color = Color::opaque(0, 162, 232);
-                    let model = scene.graph.add_node(Node::Sprite(SpriteBuilder::new(BaseBuilder::new())
-                        .with_size(size)
-                        .with_color(color)
-                        .with_opt_texture(resource_manager.request_texture("data/particles/light_01.png", TextureKind::R8))
-                        .build()));
+                    let model =
+                        scene.graph.add_node(Node::Sprite(
+                            SpriteBuilder::new(BaseBuilder::new())
+                                .with_size(size)
+                                .with_color(color)
+                                .with_opt_texture(resource_manager.request_texture(
+                                    "data/particles/light_01.png",
+                                    TextureKind::R8,
+                                ))
+                                .build(),
+                        ));
 
-                    let light = scene.graph.add_node(Node::Light(LightBuilder::new(
-                        LightKind::Point(PointLight::new(1.5)), BaseBuilder::new())
-                        .with_color(color)
-                        .build()));
+                    let light = scene.graph.add_node(
+                        PointLightBuilder::new(
+                            BaseLightBuilder::new(BaseBuilder::new()).with_color(color),
+                        )
+                        .with_radius(1.5)
+                        .build_node(),
+                    );
 
                     scene.graph.link_nodes(light, model);
 
@@ -190,33 +187,48 @@ impl Projectile {
                     body.set_position(position);
                     body.collision_group = CollisionGroups::Projectile as u64;
                     // Projectile-Projectile collisions is disabled.
-                    body.collision_mask = CollisionGroups::All as u64 & !(CollisionGroups::Projectile as u64);
+                    body.collision_mask =
+                        CollisionGroups::All as u64 & !(CollisionGroups::Projectile as u64);
                     body.collision_flags = CollisionFlags::DISABLE_COLLISION_RESPONSE;
 
                     (model, scene.physics.add_body(body))
                 }
                 ProjectileKind::Bullet => {
-                    let model = scene.graph.add_node(Node::Sprite(SpriteBuilder::new(BaseBuilder::new()
-                        .with_local_transform(TransformBuilder::new()
-                            .with_local_position(position)
-                            .build()))
+                    let model = scene.graph.add_node(Node::Sprite(
+                        SpriteBuilder::new(
+                            BaseBuilder::new().with_local_transform(
+                                TransformBuilder::new()
+                                    .with_local_position(position)
+                                    .build(),
+                            ),
+                        )
                         .with_size(0.05)
-                        .with_opt_texture(resource_manager.request_texture("data/particles/light_01.png", TextureKind::R8))
-                        .build()));
+                        .with_opt_texture(
+                            resource_manager
+                                .request_texture("data/particles/light_01.png", TextureKind::R8),
+                        )
+                        .build(),
+                    ));
 
                     (model, Handle::NONE)
                 }
                 ProjectileKind::Rocket => {
-                    let resource = resource_manager.request_model("data/models/rocket.FBX").unwrap();
+                    let resource = resource_manager
+                        .request_model("data/models/rocket.FBX")
+                        .unwrap();
                     let model = resource.lock().unwrap().instantiate_geometry(scene);
                     scene.graph[model]
                         .local_transform_mut()
                         .set_rotation(Quat::from(basis))
                         .set_position(position);
-                    let light = scene.graph.add_node(Node::Light(LightBuilder::new(
-                        LightKind::Point(PointLight::new(1.5)), BaseBuilder::new())
-                        .with_color(Color::opaque(255, 127, 0))
-                        .build()));
+                    let light = scene.graph.add_node(
+                        PointLightBuilder::new(
+                            BaseLightBuilder::new(BaseBuilder::new())
+                                .with_color(Color::opaque(255, 127, 0)),
+                        )
+                        .with_radius(1.5)
+                        .build_node(),
+                    );
                     scene.graph.link_nodes(light, model);
                     (model, Handle::NONE)
                 }
@@ -250,7 +262,13 @@ impl Projectile {
         self.lifetime = 0.0;
     }
 
-    pub fn update(&mut self, scene: &mut Scene, actors: &ActorContainer, weapons: &WeaponContainer, time: GameTime) {
+    pub fn update(
+        &mut self,
+        scene: &mut Scene,
+        actors: &ActorContainer,
+        weapons: &WeaponContainer,
+        time: GameTime,
+    ) {
         // Fetch current position of projectile.
         let position = if self.body.is_some() {
             scene.physics.borrow_body(self.body).get_position()
@@ -265,7 +283,10 @@ impl Projectile {
         // fast moving projectiles.
         if let Some(ray) = Ray::from_two_points(&self.last_position, &position) {
             let mut result = Vec::new();
-            if scene.physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
+            if scene
+                .physics
+                .ray_cast(&ray, RayCastOptions::default(), &mut result)
+            {
                 // List of hits sorted by distance from ray origin.
                 'hit_loop: for hit in result.iter() {
                     if let HitKind::Body(body) = hit.kind {
@@ -327,7 +348,10 @@ impl Projectile {
                 }
 
                 // Move rigid body explicitly.
-                scene.physics.borrow_body_mut(self.body).offset_by(total_velocity);
+                scene
+                    .physics
+                    .borrow_body_mut(self.body)
+                    .offset_by(total_velocity);
             } else {
                 // We have just model - move it.
                 scene.graph[self.model]
@@ -350,18 +374,26 @@ impl Projectile {
         if self.lifetime <= 0.0 {
             let pos = effect_position.unwrap_or_else(|| self.get_position(&scene.graph));
 
-            self.sender.as_ref().unwrap().send(Message::CreateEffect {
-                kind: EffectKind::BulletImpact,
-                position: pos,
-            }).unwrap();
+            self.sender
+                .as_ref()
+                .unwrap()
+                .send(Message::CreateEffect {
+                    kind: EffectKind::BulletImpact,
+                    position: pos,
+                })
+                .unwrap();
 
-            self.sender.as_ref().unwrap().send(Message::PlaySound {
-                path: PathBuf::from(self.definition.impact_sound),
-                position: pos,
-                gain: 1.0,
-                rolloff_factor: 4.0,
-                radius: 3.0
-            }).unwrap();
+            self.sender
+                .as_ref()
+                .unwrap()
+                .send(Message::PlaySound {
+                    path: PathBuf::from(self.definition.impact_sound),
+                    position: pos,
+                    gain: 1.0,
+                    rolloff_factor: 4.0,
+                    radius: 3.0,
+                })
+                .unwrap();
         }
 
         // List of hit actors can contain same actor multiple times in a row because this list could
@@ -369,11 +401,15 @@ impl Projectile {
         // to not damage actor twice or more times with one projectile.
         hits.dedup_by(|a, b| a.actor == b.actor);
         for hit in hits {
-            self.sender.as_ref().unwrap().send(Message::DamageActor {
-                actor: hit.actor,
-                who: hit.who,
-                amount: self.definition.damage,
-            }).unwrap();
+            self.sender
+                .as_ref()
+                .unwrap()
+                .send(Message::DamageActor {
+                    actor: hit.actor,
+                    who: hit.who,
+                    amount: self.definition.damage,
+                })
+                .unwrap();
         }
 
         self.last_position = position;
@@ -422,14 +458,12 @@ impl Visit for Projectile {
 }
 
 pub struct ProjectileContainer {
-    pool: Pool<Projectile>
+    pool: Pool<Projectile>,
 }
 
 impl ProjectileContainer {
     pub fn new() -> Self {
-        Self {
-            pool: Pool::new()
-        }
+        Self { pool: Pool::new() }
     }
 
     pub fn add(&mut self, projectile: Projectile) -> Handle<Projectile> {
@@ -440,7 +474,13 @@ impl ProjectileContainer {
         self.pool.iter_mut()
     }
 
-    pub fn update(&mut self, scene: &mut Scene, actors: &ActorContainer, weapons: &WeaponContainer, time: GameTime) {
+    pub fn update(
+        &mut self,
+        scene: &mut Scene,
+        actors: &ActorContainer,
+        weapons: &WeaponContainer,
+        time: GameTime,
+    ) {
         for projectile in self.pool.iter_mut() {
             projectile.update(scene, actors, weapons, time);
             if projectile.is_dead() {

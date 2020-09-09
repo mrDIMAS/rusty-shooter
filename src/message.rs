@@ -10,25 +10,16 @@
 //! all kinds of games, but at least it very useful for first-person shooters.
 
 use crate::{
+    actor::Actor,
     bot::BotKind,
-    weapon::{
-        WeaponKind,
-        Weapon,
-    },
-    actor::Actor, item::{
-        ItemKind,
-        Item,
-    },
-    projectile::ProjectileKind,
     effects::EffectKind,
+    item::{Item, ItemKind},
+    projectile::ProjectileKind,
+    weapon::{Weapon, WeaponKind},
     MatchOptions,
 };
+use rg3d::core::{math::mat3::Mat3, math::vec3::Vec3, pool::Handle};
 use std::path::PathBuf;
-use rg3d::core::{
-    pool::Handle,
-    math::vec3::Vec3,
-    math::mat3::Mat3
-};
 
 #[derive(Debug)]
 pub enum Message {
@@ -42,14 +33,14 @@ pub enum Message {
         name: Option<String>,
     },
     RemoveActor {
-        actor: Handle<Actor>
+        actor: Handle<Actor>,
     },
     /// Spawns new bot at random spawn point. Selection of spawn point can be based on some
     /// particular heuristic, leading to good selection (like do spawn at a point with least
     /// enemies nearby, which will increase survival probability)
     SpawnBot {
         kind: BotKind,
-        name: String
+        name: String,
     },
     /// Gives item of specified kind to a given actor. Basically it means that actor will take
     /// item and consume it immediately (heal itself, add ammo, etc.)
@@ -75,19 +66,19 @@ pub enum Message {
         direction: Vec3,
         initial_velocity: Vec3,
         owner: Handle<Weapon>,
-        basis: Mat3
+        basis: Mat3,
     },
     ShootWeapon {
         weapon: Handle<Weapon>,
         initial_velocity: Vec3,
-        direction: Option<Vec3>
+        direction: Option<Vec3>,
     },
     PlaySound {
         path: PathBuf,
         position: Vec3,
         gain: f32,
         rolloff_factor: f32,
-        radius: f32
+        radius: f32,
     },
     ShowWeapon {
         weapon: Handle<Weapon>,
@@ -107,22 +98,22 @@ pub enum Message {
     SpawnPlayer,
     /// HUD listens such events and puts them into queue.
     AddNotification {
-        text: String
+        text: String,
     },
     /// Removes specified actor and creates new one at random spawn point.
     RespawnActor {
-        actor: Handle<Actor>
+        actor: Handle<Actor>,
     },
     /// Save game state to a file. TODO: Add filename field.
     SaveGame,
     /// Loads game state from a file. TODO: Add filename field.
     LoadGame,
     StartNewGame {
-        options: MatchOptions
+        options: MatchOptions,
     },
     QuitGame,
     SetMusicVolume {
-        volume: f32
+        volume: f32,
     },
-    EndMatch
+    EndMatch,
 }

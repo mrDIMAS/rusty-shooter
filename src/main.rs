@@ -1,89 +1,70 @@
 #![deny(unsafe_code)]
 #![deny(unused_must_use)]
 
-extern crate rg3d;
 extern crate rand;
+extern crate rg3d;
 
 mod actor;
-mod level;
-mod player;
-mod weapon;
 mod bot;
-mod projectile;
-mod menu;
-mod effects;
 mod character;
-mod hud;
-mod jump_pad;
-mod item;
 mod control_scheme;
+mod effects;
+mod gui;
+mod hud;
+mod item;
+mod jump_pad;
+mod leader_board;
+mod level;
 mod match_menu;
+mod menu;
 mod message;
 mod options_menu;
-mod gui;
-mod leader_board;
+mod player;
+mod projectile;
+mod weapon;
 
 use crate::{
-    level::Level,
+    actor::Actor, control_scheme::ControlScheme, hud::Hud, level::Level, menu::Menu,
     message::Message,
-    menu::Menu,
-    hud::Hud,
-    actor::Actor,
-    control_scheme::ControlScheme,
 };
-use std::{
-    sync::mpsc::{
-        Receiver,
-        Sender,
-        self,
-    },
-    rc::Rc,
-    fs::File,
-    path::Path,
-    time::{
-        Instant,
-        self,
-        Duration,
-    },
-    io::Write,
-    thread,
-    cell::RefCell,
-};
+use rg3d::engine::resource_manager::ResourceManager;
 use rg3d::{
-    utils::translate_event,
     core::{
-        pool::Handle,
-        visitor::{
-            Visitor,
-            VisitResult,
-            Visit,
-        },
         color::Color,
+        pool::Handle,
+        visitor::{Visit, VisitResult, Visitor},
+    },
+    engine::Engine,
+    event::{DeviceEvent, ElementState, Event, VirtualKeyCode, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    gui::{
+        message::TextMessage,
+        message::UiMessage,
+        node::{StubNode, UINode},
+        text::TextBuilder,
+        widget::WidgetBuilder,
+        UserInterface,
     },
     sound::{
         context::Context,
-        effects::{Effect, BaseEffect, EffectInput},
+        effects::{BaseEffect, Effect, EffectInput},
         source::{
-            spatial::SpatialSourceBuilder,
-            Status,
-            SoundSource,
-            generic::GenericSourceBuilder,
+            generic::GenericSourceBuilder, spatial::SpatialSourceBuilder, SoundSource, Status,
         },
     },
-    gui::{
-        message::TextMessage,
-        widget::WidgetBuilder,
-        node::{UINode, StubNode},
-        text::TextBuilder,
-        UserInterface,
-        message::UiMessage,
-    },
-    event::{DeviceEvent, WindowEvent, ElementState, VirtualKeyCode, Event},
-    event_loop::{EventLoop, ControlFlow},
-    engine::Engine,
+    utils::translate_event,
 };
 use std::sync::{Arc, Mutex};
-use rg3d::engine::resource_manager::ResourceManager;
+use std::{
+    cell::RefCell,
+    fs::File,
+    io::Write,
+    path::Path,
+    rc::Rc,
+    sync::mpsc::{self, Receiver, Sender},
+    thread,
+    time::{self, Duration, Instant},
+};
 
 // Define type aliases for engine structs.
 pub type UiNode = UINode<(), StubNode>;
@@ -216,7 +197,7 @@ impl MatchOptions {
             0 => Ok(MatchOptions::DeathMatch(Default::default())),
             1 => Ok(MatchOptions::TeamDeathMatch(Default::default())),
             2 => Ok(MatchOptions::CaptureTheFlag(Default::default())),
-            _ => Err(format!("Invalid match options {}", id))
+            _ => Err(format!("Invalid match options {}", id)),
         }
     }
 
@@ -262,21 +243,24 @@ pub struct SoundManager {
 
 impl SoundManager {
     pub fn new(context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager) -> Self {
-        let buffer = resource_manager.request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true).unwrap();
-        let music = context.lock()
-            .unwrap()
-            .add_source(GenericSourceBuilder::new(buffer)
+        let buffer = resource_manager
+            .request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true)
+            .unwrap();
+        let music = context.lock().unwrap().add_source(
+            GenericSourceBuilder::new(buffer)
                 .with_looping(true)
                 .with_status(Status::Playing)
                 .with_gain(0.25)
                 .build_source()
-                .unwrap());
+                .unwrap(),
+        );
 
         let mut base_effect = BaseEffect::default();
         base_effect.set_gain(0.7);
         let mut reverb = rg3d::sound::effects::reverb::Reverb::new(base_effect);
         reverb.set_decay_time(Duration::from_secs_f32(3.0));
-        let reverb = context.lock()
+        let reverb = context
+            .lock()
             .unwrap()
             .add_effect(rg3d::sound::effects::Effect::Reverb(reverb));
 
@@ -291,7 +275,13 @@ impl SoundManager {
         let mut context = self.context.lock().unwrap();
 
         match message {
-            Message::PlaySound { path, position, gain, rolloff_factor, radius } => {
+            Message::PlaySound {
+                path,
+                position,
+                gain,
+                rolloff_factor,
+                radius,
+            } => {
                 let shot_buffer = resource_manager.request_sound_buffer(path, false).unwrap();
                 let shot_sound = SpatialSourceBuilder::new(
                     GenericSourceBuilder::new(shot_buffer)
@@ -299,17 +289,19 @@ impl SoundManager {
                         .with_play_once(true)
                         .with_gain(*gain)
                         .build()
-                        .unwrap())
-                    .with_position(*position)
-                    .with_radius(*radius)
-                    .with_rolloff_factor(*rolloff_factor)
-                    .build_source();
+                        .unwrap(),
+                )
+                .with_position(*position)
+                .with_radius(*radius)
+                .with_rolloff_factor(*rolloff_factor)
+                .build_source();
                 let source = context.add_source(shot_sound);
-                context.effect_mut(self.reverb).add_input(EffectInput::direct(source));
+                context
+                    .effect_mut(self.reverb)
+                    .add_input(EffectInput::direct(source));
             }
             Message::SetMusicVolume { volume } => {
-                context.source_mut(self.music)
-                    .set_gain(*volume);
+                context.source_mut(self.music).set_gain(*volume);
             }
             _ => {}
         }
@@ -344,15 +336,15 @@ impl Game {
 
         let mut engine = GameEngine::new(window_builder, &events_loop).unwrap();
         let hrtf_sphere = rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin").unwrap();
-        engine.sound_context
-            .lock()
-            .unwrap()
-            .set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(rg3d::sound::hrtf::HrtfRenderer::new(hrtf_sphere)));
+        engine.sound_context.lock().unwrap().set_renderer(
+            rg3d::sound::renderer::Renderer::HrtfRenderer(rg3d::sound::hrtf::HrtfRenderer::new(
+                hrtf_sphere,
+            )),
+        );
 
         effects::register_custom_emitter_factory();
 
         engine.renderer.set_ambient_color(Color::opaque(60, 60, 60));
-
 
         let control_scheme = Rc::new(RefCell::new(ControlScheme::default()));
 
@@ -367,7 +359,10 @@ impl Game {
 
         let (tx, rx) = mpsc::channel();
 
-        let sound_manager = SoundManager::new(engine.sound_context.clone(), &mut engine.resource_manager.lock().unwrap());
+        let sound_manager = SoundManager::new(
+            engine.sound_context.clone(),
+            &mut engine.resource_manager.lock().unwrap(),
+        );
 
         let mut game = Game {
             sound_manager,
@@ -421,20 +416,16 @@ impl Game {
                     // Make sure to cap update rate to 60 FPS.
                     game.limit_fps(fixed_fps as f64);
                 }
-                Event::WindowEvent { event, .. } => {
-                    match event {
-                        WindowEvent::CloseRequested => {
-                            game.destroy_level();
-                            *control_flow = ControlFlow::Exit
-                        }
-                        WindowEvent::Resized(new_size) => {
-                            game.engine
-                                .renderer
-                                .set_frame_size(new_size.into());
-                        }
-                        _ => ()
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::CloseRequested => {
+                        game.destroy_level();
+                        *control_flow = ControlFlow::Exit
                     }
-                }
+                    WindowEvent::Resized(new_size) => {
+                        game.engine.renderer.set_frame_size(new_size.into());
+                    }
+                    _ => (),
+                },
                 Event::LoopDestroyed => {
                     rg3d::core::profiler::print();
                 }
@@ -452,8 +443,7 @@ impl Game {
     }
 
     pub fn create_debug_ui(&mut self) {
-        self.debug_text = TextBuilder::new(WidgetBuilder::new()
-            .with_width(400.0))
+        self.debug_text = TextBuilder::new(WidgetBuilder::new().with_width(400.0))
             .build(&mut self.engine.user_interface.build_ctx());
     }
 
@@ -563,7 +553,8 @@ impl Game {
                 self.hud.set_armor(ui, player.get_armor());
                 let current_weapon = player.current_weapon();
                 if current_weapon.is_some() {
-                    self.hud.set_ammo(ui, level.weapons()[current_weapon].ammo());
+                    self.hud
+                        .set_ammo(ui, level.weapons()[current_weapon].ammo());
                 }
                 self.hud.set_is_died(ui, false);
             } else {
@@ -582,12 +573,10 @@ impl Game {
                 Message::StartNewGame { options } => {
                     self.start_new_game(*options);
                 }
-                Message::SaveGame => {
-                    match self.save_game() {
-                        Ok(_) => println!("successfully saved"),
-                        Err(e) => println!("failed to make a save, reason: {}", e),
-                    }
-                }
+                Message::SaveGame => match self.save_game() {
+                    Ok(_) => println!("successfully saved"),
+                    Err(e) => println!("failed to make a save, reason: {}", e),
+                },
                 Message::LoadGame => {
                     if let Err(e) = self.load_game() {
                         println!("Failed to load saved game. Reason: {:?}", e);
@@ -599,17 +588,25 @@ impl Game {
                 }
                 Message::EndMatch => {
                     self.destroy_level();
-                    self.hud.leader_board().set_visible(true, &mut self.engine.user_interface);
+                    self.hud
+                        .leader_board()
+                        .set_visible(true, &mut self.engine.user_interface);
                 }
-                _ => ()
+                _ => (),
             }
 
-            self.sound_manager.handle_message(&mut self.engine.resource_manager.lock().unwrap(), &message);
+            self.sound_manager
+                .handle_message(&mut self.engine.resource_manager.lock().unwrap(), &message);
 
             if let Some(ref mut level) = self.level {
                 level.handle_message(&mut self.engine, &message, time);
 
-                self.hud.handle_message(&message, &mut self.engine.user_interface, &level.leader_board, &level.options);
+                self.hud.handle_message(
+                    &message,
+                    &mut self.engine.user_interface,
+                    &level.leader_board,
+                    &level.options,
+                );
             }
         }
     }
@@ -618,8 +615,9 @@ impl Game {
         self.debug_string.clear();
         use std::fmt::Write;
         let statistics = self.engine.renderer.get_statistics();
-        write!(self.debug_string,
-               "Pure frame time: {:.2} ms\n\
+        write!(
+            self.debug_string,
+            "Pure frame time: {:.2} ms\n\
                Capped frame time: {:.2} ms\n\
                FPS: {}\n\
                Triangles: {}\n\
@@ -627,35 +625,45 @@ impl Game {
                Up time: {:.2} s\n\
                Sound render time: {:?}\n\
                UI Time: {:?}",
-               statistics.pure_frame_time * 1000.0,
-               statistics.capped_frame_time * 1000.0,
-               statistics.frames_per_second,
-               statistics.geometry.triangles_rendered,
-               statistics.geometry.draw_calls,
-               elapsed,
-               self.engine.sound_context.lock().unwrap().full_render_duration(),
-               self.engine.ui_time
-        ).unwrap();
+            statistics.pure_frame_time * 1000.0,
+            statistics.capped_frame_time * 1000.0,
+            statistics.frames_per_second,
+            statistics.geometry.triangles_rendered,
+            statistics.geometry.draw_calls,
+            elapsed,
+            self.engine
+                .sound_context
+                .lock()
+                .unwrap()
+                .full_render_duration(),
+            self.engine.ui_time
+        )
+        .unwrap();
 
-        self.engine.user_interface.send_message(TextMessage::text(self.debug_text, self.debug_string.clone()));
+        self.engine.user_interface.send_message(TextMessage::text(
+            self.debug_text,
+            self.debug_string.clone(),
+        ));
     }
 
     pub fn limit_fps(&mut self, value: f64) {
         let current_time = time::Instant::now();
-        let render_call_duration = current_time.duration_since(self.last_tick_time).as_secs_f64();
+        let render_call_duration = current_time
+            .duration_since(self.last_tick_time)
+            .as_secs_f64();
         self.last_tick_time = current_time;
         let desired_frame_time = 1.0 / value;
         if render_call_duration < desired_frame_time {
-            thread::sleep(Duration::from_secs_f64(desired_frame_time - render_call_duration));
+            thread::sleep(Duration::from_secs_f64(
+                desired_frame_time - render_call_duration,
+            ));
         }
     }
 
     fn process_dispatched_event(&mut self, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             if let Some(event) = translate_event(event) {
-                self.engine
-                    .user_interface
-                    .process_os_event(&event);
+                self.engine.user_interface.process_os_event(&event);
             }
         }
 

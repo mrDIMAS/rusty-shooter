@@ -1,26 +1,12 @@
+use crate::{message::Message, weapon::Weapon};
 use rg3d::{
-    scene::{
-        node::Node,
-        Scene,
-    },
     core::{
-        pool::Handle,
         math::vec3::Vec3,
-        visitor::{
-            Visit,
-            Visitor,
-            VisitResult,
-            VisitError
-        },
+        pool::Handle,
+        visitor::{Visit, VisitError, VisitResult, Visitor},
     },
-    physics::{
-        rigid_body::RigidBody,
-        Physics,
-    },
-};
-use crate::{
-    weapon::Weapon,
-    message::Message,
+    physics::{rigid_body::RigidBody, Physics},
+    scene::{node::Node, Scene},
 };
 use std::sync::mpsc::Sender;
 
@@ -34,14 +20,14 @@ pub struct Character {
     pub current_weapon: u32,
     pub weapon_pivot: Handle<Node>,
     pub sender: Option<Sender<Message>>,
-    pub team: Team
+    pub team: Team,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Team {
     None,
     Red,
-    Blue
+    Blue,
 }
 
 impl Default for Team {
@@ -63,7 +49,7 @@ impl Visit for Team {
                 0 => Team::None,
                 1 => Team::Red,
                 2 => Team::Blue,
-                _ => return Err(VisitError::User(format!("Invalid team id {}", id)))
+                _ => return Err(VisitError::User(format!("Invalid team id {}", id))),
             }
         }
         Ok(())
@@ -82,7 +68,7 @@ impl Default for Character {
             current_weapon: 0,
             weapon_pivot: Handle::NONE,
             sender: None,
-            team: Team::None
+            team: Team::None,
         }
     }
 }
@@ -137,7 +123,9 @@ impl Character {
     }
 
     pub fn set_position(&mut self, physics: &mut Physics, position: Vec3) {
-        physics.borrow_body_mut(self.get_body()).set_position(position);
+        physics
+            .borrow_body_mut(self.get_body())
+            .set_position(position);
     }
 
     pub fn position(&self, physics: &Physics) -> Vec3 {
@@ -179,10 +167,12 @@ impl Character {
     pub fn add_weapon(&mut self, weapon: Handle<Weapon>) {
         if let Some(sender) = self.sender.as_ref() {
             for other_weapon in self.weapons.iter() {
-                sender.send(Message::ShowWeapon {
-                    weapon: *other_weapon,
-                    state: false,
-                }).unwrap();
+                sender
+                    .send(Message::ShowWeapon {
+                        weapon: *other_weapon,
+                        state: false,
+                    })
+                    .unwrap();
             }
         }
 
@@ -203,10 +193,12 @@ impl Character {
     fn request_current_weapon_visible(&self, state: bool) {
         if let Some(sender) = self.sender.as_ref() {
             if let Some(current_weapon) = self.weapons.get(self.current_weapon as usize) {
-                sender.send(Message::ShowWeapon {
-                    weapon: *current_weapon,
-                    state,
-                }).unwrap()
+                sender
+                    .send(Message::ShowWeapon {
+                        weapon: *current_weapon,
+                        state,
+                    })
+                    .unwrap()
             }
         }
     }

@@ -1,51 +1,30 @@
-use rand::Rng;
 use crate::{
     character::Character,
+    control_scheme::{ControlButton, ControlScheme},
     level::UpdateContext,
-    control_scheme::{
-        ControlScheme,
-        ControlButton,
-    },
     message::Message,
 };
-use std::{
-    rc::Rc,
-    sync::{
-        Arc,
-        Mutex,
-        mpsc::Sender,
-    },
-    cell::RefCell,
-};
+use rand::Rng;
 use rg3d::{
     core::{
-        visitor::{Visit, Visitor, VisitResult},
+        math::{mat3::Mat3, quat::Quat, vec3::Vec3},
         pool::Handle,
-        math::{vec3::Vec3, quat::Quat, mat3::Mat3},
+        visitor::{Visit, VisitResult, Visitor},
     },
-    event::{
-        DeviceEvent,
-        Event,
-        MouseScrollDelta,
-        ElementState,
-    },
-    scene::{
-        node::Node,
-        Scene,
-        camera::CameraBuilder,
-        base::BaseBuilder,
-    },
-    sound::context::Context,
+    event::{DeviceEvent, ElementState, Event, MouseScrollDelta},
     physics::{
-        convex_shape::{
-            ConvexShape,
-            CapsuleShape,
-            Axis,
-        },
+        convex_shape::{Axis, CapsuleShape, ConvexShape},
         rigid_body::RigidBody,
     },
+    scene::{base::BaseBuilder, camera::CameraBuilder, node::Node, Scene},
+    sound::context::Context,
 };
 use std::ops::{Deref, DerefMut};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{mpsc::Sender, Arc, Mutex},
+};
 
 pub struct Controller {
     move_forward: bool,
@@ -160,7 +139,8 @@ impl Visit for Player {
         self.dest_yaw.visit("DestYaw", visitor)?;
         self.pitch.visit("Pitch", visitor)?;
         self.dest_pitch.visit("DestPitch", visitor)?;
-        self.run_speed_multiplier.visit("RunSpeedMultiplier", visitor)?;
+        self.run_speed_multiplier
+            .visit("RunSpeedMultiplier", visitor)?;
         self.stand_body_height.visit("StandBodyRadius", visitor)?;
         self.crouch_body_height.visit("CrouchBodyRadius", visitor)?;
         self.move_speed.visit("MoveSpeed", visitor)?;
@@ -173,21 +153,26 @@ impl Visit for Player {
 
 impl Player {
     pub fn new(scene: &mut Scene, sender: Sender<Message>) -> Player {
-        let camera_handle = scene.graph.add_node(Node::Camera(
-            CameraBuilder::new(BaseBuilder::new()).build())
-        );
+        let camera_handle = scene
+            .graph
+            .add_node(Node::Camera(CameraBuilder::new(BaseBuilder::new()).build()));
 
         let height = Self::default().stand_body_height;
         let mut camera_pivot = Node::Base(Default::default());
-        camera_pivot
-            .local_transform_mut()
-            .set_position(Vec3 { x: 0.0, y: height - 0.20, z: 0.0 });
+        camera_pivot.local_transform_mut().set_position(Vec3 {
+            x: 0.0,
+            y: height - 0.20,
+            z: 0.0,
+        });
         let camera_pivot_handle = scene.graph.add_node(camera_pivot);
         scene.graph.link_nodes(camera_handle, camera_pivot_handle);
 
         let mut pivot = Node::Base(Default::default());
-        pivot.local_transform_mut()
-            .set_position(Vec3 { x: -1.0, y: 0.0, z: 1.0 });
+        pivot.local_transform_mut().set_position(Vec3 {
+            x: -1.0,
+            y: 0.0,
+            z: 1.0,
+        });
 
         let capsule_shape = CapsuleShape::new(0.35, height, Axis::Y);
         let mut body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
@@ -202,11 +187,15 @@ impl Player {
             .local_transform_mut()
             .set_position(Vec3::new(-0.065, -0.052, 0.02));
         let weapon_base_pivot_handle = scene.graph.add_node(weapon_base_pivot);
-        scene.graph.link_nodes(weapon_base_pivot_handle, camera_handle);
+        scene
+            .graph
+            .link_nodes(weapon_base_pivot_handle, camera_handle);
 
         let weapon_pivot = Node::Base(Default::default());
         let weapon_pivot_handle = scene.graph.add_node(weapon_pivot);
-        scene.graph.link_nodes(weapon_pivot_handle, weapon_base_pivot_handle);
+        scene
+            .graph
+            .link_nodes(weapon_pivot_handle, weapon_base_pivot_handle);
 
         Player {
             character: Character {
@@ -300,8 +289,7 @@ impl Player {
 
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
 
-        context.scene
-            .graph[self.character.weapon_pivot]
+        context.scene.graph[self.character.weapon_pivot]
             .local_transform_mut()
             .set_position(self.weapon_offset);
 
@@ -324,14 +312,18 @@ impl Player {
         }
 
         let camera_node = &mut context.scene.graph[self.camera];
-        camera_node.local_transform_mut().set_position(self.camera_offset);
+        camera_node
+            .local_transform_mut()
+            .set_position(self.camera_offset);
 
         self.head_position = camera_node.global_position();
         self.look_direction = camera_node.look_vector();
         self.up_direction = camera_node.up_vector();
-        self.listener_basis = Mat3::from_vectors(camera_node.side_vector(),
-                                                 camera_node.up_vector(),
-                                                 -camera_node.look_vector());
+        self.listener_basis = Mat3::from_vectors(
+            camera_node.side_vector(),
+            camera_node.up_vector(),
+            -camera_node.look_vector(),
+        );
 
         if self.control_scheme.clone().unwrap().borrow().smooth_mouse {
             self.yaw += (self.dest_yaw - self.yaw) * 0.2;
@@ -341,13 +333,11 @@ impl Player {
             self.pitch = self.dest_pitch;
         }
 
-        context.scene
-            .graph[self.character.pivot]
+        context.scene.graph[self.character.pivot]
             .local_transform_mut()
             .set_rotation(Quat::from_axis_angle(Vec3::UP, self.yaw.to_radians()));
 
-        context.scene
-            .graph[self.camera_pivot]
+        context.scene.graph[self.camera_pivot]
             .local_transform_mut()
             .set_rotation(Quat::from_axis_angle(Vec3::RIGHT, self.pitch.to_radians()));
     }
@@ -412,7 +402,7 @@ impl Player {
                         }
                     }
 
-                    _ => ()
+                    _ => (),
                 }
 
                 if let Some(control_button) = control_button {
@@ -464,18 +454,28 @@ impl Player {
     pub fn update(&mut self, context: &mut UpdateContext) {
         self.update_movement(context);
 
-        if let Some(current_weapon_handle) = self.character.weapons.get(self.character.current_weapon as usize) {
-            let velocity = context.scene
+        if let Some(current_weapon_handle) = self
+            .character
+            .weapons
+            .get(self.character.current_weapon as usize)
+        {
+            let velocity = context
+                .scene
                 .physics
                 .borrow_body(self.character.body)
                 .get_velocity();
 
             if self.controller.shoot {
-                self.character.sender.as_ref().unwrap().send(Message::ShootWeapon {
-                    weapon: *current_weapon_handle,
-                    initial_velocity: velocity,
-                    direction: None,
-                }).unwrap();
+                self.character
+                    .sender
+                    .as_ref()
+                    .unwrap()
+                    .send(Message::ShootWeapon {
+                        weapon: *current_weapon_handle,
+                        initial_velocity: velocity,
+                        direction: None,
+                    })
+                    .unwrap();
             }
         }
 
@@ -484,7 +484,7 @@ impl Player {
                 "data/sounds/footsteps/FootStep_shoe_stone_step1.wav",
                 "data/sounds/footsteps/FootStep_shoe_stone_step2.wav",
                 "data/sounds/footsteps/FootStep_shoe_stone_step3.wav",
-                "data/sounds/footsteps/FootStep_shoe_stone_step4.wav"
+                "data/sounds/footsteps/FootStep_shoe_stone_step4.wav",
             ];
             self.character
                 .sender

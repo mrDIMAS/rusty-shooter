@@ -1,44 +1,31 @@
-use std::{
-    path::Path,
-    sync::{Arc, Mutex},
-    collections::VecDeque,
+use crate::{
+    leader_board::{LeaderBoard, LeaderBoardUI},
+    message::Message,
+    GameEngine, GameTime, Gui, MatchOptions, UINodeHandle,
 };
 use rg3d::{
     core::color::Color,
-    resource::texture::TextureKind,
-    event::{
-        Event,
-        WindowEvent,
-    },
-    utils,
+    event::{Event, WindowEvent},
     gui::{
         border::BorderBuilder,
-        ttf::Font,
-        HorizontalAlignment,
-        grid::{GridBuilder, Column, Row},
-        widget::WidgetBuilder,
-        text::TextBuilder,
-        stack_panel::StackPanelBuilder,
-        image::ImageBuilder,
-        VerticalAlignment,
-        Thickness,
         brush::Brush,
-        Orientation,
-        message::WidgetMessage,
+        grid::{Column, GridBuilder, Row},
+        image::ImageBuilder,
         message::TextMessage,
+        message::WidgetMessage,
+        stack_panel::StackPanelBuilder,
+        text::TextBuilder,
+        ttf::Font,
+        widget::WidgetBuilder,
+        HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
     },
+    resource::texture::TextureKind,
+    utils,
 };
-use crate::{
-    leader_board::{
-        LeaderBoard,
-        LeaderBoardUI,
-    },
-    GameTime,
-    message::Message,
-    MatchOptions,
-    UINodeHandle,
-    GameEngine,
-    Gui,
+use std::{
+    collections::VecDeque,
+    path::Path,
+    sync::{Arc, Mutex},
 };
 
 pub struct Hud {
@@ -68,7 +55,9 @@ impl Hud {
         let font = Font::from_file(
             Path::new("data/ui/SquaresBold.ttf"),
             35.0,
-            Font::default_char_set()).unwrap();
+            Font::default_char_set(),
+        )
+        .unwrap();
         let font = Arc::new(Mutex::new(font));
 
         let health;
@@ -80,210 +69,305 @@ impl Hud {
         let second_score;
         let match_limit;
         let died;
-        let root = GridBuilder::new(WidgetBuilder::new()
-            .with_width(frame_size.0 as f32)
-            .with_height(frame_size.1 as f32)
-            .with_visibility(false)
-            .with_child(ImageBuilder::new(WidgetBuilder::new()
-                .with_horizontal_alignment(HorizontalAlignment::Center)
-                .with_vertical_alignment(VerticalAlignment::Center)
-                .with_width(33.0)
-                .with_height(33.0)
-                .on_row(0)
-                .on_column(1))
-                .with_opt_texture(utils::into_any_arc(resource_manager.request_texture(Path::new("data/ui/crosshair.tga"), TextureKind::RGBA8)))
-                .build(ctx))
-            .with_child({
-                time = TextBuilder::new(WidgetBuilder::new()
-                    .with_margin(Thickness::uniform(2.0))
-                    .with_horizontal_alignment(HorizontalAlignment::Center)
-                    .on_column(1)
-                    .on_row(0))
+        let root = GridBuilder::new(
+            WidgetBuilder::new()
+                .with_width(frame_size.0 as f32)
+                .with_height(frame_size.1 as f32)
+                .with_visibility(false)
+                .with_child(
+                    ImageBuilder::new(
+                        WidgetBuilder::new()
+                            .with_horizontal_alignment(HorizontalAlignment::Center)
+                            .with_vertical_alignment(VerticalAlignment::Center)
+                            .with_width(33.0)
+                            .with_height(33.0)
+                            .on_row(0)
+                            .on_column(1),
+                    )
+                    .with_opt_texture(utils::into_any_arc(
+                        resource_manager.request_texture(
+                            Path::new("data/ui/crosshair.tga"),
+                            TextureKind::RGBA8,
+                        ),
+                    ))
+                    .build(ctx),
+                )
+                .with_child({
+                    time = TextBuilder::new(
+                        WidgetBuilder::new()
+                            .with_margin(Thickness::uniform(2.0))
+                            .with_horizontal_alignment(HorizontalAlignment::Center)
+                            .on_column(1)
+                            .on_row(0),
+                    )
                     .with_font(font.clone())
                     .with_text("00:00:00")
                     .build(ctx);
-                time
-            })
-            .with_child(GridBuilder::new(WidgetBuilder::new()
-                .on_column(0)
-                .on_row(0)
-                .with_vertical_alignment(VerticalAlignment::Bottom)
-                .with_margin(Thickness {
-                    left: 50.0,
-                    top: 0.0,
-                    right: 0.0,
-                    bottom: 150.0,
+                    time
                 })
-                .with_child(BorderBuilder::new(WidgetBuilder::new()
-                    .on_column(0)
-                    .with_background(Brush::Solid(Color::opaque(34, 177, 76)))
-                    .with_foreground(Brush::Solid(Color::opaque(52, 216, 101)))
-                    .with_child({
-                        match_limit = TextBuilder::new(WidgetBuilder::new()
+                .with_child(
+                    GridBuilder::new(
+                        WidgetBuilder::new()
+                            .on_column(0)
+                            .on_row(0)
+                            .with_vertical_alignment(VerticalAlignment::Bottom)
+                            .with_margin(Thickness {
+                                left: 50.0,
+                                top: 0.0,
+                                right: 0.0,
+                                bottom: 150.0,
+                            })
+                            .with_child(
+                                BorderBuilder::new(
+                                    WidgetBuilder::new()
+                                        .on_column(0)
+                                        .with_background(Brush::Solid(Color::opaque(34, 177, 76)))
+                                        .with_foreground(Brush::Solid(Color::opaque(52, 216, 101)))
+                                        .with_child({
+                                            match_limit = TextBuilder::new(
+                                                WidgetBuilder::new()
+                                                    .with_horizontal_alignment(
+                                                        HorizontalAlignment::Center,
+                                                    )
+                                                    .with_vertical_alignment(
+                                                        VerticalAlignment::Center,
+                                                    )
+                                                    .with_foreground(Brush::Solid(Color::BLACK)),
+                                            )
+                                            .with_text("0")
+                                            .build(ctx);
+                                            match_limit
+                                        }),
+                                )
+                                .with_stroke_thickness(Thickness::uniform(2.0))
+                                .build(ctx),
+                            )
+                            .with_child(
+                                BorderBuilder::new(
+                                    WidgetBuilder::new()
+                                        .on_column(1)
+                                        .with_background(Brush::Solid(Color::opaque(249, 166, 2)))
+                                        .with_foreground(Brush::Solid(Color::opaque(200, 110, 0)))
+                                        .with_child({
+                                            first_score = TextBuilder::new(
+                                                WidgetBuilder::new()
+                                                    .with_horizontal_alignment(
+                                                        HorizontalAlignment::Center,
+                                                    )
+                                                    .with_vertical_alignment(
+                                                        VerticalAlignment::Center,
+                                                    )
+                                                    .with_foreground(Brush::Solid(Color::BLACK)),
+                                            )
+                                            .with_text("0")
+                                            .build(ctx);
+                                            first_score
+                                        }),
+                                )
+                                .with_stroke_thickness(Thickness::uniform(2.0))
+                                .build(ctx),
+                            )
+                            .with_child(
+                                BorderBuilder::new(
+                                    WidgetBuilder::new()
+                                        .on_column(2)
+                                        .with_background(Brush::Solid(Color::opaque(127, 127, 127)))
+                                        .with_foreground(Brush::Solid(Color::opaque(80, 80, 80)))
+                                        .with_child({
+                                            second_score = TextBuilder::new(
+                                                WidgetBuilder::new()
+                                                    .with_horizontal_alignment(
+                                                        HorizontalAlignment::Center,
+                                                    )
+                                                    .with_vertical_alignment(
+                                                        VerticalAlignment::Center,
+                                                    )
+                                                    .with_foreground(Brush::Solid(Color::BLACK)),
+                                            )
+                                            .with_text("0")
+                                            .build(ctx);
+                                            second_score
+                                        }),
+                                )
+                                .with_stroke_thickness(Thickness::uniform(2.0))
+                                .build(ctx),
+                            ),
+                    )
+                    .add_column(Column::strict(75.0))
+                    .add_column(Column::strict(75.0))
+                    .add_column(Column::strict(75.0))
+                    .add_row(Row::strict(33.0))
+                    .build(ctx),
+                )
+                .with_child(
+                    StackPanelBuilder::new(
+                        WidgetBuilder::new()
+                            .with_margin(Thickness::bottom(10.0))
+                            .on_column(0)
+                            .with_vertical_alignment(VerticalAlignment::Bottom)
                             .with_horizontal_alignment(HorizontalAlignment::Center)
-                            .with_vertical_alignment(VerticalAlignment::Center)
-                            .with_foreground(Brush::Solid(Color::BLACK)))
-                            .with_text("0")
-                            .build(ctx);
-                        match_limit
-                    }))
-                    .with_stroke_thickness(Thickness::uniform(2.0))
-                    .build(ctx))
-                .with_child(BorderBuilder::new(WidgetBuilder::new()
-                    .on_column(1)
-                    .with_background(Brush::Solid(Color::opaque(249, 166, 2)))
-                    .with_foreground(Brush::Solid(Color::opaque(200, 110, 0)))
-                    .with_child({
-                        first_score = TextBuilder::new(WidgetBuilder::new()
+                            .with_child(
+                                ImageBuilder::new(
+                                    WidgetBuilder::new().with_width(35.0).with_height(35.0),
+                                )
+                                .with_opt_texture(utils::into_any_arc(
+                                    resource_manager.request_texture(
+                                        Path::new("data/ui/health_icon.png"),
+                                        TextureKind::RGBA8,
+                                    ),
+                                ))
+                                .build(ctx),
+                            )
+                            .with_child(
+                                TextBuilder::new(
+                                    WidgetBuilder::new().with_width(170.0).with_height(35.0),
+                                )
+                                .with_text("Health:")
+                                .with_font(font.clone())
+                                .build(ctx),
+                            )
+                            .with_child({
+                                health = TextBuilder::new(
+                                    WidgetBuilder::new()
+                                        .with_foreground(Brush::Solid(Color::opaque(180, 14, 22)))
+                                        .with_width(170.0)
+                                        .with_height(35.0),
+                                )
+                                .with_text("100")
+                                .with_font(font.clone())
+                                .build(ctx);
+                                health
+                            }),
+                    )
+                    .with_orientation(Orientation::Horizontal)
+                    .build(ctx),
+                )
+                .with_child(
+                    StackPanelBuilder::new(
+                        WidgetBuilder::new()
+                            .with_margin(Thickness::bottom(10.0))
+                            .on_column(1)
+                            .with_vertical_alignment(VerticalAlignment::Bottom)
                             .with_horizontal_alignment(HorizontalAlignment::Center)
-                            .with_vertical_alignment(VerticalAlignment::Center)
-                            .with_foreground(Brush::Solid(Color::BLACK)))
-                            .with_text("0")
-                            .build(ctx);
-                        first_score
-                    }))
-                    .with_stroke_thickness(Thickness::uniform(2.0))
-                    .build(ctx))
-                .with_child(BorderBuilder::new(WidgetBuilder::new()
-                    .on_column(2)
-                    .with_background(Brush::Solid(Color::opaque(127, 127, 127)))
-                    .with_foreground(Brush::Solid(Color::opaque(80, 80, 80)))
-                    .with_child({
-                        second_score = TextBuilder::new(WidgetBuilder::new()
+                            .with_child(
+                                ImageBuilder::new(
+                                    WidgetBuilder::new().with_width(35.0).with_height(35.0),
+                                )
+                                .with_opt_texture(utils::into_any_arc(
+                                    resource_manager.request_texture(
+                                        Path::new("data/ui/ammo_icon.png"),
+                                        TextureKind::RGBA8,
+                                    ),
+                                ))
+                                .build(ctx),
+                            )
+                            .with_child(
+                                TextBuilder::new(
+                                    WidgetBuilder::new().with_width(170.0).with_height(35.0),
+                                )
+                                .with_font(font.clone())
+                                .with_text("Ammo:")
+                                .build(ctx),
+                            )
+                            .with_child({
+                                ammo = TextBuilder::new(
+                                    WidgetBuilder::new()
+                                        .with_foreground(Brush::Solid(Color::opaque(79, 79, 255)))
+                                        .with_width(170.0)
+                                        .with_height(35.0),
+                                )
+                                .with_font(font.clone())
+                                .with_text("40")
+                                .build(ctx);
+                                ammo
+                            }),
+                    )
+                    .with_orientation(Orientation::Horizontal)
+                    .build(ctx),
+                )
+                .with_child(
+                    StackPanelBuilder::new(
+                        WidgetBuilder::new()
+                            .with_margin(Thickness::bottom(10.0))
+                            .on_column(2)
+                            .with_vertical_alignment(VerticalAlignment::Bottom)
                             .with_horizontal_alignment(HorizontalAlignment::Center)
-                            .with_vertical_alignment(VerticalAlignment::Center)
-                            .with_foreground(Brush::Solid(Color::BLACK)))
-                            .with_text("0")
-                            .build(ctx);
-                        second_score
-                    }))
-                    .with_stroke_thickness(Thickness::uniform(2.0))
-                    .build(ctx)))
-                .add_column(Column::strict(75.0))
-                .add_column(Column::strict(75.0))
-                .add_column(Column::strict(75.0))
-                .add_row(Row::strict(33.0))
-                .build(ctx))
-            .with_child(StackPanelBuilder::new(WidgetBuilder::new()
-                .with_margin(Thickness::bottom(10.0))
-                .on_column(0)
-                .with_vertical_alignment(VerticalAlignment::Bottom)
-                .with_horizontal_alignment(HorizontalAlignment::Center)
-                .with_child(ImageBuilder::new(WidgetBuilder::new()
-                    .with_width(35.0)
-                    .with_height(35.0))
-                    .with_opt_texture(utils::into_any_arc(resource_manager.request_texture(Path::new("data/ui/health_icon.png"), TextureKind::RGBA8)))
-                    .build(ctx))
-                .with_child(TextBuilder::new(WidgetBuilder::new()
-                    .with_width(170.0)
-                    .with_height(35.0))
-                    .with_text("Health:")
-                    .with_font(font.clone())
-                    .build(ctx))
-                .with_child({
-                    health = TextBuilder::new(WidgetBuilder::new()
-                        .with_foreground(Brush::Solid(Color::opaque(180, 14, 22)))
-                        .with_width(170.0)
-                        .with_height(35.0))
-                        .with_text("100")
-                        .with_font(font.clone())
-                        .build(ctx);
-                    health
-                }))
-                .with_orientation(Orientation::Horizontal)
-                .build(ctx))
-            .with_child(StackPanelBuilder::new(WidgetBuilder::new()
-                .with_margin(Thickness::bottom(10.0))
-                .on_column(1)
-                .with_vertical_alignment(VerticalAlignment::Bottom)
-                .with_horizontal_alignment(HorizontalAlignment::Center)
-                .with_child(ImageBuilder::new(WidgetBuilder::new()
-                    .with_width(35.0)
-                    .with_height(35.0))
-                    .with_opt_texture(utils::into_any_arc(resource_manager.request_texture(Path::new("data/ui/ammo_icon.png"), TextureKind::RGBA8)))
-                    .build(ctx))
-                .with_child(TextBuilder::new(WidgetBuilder::new()
-                    .with_width(170.0)
-                    .with_height(35.0))
-                    .with_font(font.clone())
-                    .with_text("Ammo:")
-                    .build(ctx)
+                            .with_child(
+                                ImageBuilder::new(
+                                    WidgetBuilder::new().with_width(35.0).with_height(35.0),
+                                )
+                                .with_opt_texture(utils::into_any_arc(
+                                    resource_manager.request_texture(
+                                        Path::new("data/ui/shield_icon.png"),
+                                        TextureKind::RGBA8,
+                                    ),
+                                ))
+                                .build(ctx),
+                            )
+                            .with_child(
+                                TextBuilder::new(
+                                    WidgetBuilder::new().with_width(170.0).with_height(35.0),
+                                )
+                                .with_font(font.clone())
+                                .with_text("Armor:")
+                                .build(ctx),
+                            )
+                            .with_child({
+                                armor = TextBuilder::new(
+                                    WidgetBuilder::new()
+                                        .with_foreground(Brush::Solid(Color::opaque(255, 100, 26)))
+                                        .with_width(170.0)
+                                        .with_height(35.0),
+                                )
+                                .with_font(font.clone())
+                                .with_text("100")
+                                .build(ctx);
+                                armor
+                            }),
+                    )
+                    .with_orientation(Orientation::Horizontal)
+                    .build(ctx),
                 )
                 .with_child({
-                    ammo = TextBuilder::new(WidgetBuilder::new()
-                        .with_foreground(Brush::Solid(Color::opaque(79, 79, 255)))
-                        .with_width(170.0)
-                        .with_height(35.0))
-                        .with_font(font.clone())
-                        .with_text("40")
-                        .build(ctx);
-                    ammo
-                }))
-                .with_orientation(Orientation::Horizontal)
-                .build(ctx))
-            .with_child(StackPanelBuilder::new(WidgetBuilder::new()
-                .with_margin(Thickness::bottom(10.0))
-                .on_column(2)
-                .with_vertical_alignment(VerticalAlignment::Bottom)
-                .with_horizontal_alignment(HorizontalAlignment::Center)
-                .with_child(ImageBuilder::new(WidgetBuilder::new()
-                    .with_width(35.0)
-                    .with_height(35.0))
-                    .with_opt_texture(utils::into_any_arc(resource_manager.request_texture(Path::new("data/ui/shield_icon.png"), TextureKind::RGBA8)))
-                    .build(ctx))
-                .with_child(TextBuilder::new(WidgetBuilder::new()
-                    .with_width(170.0)
-                    .with_height(35.0))
-                    .with_font(font.clone())
-                    .with_text("Armor:")
-                    .build(ctx))
-                .with_child({
-                    armor = TextBuilder::new(WidgetBuilder::new()
-                        .with_foreground(Brush::Solid(Color::opaque(255, 100, 26)))
-                        .with_width(170.0)
-                        .with_height(35.0))
-                        .with_font(font.clone())
-                        .with_text("100")
-                        .build(ctx);
-                    armor
-                }))
-                .with_orientation(Orientation::Horizontal)
-                .build(ctx))
-            .with_child({
-                message = TextBuilder::new(WidgetBuilder::new()
-                    .on_row(0)
-                    .on_column(0)
-                    .with_vertical_alignment(VerticalAlignment::Center)
-                    .with_horizontal_alignment(HorizontalAlignment::Left)
-                    .with_margin(Thickness {
-                        left: 45.0,
-                        top: 30.0,
-                        right: 0.0,
-                        bottom: 0.0,
-                    })
-                    .with_height(40.0)
-                    .with_width(400.0))
+                    message = TextBuilder::new(
+                        WidgetBuilder::new()
+                            .on_row(0)
+                            .on_column(0)
+                            .with_vertical_alignment(VerticalAlignment::Center)
+                            .with_horizontal_alignment(HorizontalAlignment::Left)
+                            .with_margin(Thickness {
+                                left: 45.0,
+                                top: 30.0,
+                                right: 0.0,
+                                bottom: 0.0,
+                            })
+                            .with_height(40.0)
+                            .with_width(400.0),
+                    )
                     .build(ctx);
-                message
-            })
-            .with_child({
-                died = TextBuilder::new(WidgetBuilder::new()
-                    .with_visibility(false)
-                    .on_row(0)
-                    .on_column(1)
-                    .with_foreground(Brush::Solid(Color::opaque(200, 0, 0)))
-                    .with_vertical_alignment(VerticalAlignment::Center)
-                    .with_horizontal_alignment(HorizontalAlignment::Center))
+                    message
+                })
+                .with_child({
+                    died = TextBuilder::new(
+                        WidgetBuilder::new()
+                            .with_visibility(false)
+                            .on_row(0)
+                            .on_column(1)
+                            .with_foreground(Brush::Solid(Color::opaque(200, 0, 0)))
+                            .with_vertical_alignment(VerticalAlignment::Center)
+                            .with_horizontal_alignment(HorizontalAlignment::Center),
+                    )
                     .with_font(font)
                     .with_text("You Died")
                     .build(ctx);
-                died
-            }))
-            .add_column(Column::stretch())
-            .add_column(Column::stretch())
-            .add_column(Column::stretch())
-            .add_row(Row::stretch())
-            .build(ctx);
+                    died
+                }),
+        )
+        .add_column(Column::stretch())
+        .add_column(Column::stretch())
+        .add_column(Column::stretch())
+        .add_row(Row::stretch())
+        .build(ctx);
 
         Self {
             leader_board,
@@ -323,7 +407,10 @@ impl Hud {
         let minutes = (time / 60.0) as u32;
         let hours = (time / 3600.0) as u32;
 
-        ui.send_message(TextMessage::text(self.time, format!("{:02}:{:02}:{:02}", hours, minutes, seconds)));
+        ui.send_message(TextMessage::text(
+            self.time,
+            format!("{:02}:{:02}:{:02}", hours, minutes, seconds),
+        ));
     }
 
     pub fn set_is_died(&mut self, ui: &mut Gui, is_died: bool) {
@@ -331,15 +418,18 @@ impl Hud {
     }
 
     pub fn add_message<P: AsRef<str>>(&mut self, message: P) {
-        self.message_queue
-            .push_back(message.as_ref().to_owned())
+        self.message_queue.push_back(message.as_ref().to_owned())
     }
 
     pub fn process_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             if let WindowEvent::Resized(new_size) = event {
-                engine.user_interface.send_message(WidgetMessage::width(self.root, new_size.width as f32));
-                engine.user_interface.send_message(WidgetMessage::height(self.root, new_size.height as f32));
+                engine
+                    .user_interface
+                    .send_message(WidgetMessage::width(self.root, new_size.width as f32));
+                engine
+                    .user_interface
+                    .send_message(WidgetMessage::height(self.root, new_size.height as f32));
             }
         }
 
@@ -363,14 +453,26 @@ impl Hud {
         }
     }
 
-    fn update_leader_board_overview(&mut self, ui: &mut Gui, leader_board: &LeaderBoard, match_options: &MatchOptions) {
+    fn update_leader_board_overview(
+        &mut self,
+        ui: &mut Gui,
+        leader_board: &LeaderBoard,
+        match_options: &MatchOptions,
+    ) {
         // TODO: This is probably not correct way of showing leader and second place on HUD
         //  it is better to show player's score and leader/second score of some bot.
         if let Some((leader_name, leader_score)) = leader_board.highest_personal_score(None) {
-            ui.send_message(TextMessage::text(self.first_score, format!("{}", leader_score)));
+            ui.send_message(TextMessage::text(
+                self.first_score,
+                format!("{}", leader_score),
+            ));
 
-            if let Some((_, second_score)) = leader_board.highest_personal_score(Some(leader_name)) {
-                ui.send_message(TextMessage::text(self.second_score, format!("{}", second_score)));
+            if let Some((_, second_score)) = leader_board.highest_personal_score(Some(leader_name))
+            {
+                ui.send_message(TextMessage::text(
+                    self.second_score,
+                    format!("{}", second_score),
+                ));
             }
         }
 
@@ -382,18 +484,26 @@ impl Hud {
         ui.send_message(TextMessage::text(self.match_limit, format!("{}", limit)));
     }
 
-    pub fn handle_message(&mut self, message: &Message, ui: &mut Gui, leader_board: &LeaderBoard, match_options: &MatchOptions) {
+    pub fn handle_message(
+        &mut self,
+        message: &Message,
+        ui: &mut Gui,
+        leader_board: &LeaderBoard,
+        match_options: &MatchOptions,
+    ) {
         match message {
-            Message::AddNotification { text } => {
-                self.add_message(text)
-            }
-            Message::AddBot { .. } | Message::RemoveActor { .. } | Message::RespawnActor { .. } | Message::SpawnBot { .. } | Message::SpawnPlayer => {
+            Message::AddNotification { text } => self.add_message(text),
+            Message::AddBot { .. }
+            | Message::RemoveActor { .. }
+            | Message::RespawnActor { .. }
+            | Message::SpawnBot { .. }
+            | Message::SpawnPlayer => {
                 self.update_leader_board_overview(ui, leader_board, match_options)
             }
-            _ => ()
+            _ => (),
         }
 
-        self.leader_board.handle_message(message, ui, leader_board, match_options);
+        self.leader_board
+            .handle_message(message, ui, leader_board, match_options);
     }
 }
-

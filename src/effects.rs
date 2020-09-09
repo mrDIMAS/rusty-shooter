@@ -18,7 +18,7 @@ use rg3d::{
         node::Node,
         particle_system::{
             CustomEmitter, CustomEmitterFactory, Emit, Particle, ParticleSystem,
-            ParticleSystemBuilder, SphereEmitter,
+            ParticleSystemBuilder,
         },
         transform::TransformBuilder,
     },

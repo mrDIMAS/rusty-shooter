@@ -1,46 +1,27 @@
-use std::{
-    path::{
-        Path,
-        PathBuf
-    },
-    sync::mpsc::Sender,
-    ops::{Index, IndexMut}
+use crate::{
+    actor::Actor, actor::ActorContainer, message::Message, projectile::ProjectileKind, GameTime,
 };
 use rg3d::{
-    physics::{RayCastOptions, HitKind, Physics},
+    core::{
+        color::Color,
+        math::{mat3::Mat3, ray::Ray, vec3::Vec3},
+        pool::{Handle, Pool, PoolIteratorMut},
+        visitor::{Visit, VisitResult, Visitor},
+    },
     engine::resource_manager::ResourceManager,
+    physics::{HitKind, Physics, RayCastOptions},
     scene::{
+        base::BaseBuilder,
+        graph::Graph,
+        light::{BaseLightBuilder, PointLightBuilder},
         node::Node,
         Scene,
-        graph::Graph,
-        light::{
-            LightKind,
-            LightBuilder,
-            PointLight,
-        },
-        base::BaseBuilder,
-    },
-    core::{
-        pool::{
-            Pool,
-            PoolIteratorMut,
-            Handle,
-        },
-        color::Color,
-        visitor::{
-            Visit,
-            VisitResult,
-            Visitor,
-        },
-        math::{vec3::Vec3, ray::Ray, mat3::Mat3},
     },
 };
-use crate::{
-    actor::ActorContainer,
-    projectile::ProjectileKind,
-    actor::Actor,
-    GameTime,
-    message::Message,
+use std::{
+    ops::{Index, IndexMut},
+    path::{Path, PathBuf},
+    sync::mpsc::Sender,
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -57,7 +38,7 @@ impl WeaponKind {
             WeaponKind::M4 => 0,
             WeaponKind::Ak47 => 1,
             WeaponKind::PlasmaRifle => 2,
-            WeaponKind::RocketLauncher => 3
+            WeaponKind::RocketLauncher => 3,
         }
     }
 
@@ -67,7 +48,7 @@ impl WeaponKind {
             1 => Ok(WeaponKind::Ak47),
             2 => Ok(WeaponKind::PlasmaRifle),
             3 => Ok(WeaponKind::RocketLauncher),
-            _ => Err(format!("unknown weapon kind {}", id))
+            _ => Err(format!("unknown weapon kind {}", id)),
         }
     }
 }
@@ -183,21 +164,31 @@ impl Weapon {
         }
     }
 
-    pub fn new(kind: WeaponKind, resource_manager: &mut ResourceManager, scene: &mut Scene, sender: Sender<Message>) -> Weapon {
+    pub fn new(
+        kind: WeaponKind,
+        resource_manager: &mut ResourceManager,
+        scene: &mut Scene,
+        sender: Sender<Message>,
+    ) -> Weapon {
         let definition = Self::get_definition(kind);
 
-        let model = resource_manager.request_model(Path::new(definition.model))
+        let model = resource_manager
+            .request_model(Path::new(definition.model))
             .unwrap()
             .lock()
             .unwrap()
             .instantiate_geometry(scene);
 
-        let laser_dot = scene.graph.add_node(Node::Light(
-            LightBuilder::new(LightKind::Point(PointLight::new(0.5)), BaseBuilder::new())
-                .with_color(Color::opaque(255, 0, 0))
-                .with_scatter_enabled(false)
-                .cast_shadows(false)
-                .build()));
+        let laser_dot = scene.graph.add_node(
+            PointLightBuilder::new(
+                BaseLightBuilder::new(BaseBuilder::new())
+                    .with_color(Color::opaque(255, 0, 0))
+                    .with_scatter_enabled(false)
+                    .cast_shadows(false),
+            )
+            .with_radius(0.5)
+            .build_node(),
+        );
 
         let shot_point = scene.graph.find_by_name(model, "Weapon:ShotPoint");
 
@@ -312,13 +303,15 @@ impl Weapon {
             let position = self.get_shot_position(&scene.graph);
 
             if let Some(sender) = self.sender.as_ref() {
-                sender.send(Message::PlaySound {
-                    path: PathBuf::from(self.definition.shot_sound),
-                    position,
-                    gain: 1.0,
-                    rolloff_factor: 5.0,
-                    radius: 3.0,
-                }).unwrap();
+                sender
+                    .send(Message::PlaySound {
+                        path: PathBuf::from(self.definition.shot_sound),
+                        position,
+                        gain: 1.0,
+                        rolloff_factor: 5.0,
+                        radius: 3.0,
+                    })
+                    .unwrap();
             }
 
             true
@@ -335,14 +328,12 @@ impl Weapon {
 
 #[derive(Default)]
 pub struct WeaponContainer {
-    pool: Pool<Weapon>
+    pool: Pool<Weapon>,
 }
 
 impl WeaponContainer {
     pub fn new() -> Self {
-        Self {
-            pool: Pool::new()
-        }
+        Self { pool: Pool::new() }
     }
 
     pub fn add(&mut self, weapon: Weapon) -> Handle<Weapon> {

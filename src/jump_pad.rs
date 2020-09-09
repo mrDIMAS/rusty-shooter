@@ -1,31 +1,20 @@
 use rg3d::{
-    physics::static_geometry::StaticGeometry,
     core::{
-        pool::{
-            Pool,
-            PoolIterator,
-            Handle
-        },
         math::vec3::Vec3,
-        visitor::{
-            Visit,
-            Visitor,
-            VisitResult
-        }
-    }
+        pool::{Handle, Pool, PoolIterator},
+        visitor::{Visit, VisitResult, Visitor},
+    },
+    physics::static_geometry::StaticGeometry,
 };
 
 pub struct JumpPad {
     force: Vec3,
-    shape: Handle<StaticGeometry>
+    shape: Handle<StaticGeometry>,
 }
 
 impl JumpPad {
     pub fn new(shape: Handle<StaticGeometry>, force: Vec3) -> JumpPad {
-        Self {
-            force,
-            shape
-        }
+        Self { force, shape }
     }
 
     pub fn get_shape(&self) -> Handle<StaticGeometry> {
@@ -41,7 +30,7 @@ impl Default for JumpPad {
     fn default() -> Self {
         Self {
             force: Default::default(),
-            shape: Default::default()
+            shape: Default::default(),
         }
     }
 }
@@ -58,7 +47,7 @@ impl Visit for JumpPad {
 }
 
 pub struct JumpPadContainer {
-    pool: Pool<JumpPad>
+    pool: Pool<JumpPad>,
 }
 
 impl Default for JumpPadContainer {
@@ -69,9 +58,7 @@ impl Default for JumpPadContainer {
 
 impl JumpPadContainer {
     pub fn new() -> Self {
-        Self {
-            pool: Pool::new()
-        }
+        Self { pool: Pool::new() }
     }
 
     pub fn add(&mut self, jump_pad: JumpPad) -> Handle<JumpPad> {

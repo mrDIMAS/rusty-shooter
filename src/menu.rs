@@ -1,49 +1,24 @@
-use std::{
-    path::Path,
-    rc::Rc,
-    sync::{
-        Mutex,
-        Arc,
-        mpsc::Sender,
-    },
-    cell::RefCell,
-};
 use crate::{
-    message::Message,
-    match_menu::MatchMenu,
-    options_menu::OptionsMenu,
-    UINodeHandle,
-    GameEngine,
-    Gui,
-    GuiMessage,
-    control_scheme::ControlScheme,
+    control_scheme::ControlScheme, match_menu::MatchMenu, message::Message,
+    options_menu::OptionsMenu, GameEngine, Gui, GuiMessage, UINodeHandle,
 };
 use rg3d::{
-    event::{
-        WindowEvent,
-        Event,
-    },
+    event::{Event, WindowEvent},
     gui::{
-        ttf::Font,
-        grid::{
-            GridBuilder,
-            Row,
-            Column,
-        },
-        Thickness,
-        window::{
-            WindowBuilder,
-            WindowTitle,
-        },
         button::ButtonBuilder,
-        message::{
-            UiMessageData,
-            WindowMessage,
-            ButtonMessage,
-            WidgetMessage,
-        },
+        grid::{Column, GridBuilder, Row},
+        message::{ButtonMessage, UiMessageData, WidgetMessage, WindowMessage},
+        ttf::Font,
         widget::WidgetBuilder,
+        window::{WindowBuilder, WindowTitle},
+        Thickness,
     },
+};
+use std::{
+    cell::RefCell,
+    path::Path,
+    rc::Rc,
+    sync::{mpsc::Sender, Arc, Mutex},
 };
 
 pub struct Menu {
@@ -59,13 +34,19 @@ pub struct Menu {
 }
 
 impl Menu {
-    pub fn new(engine: &mut GameEngine, control_scheme: Rc<RefCell<ControlScheme>>, sender: Sender<Message>) -> Self {
+    pub fn new(
+        engine: &mut GameEngine,
+        control_scheme: Rc<RefCell<ControlScheme>>,
+        sender: Sender<Message>,
+    ) -> Self {
         let frame_size = engine.renderer.get_frame_size();
 
         let font: Font = Font::from_file(
             Path::new("data/ui/SquaresBold.ttf"),
-            30.0,
-            Font::default_char_set()).unwrap();
+            31.0,
+            Font::default_char_set(),
+        )
+        .unwrap();
         let font = Arc::new(Mutex::new(font));
 
         let ctx = &mut engine.user_interface.build_ctx();
@@ -75,83 +56,99 @@ impl Menu {
         let btn_save_game;
         let btn_load_game;
         let btn_quit_game;
-        let root: UINodeHandle = GridBuilder::new(WidgetBuilder::new()
-            .with_width(frame_size.0 as f32)
-            .with_height(frame_size.1 as f32)
-            .with_child(WindowBuilder::new(WidgetBuilder::new()
-                .on_row(1)
-                .on_column(1))
-                .can_resize(false)
-                .can_minimize(false)
-                .can_close(false)
-                .with_title(WindowTitle::text("Rusty Shooter"))
-                .with_content(GridBuilder::new(WidgetBuilder::new()
-                    .with_margin(Thickness::uniform(20.0))
-                    .with_child({
-                        btn_new_game = ButtonBuilder::new(WidgetBuilder::new()
-                            .on_column(0)
-                            .on_row(0)
-                            .with_margin(Thickness::uniform(4.0)))
-                            .with_text("New Game")
-                            .with_font(font.clone())
-                            .build(ctx);
-                        btn_new_game
-                    })
-                    .with_child({
-                        btn_save_game = ButtonBuilder::new(WidgetBuilder::new()
-                            .on_column(0)
-                            .on_row(1)
-                            .with_margin(Thickness::uniform(4.0)))
-                            .with_text("Save Game")
-                            .with_font(font.clone())
-                            .build(ctx);
-                        btn_save_game
-                    })
-                    .with_child({
-                        btn_load_game = ButtonBuilder::new(WidgetBuilder::new()
-                            .on_column(0)
-                            .on_row(2)
-                            .with_margin(Thickness::uniform(4.0)))
-                            .with_text("Load Game")
-                            .with_font(font.clone())
-                            .build(ctx);
-                        btn_load_game
-                    })
-                    .with_child({
-                        btn_settings = ButtonBuilder::new(WidgetBuilder::new()
-                            .on_column(0)
-                            .on_row(3)
-                            .with_margin(Thickness::uniform(4.0)))
-                            .with_text("Settings")
-                            .with_font(font.clone())
-                            .build(ctx);
-                        btn_settings
-                    })
-                    .with_child({
-                        btn_quit_game = ButtonBuilder::new(WidgetBuilder::new()
-                            .on_column(0)
-                            .on_row(4)
-                            .with_margin(Thickness::uniform(4.0)))
-                            .with_text("Quit")
-                            .with_font(font)
-                            .build(ctx);
-                        btn_quit_game
-                    }))
-                    .add_column(Column::stretch())
-                    .add_row(Row::strict(75.0))
-                    .add_row(Row::strict(75.0))
-                    .add_row(Row::strict(75.0))
-                    .add_row(Row::strict(75.0))
-                    .add_row(Row::strict(75.0))
-                    .build(ctx))
-                .build(ctx)))
-            .add_row(Row::stretch())
-            .add_row(Row::strict(500.0))
-            .add_row(Row::stretch())
-            .add_column(Column::stretch())
-            .add_column(Column::strict(400.0))
-            .add_column(Column::stretch())
-            .build(ctx);
+        let root: UINodeHandle = GridBuilder::new(
+            WidgetBuilder::new()
+                .with_width(frame_size.0 as f32)
+                .with_height(frame_size.1 as f32)
+                .with_child(
+                    WindowBuilder::new(WidgetBuilder::new().on_row(1).on_column(1))
+                        .can_resize(false)
+                        .can_minimize(false)
+                        .can_close(false)
+                        .with_title(WindowTitle::text("Rusty Shooter"))
+                        .with_content(
+                            GridBuilder::new(
+                                WidgetBuilder::new()
+                                    .with_margin(Thickness::uniform(20.0))
+                                    .with_child({
+                                        btn_new_game = ButtonBuilder::new(
+                                            WidgetBuilder::new()
+                                                .on_column(0)
+                                                .on_row(0)
+                                                .with_margin(Thickness::uniform(4.0)),
+                                        )
+                                        .with_text("New Game")
+                                        .with_font(font.clone())
+                                        .build(ctx);
+                                        btn_new_game
+                                    })
+                                    .with_child({
+                                        btn_save_game = ButtonBuilder::new(
+                                            WidgetBuilder::new()
+                                                .on_column(0)
+                                                .on_row(1)
+                                                .with_margin(Thickness::uniform(4.0)),
+                                        )
+                                        .with_text("Save Game")
+                                        .with_font(font.clone())
+                                        .build(ctx);
+                                        btn_save_game
+                                    })
+                                    .with_child({
+                                        btn_load_game = ButtonBuilder::new(
+                                            WidgetBuilder::new()
+                                                .on_column(0)
+                                                .on_row(2)
+                                                .with_margin(Thickness::uniform(4.0)),
+                                        )
+                                        .with_text("Load Game")
+                                        .with_font(font.clone())
+                                        .build(ctx);
+                                        btn_load_game
+                                    })
+                                    .with_child({
+                                        btn_settings = ButtonBuilder::new(
+                                            WidgetBuilder::new()
+                                                .on_column(0)
+                                                .on_row(3)
+                                                .with_margin(Thickness::uniform(4.0)),
+                                        )
+                                        .with_text("Settings")
+                                        .with_font(font.clone())
+                                        .build(ctx);
+                                        btn_settings
+                                    })
+                                    .with_child({
+                                        btn_quit_game = ButtonBuilder::new(
+                                            WidgetBuilder::new()
+                                                .on_column(0)
+                                                .on_row(4)
+                                                .with_margin(Thickness::uniform(4.0)),
+                                        )
+                                        .with_text("Quit")
+                                        .with_font(font)
+                                        .build(ctx);
+                                        btn_quit_game
+                                    }),
+                            )
+                            .add_column(Column::stretch())
+                            .add_row(Row::strict(75.0))
+                            .add_row(Row::strict(75.0))
+                            .add_row(Row::strict(75.0))
+                            .add_row(Row::strict(75.0))
+                            .add_row(Row::strict(75.0))
+                            .build(ctx),
+                        )
+                        .build(ctx),
+                ),
+        )
+        .add_row(Row::stretch())
+        .add_row(Row::strict(500.0))
+        .add_row(Row::stretch())
+        .add_column(Column::stretch())
+        .add_column(Column::strict(400.0))
+        .add_column(Column::stretch())
+        .build(ctx);
 
         Self {
             sender: sender.clone(),
@@ -162,7 +159,11 @@ impl Menu {
             btn_load_game,
             btn_quit_game,
             options_menu: OptionsMenu::new(engine, control_scheme, sender.clone()),
-            match_menu: MatchMenu::new(&mut engine.user_interface, &mut engine.resource_manager.lock().unwrap(), sender),
+            match_menu: MatchMenu::new(
+                &mut engine.user_interface,
+                &mut engine.resource_manager.lock().unwrap(),
+                sender,
+            ),
         }
     }
 
@@ -181,8 +182,12 @@ impl Menu {
     pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             if let WindowEvent::Resized(new_size) = event {
-                engine.user_interface.send_message(WidgetMessage::width(self.root, new_size.width as f32));
-                engine.user_interface.send_message(WidgetMessage::height(self.root, new_size.height as f32));
+                engine
+                    .user_interface
+                    .send_message(WidgetMessage::width(self.root, new_size.width as f32));
+                engine
+                    .user_interface
+                    .send_message(WidgetMessage::height(self.root, new_size.height as f32));
             }
         }
 
@@ -193,23 +198,25 @@ impl Menu {
         if let UiMessageData::Button(msg) = &message.data {
             if let ButtonMessage::Click = msg {
                 if message.destination == self.btn_new_game {
-                    engine.user_interface.send_message(WindowMessage::open(self.match_menu.window));
-                    engine.user_interface.send_message(WidgetMessage::center(self.match_menu.window));
+                    engine
+                        .user_interface
+                        .send_message(WindowMessage::open(self.match_menu.window));
+                    engine
+                        .user_interface
+                        .send_message(WidgetMessage::center(self.match_menu.window));
                 } else if message.destination == self.btn_save_game {
-                    self.sender
-                        .send(Message::SaveGame)
-                        .unwrap();
+                    self.sender.send(Message::SaveGame).unwrap();
                 } else if message.destination == self.btn_load_game {
-                    self.sender
-                        .send(Message::LoadGame)
-                        .unwrap();
+                    self.sender.send(Message::LoadGame).unwrap();
                 } else if message.destination == self.btn_quit_game {
-                    self.sender
-                        .send(Message::QuitGame)
-                        .unwrap();
+                    self.sender.send(Message::QuitGame).unwrap();
                 } else if message.destination == self.btn_settings {
-                    engine.user_interface.send_message(WindowMessage::open(self.options_menu.window));
-                    engine.user_interface.send_message(WidgetMessage::center(self.options_menu.window));
+                    engine
+                        .user_interface
+                        .send_message(WindowMessage::open(self.options_menu.window));
+                    engine
+                        .user_interface
+                        .send_message(WidgetMessage::center(self.options_menu.window));
                 }
             }
         }

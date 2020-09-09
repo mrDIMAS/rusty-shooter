@@ -1,27 +1,10 @@
 use crate::{
-    bot::Bot,
-    player::Player,
-    character::Character,
-    level::UpdateContext,
-    message::Message,
+    bot::Bot, character::Character, level::UpdateContext, message::Message, player::Player,
 };
-use rg3d::{
-    core::{
-        pool::{
-            Handle,
-            Pool,
-            PoolIterator,
-            PoolIteratorMut,
-            PoolPairIterator,
-            PoolPairIteratorMut,
-        },
-        visitor::{
-            Visit,
-            Visitor,
-            VisitResult,
-        },
-        math::vec3::Vec3,
-    },
+use rg3d::core::{
+    math::vec3::Vec3,
+    pool::{Handle, Pool, PoolIterator, PoolIteratorMut, PoolPairIterator, PoolPairIteratorMut},
+    visitor::{Visit, VisitResult, Visitor},
 };
 use rg3d::scene::Scene;
 use std::ops::{Deref, DerefMut};
@@ -52,7 +35,7 @@ impl Actor {
         match id {
             0 => Ok(Actor::Player(Default::default())),
             1 => Ok(Actor::Bot(Default::default())),
-            _ => Err(format!("Unknown actor kind {}", id))
+            _ => Err(format!("Unknown actor kind {}", id)),
         }
     }
 
@@ -104,7 +87,7 @@ impl Visit for Actor {
 
         match self {
             Actor::Player(player) => player.visit("Data", visitor)?,
-            Actor::Bot(bot) => bot.visit("Data", visitor)?
+            Actor::Bot(bot) => bot.visit("Data", visitor)?,
         }
 
         visitor.leave_region()
@@ -182,20 +165,24 @@ impl ActorContainer {
 
             match actor {
                 Actor::Bot(bot) => bot.update(handle, context, &self.target_descriptors),
-                Actor::Player(player) => player.update(context)
+                Actor::Player(player) => player.update(context),
             }
             if !is_dead {
                 for (item_handle, item) in context.items.pair_iter() {
                     let body = context.scene.physics.borrow_body(actor.get_body());
-                    let distance = (context.scene.graph[item.get_pivot()].global_position() - body.get_position()).len();
+                    let distance = (context.scene.graph[item.get_pivot()].global_position()
+                        - body.get_position())
+                    .len();
                     if distance < 1.25 && !item.is_picked_up() {
-                        actor.sender
+                        actor
+                            .sender
                             .as_ref()
                             .unwrap()
                             .send(Message::PickUpItem {
                                 actor: handle,
                                 item: item_handle,
-                            }).unwrap();
+                            })
+                            .unwrap();
                     }
                 }
             }
@@ -217,13 +204,12 @@ impl ActorContainer {
 
             if actor.can_be_removed() {
                 // Abuse the fact that actor has sender and use it to send message.
-                actor.sender
+                actor
+                    .sender
                     .clone()
                     .as_ref()
                     .unwrap()
-                    .send(Message::RespawnActor {
-                        actor: handle
-                    })
+                    .send(Message::RespawnActor { actor: handle })
                     .unwrap();
             }
         }

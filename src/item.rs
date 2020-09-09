@@ -1,32 +1,14 @@
+use crate::{effects::EffectKind, message::Message, GameTime};
 use rg3d::{
     core::{
-        pool::{
-            Handle,
-            Pool,
-            PoolPairIterator,
-            PoolIterator,
-        },
-        visitor::{Visit, Visitor, VisitResult},
         math::vec3::Vec3,
+        pool::{Handle, Pool, PoolIterator, PoolPairIterator},
+        visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    scene::{
-        base::BaseBuilder,
-        Scene,
-        node::Node,
-        transform::TransformBuilder,
-        graph::Graph,
-    },
+    scene::{base::BaseBuilder, graph::Graph, node::Node, transform::TransformBuilder, Scene},
 };
-use std::{
-    path::Path,
-    sync::mpsc::Sender,
-};
-use crate::{
-    GameTime,
-    message::Message,
-    effects::EffectKind,
-};
+use std::{path::Path, sync::mpsc::Sender};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ItemKind {
@@ -41,7 +23,7 @@ pub enum ItemKind {
     PlasmaGun,
     Ak47,
     M4,
-    RocketLauncher
+    RocketLauncher,
 }
 
 impl ItemKind {
@@ -55,7 +37,7 @@ impl ItemKind {
             5 => Ok(ItemKind::Ak47),
             6 => Ok(ItemKind::M4),
             7 => Ok(ItemKind::RocketLauncher),
-            _ => Err(format!("Unknown item kind {}", id))
+            _ => Err(format!("Unknown item kind {}", id)),
         }
     }
 
@@ -190,18 +172,27 @@ impl Item {
     ) -> Self {
         let definition = Self::get_definition(kind);
 
-        let model = resource_manager.request_model(Path::new(definition.model))
+        let model = resource_manager
+            .request_model(Path::new(definition.model))
             .unwrap()
             .lock()
             .unwrap()
             .instantiate_geometry(scene);
 
-        let pivot = scene.graph.add_node(Node::Base(BaseBuilder::new()
-            .with_local_transform(TransformBuilder::new()
-                .with_local_position(position)
-                .with_local_scale(Vec3::new(definition.scale, definition.scale, definition.scale))
-                .build())
-            .build()));
+        let pivot = scene.graph.add_node(Node::Base(
+            BaseBuilder::new()
+                .with_local_transform(
+                    TransformBuilder::new()
+                        .with_local_position(position)
+                        .with_local_scale(Vec3::new(
+                            definition.scale,
+                            definition.scale,
+                            definition.scale,
+                        ))
+                        .build(),
+                )
+                .build(),
+        ));
 
         scene.graph.link_nodes(model, pivot);
 
@@ -241,10 +232,14 @@ impl Item {
             if self.reactivation_timer <= 0.0 {
                 self.active = true;
 
-                self.sender.as_ref().unwrap().send(Message::CreateEffect {
-                    kind: EffectKind::ItemAppear,
-                    position,
-                }).unwrap();
+                self.sender
+                    .as_ref()
+                    .unwrap()
+                    .send(Message::CreateEffect {
+                        kind: EffectKind::ItemAppear,
+                        position,
+                    })
+                    .unwrap();
             }
         }
     }
@@ -294,7 +289,8 @@ impl Visit for Item {
         self.offset.visit("Offset", visitor)?;
         self.offset_factor.visit("OffsetFactor", visitor)?;
         self.dest_offset.visit("DestOffset", visitor)?;
-        self.reactivation_timer.visit("ReactivationTimer", visitor)?;
+        self.reactivation_timer
+            .visit("ReactivationTimer", visitor)?;
         self.active.visit("Active", visitor)?;
         self.lifetime.visit("Lifetime", visitor)?;
 
@@ -303,7 +299,7 @@ impl Visit for Item {
 }
 
 pub struct ItemContainer {
-    pool: Pool<Item>
+    pool: Pool<Item>,
 }
 
 impl Default for ItemContainer {
@@ -324,9 +320,7 @@ impl Visit for ItemContainer {
 
 impl ItemContainer {
     pub fn new() -> Self {
-        Self {
-            pool: Pool::new()
-        }
+        Self { pool: Pool::new() }
     }
 
     pub fn add(&mut self, item: Item) -> Handle<Item> {

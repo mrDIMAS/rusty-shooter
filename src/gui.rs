@@ -52,7 +52,7 @@ pub fn create_scroll_bar(
         ImageBuilder::new(
             WidgetBuilder::new().with_background(Brush::Solid(Color::opaque(60, 60, 60))),
         )
-        .with_opt_texture(utils::into_any_arc(
+        .with_opt_texture(utils::into_gui_texture(
             resource_manager.request_texture("data/ui/circle.png", TextureKind::RGBA8),
         ))
         .build(ctx),
@@ -80,7 +80,7 @@ pub fn create_check_box(
     .checked(Some(checked))
     .with_check_mark(
         ImageBuilder::new(WidgetBuilder::new())
-            .with_opt_texture(utils::into_any_arc(
+            .with_opt_texture(utils::into_gui_texture(
                 resource_manager.request_texture("data/ui/check_mark.png", TextureKind::RGBA8),
             ))
             .build(ctx),

@@ -180,9 +180,9 @@ impl MatchMenu {
     pub fn handle_ui_event(&mut self, engine: &mut GameEngine, message: &GuiMessage) {
         let ui = &mut engine.user_interface;
 
-        if let UiMessageData::Button(msg) = &message.data {
+        if let UiMessageData::Button(msg) = message.data() {
             if let ButtonMessage::Click = msg {
-                if message.destination == self.start_button {
+                if message.destination() == self.start_button {
                     let time_limit_minutes =
                         if let UINode::ScrollBar(scroll_bar) = ui.node(self.sb_time_limit) {
                             scroll_bar.value()

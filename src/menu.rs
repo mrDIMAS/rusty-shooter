@@ -2,6 +2,8 @@ use crate::{
     control_scheme::ControlScheme, match_menu::MatchMenu, message::Message,
     options_menu::OptionsMenu, GameEngine, Gui, GuiMessage, UINodeHandle,
 };
+use rg3d::gui::message::MessageDirection;
+use rg3d::gui::ttf::SharedFont;
 use rg3d::{
     event::{Event, WindowEvent},
     gui::{
@@ -47,7 +49,7 @@ impl Menu {
             Font::default_char_set(),
         )
         .unwrap();
-        let font = Arc::new(Mutex::new(font));
+        let font = SharedFont(Arc::new(Mutex::new(font)));
 
         let ctx = &mut engine.user_interface.build_ctx();
 
@@ -168,10 +170,20 @@ impl Menu {
     }
 
     pub fn set_visible(&mut self, ui: &mut Gui, visible: bool) {
-        ui.send_message(WidgetMessage::visibility(self.root, visible));
+        ui.send_message(WidgetMessage::visibility(
+            self.root,
+            MessageDirection::ToWidget,
+            visible,
+        ));
         if !visible {
-            ui.send_message(WindowMessage::close(self.options_menu.window));
-            ui.send_message(WindowMessage::close(self.match_menu.window));
+            ui.send_message(WindowMessage::close(
+                self.options_menu.window,
+                MessageDirection::ToWidget,
+            ));
+            ui.send_message(WindowMessage::close(
+                self.match_menu.window,
+                MessageDirection::ToWidget,
+            ));
         }
     }
 
@@ -182,12 +194,16 @@ impl Menu {
     pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             if let WindowEvent::Resized(new_size) = event {
-                engine
-                    .user_interface
-                    .send_message(WidgetMessage::width(self.root, new_size.width as f32));
-                engine
-                    .user_interface
-                    .send_message(WidgetMessage::height(self.root, new_size.height as f32));
+                engine.user_interface.send_message(WidgetMessage::width(
+                    self.root,
+                    MessageDirection::ToWidget,
+                    new_size.width as f32,
+                ));
+                engine.user_interface.send_message(WidgetMessage::height(
+                    self.root,
+                    MessageDirection::ToWidget,
+                    new_size.height as f32,
+                ));
             }
         }
 
@@ -195,28 +211,32 @@ impl Menu {
     }
 
     pub fn handle_ui_event(&mut self, engine: &mut GameEngine, message: &GuiMessage) {
-        if let UiMessageData::Button(msg) = &message.data {
+        if let UiMessageData::Button(msg) = message.data() {
             if let ButtonMessage::Click = msg {
-                if message.destination == self.btn_new_game {
-                    engine
-                        .user_interface
-                        .send_message(WindowMessage::open(self.match_menu.window));
-                    engine
-                        .user_interface
-                        .send_message(WidgetMessage::center(self.match_menu.window));
-                } else if message.destination == self.btn_save_game {
+                if message.destination() == self.btn_new_game {
+                    engine.user_interface.send_message(WindowMessage::open(
+                        self.match_menu.window,
+                        MessageDirection::ToWidget,
+                    ));
+                    engine.user_interface.send_message(WidgetMessage::center(
+                        self.match_menu.window,
+                        MessageDirection::ToWidget,
+                    ));
+                } else if message.destination() == self.btn_save_game {
                     self.sender.send(Message::SaveGame).unwrap();
-                } else if message.destination == self.btn_load_game {
+                } else if message.destination() == self.btn_load_game {
                     self.sender.send(Message::LoadGame).unwrap();
-                } else if message.destination == self.btn_quit_game {
+                } else if message.destination() == self.btn_quit_game {
                     self.sender.send(Message::QuitGame).unwrap();
-                } else if message.destination == self.btn_settings {
-                    engine
-                        .user_interface
-                        .send_message(WindowMessage::open(self.options_menu.window));
-                    engine
-                        .user_interface
-                        .send_message(WidgetMessage::center(self.options_menu.window));
+                } else if message.destination() == self.btn_settings {
+                    engine.user_interface.send_message(WindowMessage::open(
+                        self.options_menu.window,
+                        MessageDirection::ToWidget,
+                    ));
+                    engine.user_interface.send_message(WidgetMessage::center(
+                        self.options_menu.window,
+                        MessageDirection::ToWidget,
+                    ));
                 }
             }
         }

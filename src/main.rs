@@ -28,6 +28,7 @@ use crate::{
     message::Message,
 };
 use rg3d::engine::resource_manager::ResourceManager;
+use rg3d::gui::message::MessageDirection;
 use rg3d::{
     core::{
         color::Color,
@@ -642,6 +643,7 @@ impl Game {
 
         self.engine.user_interface.send_message(TextMessage::text(
             self.debug_text,
+            MessageDirection::ToWidget,
             self.debug_string.clone(),
         ));
     }

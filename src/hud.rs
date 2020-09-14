@@ -3,6 +3,8 @@ use crate::{
     message::Message,
     GameEngine, GameTime, Gui, MatchOptions, UINodeHandle,
 };
+use rg3d::gui::message::MessageDirection;
+use rg3d::gui::ttf::SharedFont;
 use rg3d::{
     core::color::Color,
     event::{Event, WindowEvent},
@@ -58,7 +60,7 @@ impl Hud {
             Font::default_char_set(),
         )
         .unwrap();
-        let font = Arc::new(Mutex::new(font));
+        let font = SharedFont(Arc::new(Mutex::new(font)));
 
         let health;
         let armor;
@@ -84,7 +86,7 @@ impl Hud {
                             .on_row(0)
                             .on_column(1),
                     )
-                    .with_opt_texture(utils::into_any_arc(
+                    .with_opt_texture(utils::into_gui_texture(
                         resource_manager.request_texture(
                             Path::new("data/ui/crosshair.tga"),
                             TextureKind::RGBA8,
@@ -210,7 +212,7 @@ impl Hud {
                                 ImageBuilder::new(
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
-                                .with_opt_texture(utils::into_any_arc(
+                                .with_opt_texture(utils::into_gui_texture(
                                     resource_manager.request_texture(
                                         Path::new("data/ui/health_icon.png"),
                                         TextureKind::RGBA8,
@@ -253,7 +255,7 @@ impl Hud {
                                 ImageBuilder::new(
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
-                                .with_opt_texture(utils::into_any_arc(
+                                .with_opt_texture(utils::into_gui_texture(
                                     resource_manager.request_texture(
                                         Path::new("data/ui/ammo_icon.png"),
                                         TextureKind::RGBA8,
@@ -296,7 +298,7 @@ impl Hud {
                                 ImageBuilder::new(
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
-                                .with_opt_texture(utils::into_any_arc(
+                                .with_opt_texture(utils::into_gui_texture(
                                     resource_manager.request_texture(
                                         Path::new("data/ui/shield_icon.png"),
                                         TextureKind::RGBA8,
@@ -387,19 +389,35 @@ impl Hud {
     }
 
     pub fn set_health(&mut self, ui: &mut Gui, health: f32) {
-        ui.send_message(TextMessage::text(self.health, format!("{}", health)));
+        ui.send_message(TextMessage::text(
+            self.health,
+            MessageDirection::ToWidget,
+            format!("{}", health),
+        ));
     }
 
     pub fn set_armor(&mut self, ui: &mut Gui, armor: f32) {
-        ui.send_message(TextMessage::text(self.armor, format!("{}", armor)));
+        ui.send_message(TextMessage::text(
+            self.armor,
+            MessageDirection::ToWidget,
+            format!("{}", armor),
+        ));
     }
 
     pub fn set_ammo(&mut self, ui: &mut Gui, ammo: u32) {
-        ui.send_message(TextMessage::text(self.ammo, format!("{}", ammo)));
+        ui.send_message(TextMessage::text(
+            self.ammo,
+            MessageDirection::ToWidget,
+            format!("{}", ammo),
+        ));
     }
 
     pub fn set_visible(&mut self, ui: &mut Gui, visible: bool) {
-        ui.send_message(WidgetMessage::visibility(self.root, visible));
+        ui.send_message(WidgetMessage::visibility(
+            self.root,
+            MessageDirection::ToWidget,
+            visible,
+        ));
     }
 
     pub fn set_time(&mut self, ui: &mut Gui, time: f32) {
@@ -409,12 +427,17 @@ impl Hud {
 
         ui.send_message(TextMessage::text(
             self.time,
+            MessageDirection::ToWidget,
             format!("{:02}:{:02}:{:02}", hours, minutes, seconds),
         ));
     }
 
     pub fn set_is_died(&mut self, ui: &mut Gui, is_died: bool) {
-        ui.send_message(WidgetMessage::visibility(self.died, is_died));
+        ui.send_message(WidgetMessage::visibility(
+            self.died,
+            MessageDirection::ToWidget,
+            is_died,
+        ));
     }
 
     pub fn add_message<P: AsRef<str>>(&mut self, message: P) {
@@ -424,12 +447,16 @@ impl Hud {
     pub fn process_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             if let WindowEvent::Resized(new_size) = event {
-                engine
-                    .user_interface
-                    .send_message(WidgetMessage::width(self.root, new_size.width as f32));
-                engine
-                    .user_interface
-                    .send_message(WidgetMessage::height(self.root, new_size.height as f32));
+                engine.user_interface.send_message(WidgetMessage::width(
+                    self.root,
+                    MessageDirection::ToWidget,
+                    new_size.width as f32,
+                ));
+                engine.user_interface.send_message(WidgetMessage::height(
+                    self.root,
+                    MessageDirection::ToWidget,
+                    new_size.height as f32,
+                ));
             }
         }
 
@@ -445,10 +472,18 @@ impl Hud {
 
         if self.message_timeout <= 0.0 {
             if let Some(message) = self.message_queue.pop_front() {
-                ui.send_message(TextMessage::text(self.message, message));
+                ui.send_message(TextMessage::text(
+                    self.message,
+                    MessageDirection::ToWidget,
+                    message,
+                ));
                 self.message_timeout = 1.25;
             } else {
-                ui.send_message(TextMessage::text(self.message, Default::default()));
+                ui.send_message(TextMessage::text(
+                    self.message,
+                    MessageDirection::ToWidget,
+                    Default::default(),
+                ));
             }
         }
     }
@@ -464,6 +499,7 @@ impl Hud {
         if let Some((leader_name, leader_score)) = leader_board.highest_personal_score(None) {
             ui.send_message(TextMessage::text(
                 self.first_score,
+                MessageDirection::ToWidget,
                 format!("{}", leader_score),
             ));
 
@@ -471,6 +507,7 @@ impl Hud {
             {
                 ui.send_message(TextMessage::text(
                     self.second_score,
+                    MessageDirection::ToWidget,
                     format!("{}", second_score),
                 ));
             }
@@ -481,7 +518,11 @@ impl Hud {
             MatchOptions::TeamDeathMatch(tdm) => tdm.team_frag_limit,
             MatchOptions::CaptureTheFlag(ctf) => ctf.flag_limit,
         };
-        ui.send_message(TextMessage::text(self.match_limit, format!("{}", limit)));
+        ui.send_message(TextMessage::text(
+            self.match_limit,
+            MessageDirection::ToWidget,
+            format!("{}", limit),
+        ));
     }
 
     pub fn handle_message(

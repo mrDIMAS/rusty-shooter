@@ -5,6 +5,7 @@ use crate::{
     message::Message,
     GameEngine, GuiMessage, UINodeHandle,
 };
+use rg3d::gui::message::MessageDirection;
 use rg3d::{
     event::{Event, MouseButton, MouseScrollDelta, WindowEvent},
     gui::{
@@ -647,7 +648,11 @@ impl OptionsMenu {
         let settings = engine.renderer.get_quality_settings();
 
         let sync_check_box = |handle: UINodeHandle, value: bool| {
-            ui.send_message(CheckBoxMessage::check(handle, Some(value)));
+            ui.send_message(CheckBoxMessage::checked(
+                handle,
+                MessageDirection::ToWidget,
+                Some(value),
+            ));
         };
         sync_check_box(self.cb_spot_shadows, settings.spot_shadows_enabled);
         sync_check_box(self.cb_soft_spot_shadows, settings.spot_soft_shadows);
@@ -666,7 +671,11 @@ impl OptionsMenu {
         sync_check_box(self.cb_use_hrtf, is_hrtf);
 
         let sync_scroll_bar = |handle: UINodeHandle, value: f32| {
-            ui.send_message(ScrollBarMessage::value(handle, value));
+            ui.send_message(ScrollBarMessage::value(
+                handle,
+                MessageDirection::ToWidget,
+                value,
+            ));
         };
         sync_scroll_bar(
             self.sb_point_shadow_distance,
@@ -687,6 +696,7 @@ impl OptionsMenu {
             if let UINode::Button(button) = ui.node(*btn) {
                 ui.send_message(TextMessage::text(
                     button.content(),
+                    MessageDirection::ToWidget,
                     def.button.name().to_owned(),
                 ));
             }
@@ -735,6 +745,7 @@ impl OptionsMenu {
                     {
                         engine.user_interface.send_message(TextMessage::text(
                             button.content(),
+                            MessageDirection::ToWidget,
                             control_button.name().to_owned(),
                         ));
                     }
@@ -753,22 +764,22 @@ impl OptionsMenu {
         let old_settings = engine.renderer.get_quality_settings();
         let mut settings = old_settings;
 
-        match &message.data {
+        match message.data() {
             UiMessageData::ScrollBar(prop) => {
                 if let ScrollBarMessage::Value(new_value) = prop {
-                    if message.destination == self.sb_sound_volume {
+                    if message.destination() == self.sb_sound_volume {
                         engine
                             .sound_context
                             .lock()
                             .unwrap()
                             .set_master_gain(*new_value)
-                    } else if message.destination == self.sb_point_shadow_distance {
+                    } else if message.destination() == self.sb_point_shadow_distance {
                         settings.point_shadows_distance = *new_value;
-                    } else if message.destination == self.sb_spot_shadow_distance {
+                    } else if message.destination() == self.sb_spot_shadow_distance {
                         settings.spot_shadows_distance = *new_value;
-                    } else if message.destination == self.sb_mouse_sens {
+                    } else if message.destination() == self.sb_mouse_sens {
                         self.control_scheme.borrow_mut().mouse_sens = *new_value;
-                    } else if message.destination == self.sb_music_volume {
+                    } else if message.destination() == self.sb_music_volume {
                         self.sender
                             .send(Message::SetMusicVolume { volume: *new_value })
                             .unwrap();
@@ -777,7 +788,7 @@ impl OptionsMenu {
             }
             UiMessageData::ListView(msg) => {
                 if let ListViewMessage::SelectionChanged(new_value) = msg {
-                    if message.destination == self.lb_video_modes {
+                    if message.destination() == self.lb_video_modes {
                         if let Some(index) = new_value {
                             let video_mode = self.video_modes[*index].clone();
                             engine
@@ -790,38 +801,39 @@ impl OptionsMenu {
             UiMessageData::CheckBox(msg) => {
                 if let CheckBoxMessage::Check(value) = msg {
                     let mut control_scheme = self.control_scheme.borrow_mut();
-                    if message.destination == self.cb_point_shadows {
+                    if message.destination() == self.cb_point_shadows {
                         settings.point_shadows_enabled = value.unwrap_or(false);
-                    } else if message.destination == self.cb_spot_shadows {
+                    } else if message.destination() == self.cb_spot_shadows {
                         settings.spot_shadows_enabled = value.unwrap_or(false);
-                    } else if message.destination == self.cb_soft_spot_shadows {
+                    } else if message.destination() == self.cb_soft_spot_shadows {
                         settings.spot_soft_shadows = value.unwrap_or(false);
-                    } else if message.destination == self.cb_soft_point_shadows {
+                    } else if message.destination() == self.cb_soft_point_shadows {
                         settings.point_soft_shadows = value.unwrap_or(false);
-                    } else if message.destination == self.cb_mouse_y_inverse {
+                    } else if message.destination() == self.cb_mouse_y_inverse {
                         control_scheme.mouse_y_inverse = value.unwrap_or(false);
-                    } else if message.destination == self.cb_smooth_mouse {
+                    } else if message.destination() == self.cb_smooth_mouse {
                         control_scheme.smooth_mouse = value.unwrap_or(false);
-                    } else if message.destination == self.cb_shake_camera {
+                    } else if message.destination() == self.cb_shake_camera {
                         control_scheme.shake_camera = value.unwrap_or(false);
                     }
                 }
             }
             UiMessageData::Button(msg) => {
                 if let ButtonMessage::Click = msg {
-                    if message.destination == self.btn_reset_control_scheme {
+                    if message.destination() == self.btn_reset_control_scheme {
                         self.control_scheme.borrow_mut().reset();
                         self.sync_to_model(engine);
-                    } else if message.destination == self.btn_reset_audio_settings {
+                    } else if message.destination() == self.btn_reset_audio_settings {
                         engine.sound_context.lock().unwrap().set_master_gain(1.0);
                         self.sync_to_model(engine);
                     }
 
                     for (i, button) in self.control_scheme_buttons.iter().enumerate() {
-                        if message.destination == *button {
+                        if message.destination() == *button {
                             if let UINode::Button(button) = engine.user_interface.node(*button) {
                                 engine.user_interface.send_message(TextMessage::text(
                                     button.content(),
+                                    MessageDirection::ToWidget,
                                     "[WAITING INPUT]".to_owned(),
                                 ))
                             }

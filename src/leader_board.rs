@@ -1,4 +1,5 @@
 use crate::{character::Team, message::Message, GameEngine, Gui, MatchOptions, UINodeHandle};
+use rg3d::gui::message::MessageDirection;
 use rg3d::{
     core::{
         color::Color,
@@ -424,25 +425,37 @@ impl LeaderBoardUI {
 
         if let Some(table) = ctx[self.root].children().first() {
             let table = *table;
-            ui.send_message(WidgetMessage::remove(table));
+            ui.send_message(WidgetMessage::remove(table, MessageDirection::ToWidget));
         }
-        ui.send_message(WidgetMessage::link(table, self.root));
+        ui.send_message(WidgetMessage::link(
+            table,
+            MessageDirection::ToWidget,
+            self.root,
+        ));
     }
 
     pub fn set_visible(&self, visible: bool, ui: &mut Gui) {
-        ui.send_message(WidgetMessage::visibility(self.root, visible));
+        ui.send_message(WidgetMessage::visibility(
+            self.root,
+            MessageDirection::ToWidget,
+            visible,
+        ));
     }
 
     pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             match event {
                 WindowEvent::Resized(new_size) => {
-                    engine
-                        .user_interface
-                        .send_message(WidgetMessage::width(self.root, new_size.width as f32));
-                    engine
-                        .user_interface
-                        .send_message(WidgetMessage::height(self.root, new_size.height as f32));
+                    engine.user_interface.send_message(WidgetMessage::width(
+                        self.root,
+                        MessageDirection::ToWidget,
+                        new_size.width as f32,
+                    ));
+                    engine.user_interface.send_message(WidgetMessage::height(
+                        self.root,
+                        MessageDirection::ToWidget,
+                        new_size.height as f32,
+                    ));
                 }
                 WindowEvent::KeyboardInput { input, .. } => {
                     if let Some(vk) = input.virtual_keycode {

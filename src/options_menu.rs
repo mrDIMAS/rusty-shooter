@@ -43,6 +43,7 @@ pub struct OptionsMenu {
     cb_soft_point_shadows: UINodeHandle,
     sb_point_shadow_distance: UINodeHandle,
     sb_spot_shadow_distance: UINodeHandle,
+    cb_use_light_scatter: UINodeHandle,
     video_modes: Vec<VideoMode>,
     control_scheme: Rc<RefCell<ControlScheme>>,
     control_scheme_buttons: Vec<UINodeHandle>,
@@ -96,6 +97,7 @@ impl OptionsMenu {
         let mut control_scheme_buttons = Vec::new();
         let cb_use_hrtf;
         let btn_reset_audio_settings;
+        let cb_use_light_scatter;
         let tab_control = TabControlBuilder::new(WidgetBuilder::new())
             .with_tab(TabDefinition {
                 header: {
@@ -334,9 +336,31 @@ impl OptionsMenu {
                                     },
                                 );
                                 sb_point_shadow_distance
+                            })
+                            .with_child(
+                                TextBuilder::new(
+                                    WidgetBuilder::new()
+                                        .on_row(8)
+                                        .on_column(0)
+                                        .with_margin(margin),
+                                )
+                                .with_text("Use Light Scatter")
+                                .with_vertical_text_alignment(VerticalAlignment::Center)
+                                .build(ctx),
+                            )
+                            .with_child({
+                                cb_use_light_scatter = create_check_box(
+                                    ctx,
+                                    resource_manager,
+                                    8,
+                                    1,
+                                    settings.light_scatter_enabled,
+                                );
+                                cb_use_light_scatter
                             }),
                     )
                     .add_row(Row::strict(200.0))
+                    .add_row(common_row)
                     .add_row(common_row)
                     .add_row(common_row)
                     .add_row(common_row)
@@ -639,6 +663,7 @@ impl OptionsMenu {
             btn_reset_control_scheme,
             cb_use_hrtf,
             btn_reset_audio_settings,
+            cb_use_light_scatter,
         }
     }
 
@@ -658,6 +683,7 @@ impl OptionsMenu {
         sync_check_box(self.cb_soft_spot_shadows, settings.spot_soft_shadows);
         sync_check_box(self.cb_point_shadows, settings.point_shadows_enabled);
         sync_check_box(self.cb_soft_point_shadows, settings.point_soft_shadows);
+        sync_check_box(self.cb_use_light_scatter, settings.light_scatter_enabled);
         sync_check_box(self.cb_mouse_y_inverse, control_scheme.mouse_y_inverse);
         sync_check_box(self.cb_smooth_mouse, control_scheme.smooth_mouse);
         sync_check_box(self.cb_shake_camera, control_scheme.shake_camera);
@@ -800,21 +826,24 @@ impl OptionsMenu {
             }
             UiMessageData::CheckBox(msg) => {
                 if let CheckBoxMessage::Check(value) = msg {
+                    let value = value.unwrap_or(false);
                     let mut control_scheme = self.control_scheme.borrow_mut();
                     if message.destination() == self.cb_point_shadows {
-                        settings.point_shadows_enabled = value.unwrap_or(false);
+                        settings.point_shadows_enabled = value;
                     } else if message.destination() == self.cb_spot_shadows {
-                        settings.spot_shadows_enabled = value.unwrap_or(false);
+                        settings.spot_shadows_enabled = value;
                     } else if message.destination() == self.cb_soft_spot_shadows {
-                        settings.spot_soft_shadows = value.unwrap_or(false);
+                        settings.spot_soft_shadows = value;
                     } else if message.destination() == self.cb_soft_point_shadows {
-                        settings.point_soft_shadows = value.unwrap_or(false);
+                        settings.point_soft_shadows = value;
                     } else if message.destination() == self.cb_mouse_y_inverse {
-                        control_scheme.mouse_y_inverse = value.unwrap_or(false);
+                        control_scheme.mouse_y_inverse = value;
                     } else if message.destination() == self.cb_smooth_mouse {
-                        control_scheme.smooth_mouse = value.unwrap_or(false);
+                        control_scheme.smooth_mouse = value;
                     } else if message.destination() == self.cb_shake_camera {
-                        control_scheme.shake_camera = value.unwrap_or(false);
+                        control_scheme.shake_camera = value;
+                    } else if message.destination() == self.cb_use_light_scatter {
+                        settings.light_scatter_enabled = value;
                     }
                 }
             }

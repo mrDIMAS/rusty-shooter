@@ -120,7 +120,7 @@ impl Projectile {
             ProjectileKind::Bullet => {
                 static DEFINITION: ProjectileDefinition = ProjectileDefinition {
                     damage: 15.0,
-                    speed: 0.75,
+                    speed: 5.0,
                     lifetime: 10.0,
                     is_kinematic: true,
                     impact_sound: "data/sounds/bullet_impact_concrete.ogg",

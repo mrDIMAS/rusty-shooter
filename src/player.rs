@@ -249,16 +249,16 @@ impl Player {
         let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
 
         let mut velocity = Vec3::ZERO;
-        if self.controller.move_forward {
+        if self.controller.move_forward && has_ground_contact {
             velocity += look;
         }
-        if self.controller.move_backward {
+        if self.controller.move_backward && has_ground_contact {
             velocity -= look;
         }
-        if self.controller.move_left {
+        if self.controller.move_left && has_ground_contact {
             velocity += side;
         }
-        if self.controller.move_right {
+        if self.controller.move_right && has_ground_contact {
             velocity -= side;
         }
 
@@ -273,12 +273,13 @@ impl Player {
             body.set_x_velocity(normalized_velocity.x * self.move_speed * speed_mult);
             body.set_z_velocity(normalized_velocity.z * self.move_speed * speed_mult);
 
-            self.weapon_dest_offset.x = 0.01 * (self.weapon_shake_factor * 0.5).cos();
-            self.weapon_dest_offset.y = 0.005 * self.weapon_shake_factor.sin();
+            let k = (context.time.elapsed * 15.0) as f32;
+
+            self.weapon_dest_offset.x = 0.005 * (-1.0 * (-(k - 2.0)).sin() - 0.3 * (k - 2.0)).sin();
+            self.weapon_dest_offset.y = 0.005 * (-1.0 * (-(k - 5.0)).sin() - 0.6 * (k - 5.0)).sin();
             self.weapon_shake_factor += 0.23;
 
             if has_ground_contact {
-                let k = (context.time.elapsed * 15.0) as f32;
                 self.camera_dest_offset.x = 0.05 * (k * 0.5).cos();
                 self.camera_dest_offset.y = 0.1 * (-1.5 * (-k).sin() - k).sin();
                 self.path_len += 0.1;

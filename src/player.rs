@@ -185,7 +185,7 @@ impl Player {
         let mut weapon_base_pivot = Node::Base(Default::default());
         weapon_base_pivot
             .local_transform_mut()
-            .set_position(Vec3::new(-0.065, -0.052, 0.02));
+            .set_position(Vec3::new(-0.035, -0.052, 0.02));
         let weapon_base_pivot_handle = scene.graph.add_node(weapon_base_pivot);
         scene
             .graph
@@ -249,18 +249,17 @@ impl Player {
         let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
 
         let mut velocity = Vec3::ZERO;
-        if self.controller.move_forward && has_ground_contact {
-            velocity += look;
-        }
-        if self.controller.move_backward && has_ground_contact {
-            velocity -= look;
-        }
-        if self.controller.move_left && has_ground_contact {
-            velocity += side;
-        }
-        if self.controller.move_right && has_ground_contact {
-            velocity -= side;
-        }
+	if has_ground_contact {
+            if self.controller.move_forward {
+		velocity += look;
+            } else if self.controller.move_backward {
+		velocity -= look;
+            } else if self.controller.move_left {
+		velocity += side;
+            } else if self.controller.move_right {
+		velocity -= side;
+            }
+	}
 
         let speed_mult = if self.controller.run {
             self.run_speed_multiplier
@@ -275,13 +274,20 @@ impl Player {
 
             let k = (context.time.elapsed * 15.0) as f32;
 
-            self.weapon_dest_offset.x = 0.005 * (-1.0 * (-(k - 2.0)).sin() - 0.3 * (k - 2.0)).sin();
-            self.weapon_dest_offset.y = 0.005 * (-1.0 * (-(k - 5.0)).sin() - 0.6 * (k - 5.0)).sin();
+	    // Function that tries to simulate the natural up-and-down shaking of the line of sight when you move
+	    let bob_function = | a: f32, b: f32, c: f32, d: f32 | -> f32 {
+		a * (b * (-c).sin() - d * c).sin()
+	    };
+
+	    // Weapon bobbing animation
+            self.weapon_dest_offset.x = 0.0;
+            self.weapon_dest_offset.y = bob_function((0.0001 * self.move_speed).sqrt(), -1.5, 0.5 * k - 2.0, 0.8);
             self.weapon_shake_factor += 0.23;
 
+	    // View bobbing animation
             if has_ground_contact {
-                self.camera_dest_offset.x = 0.05 * (k * 0.5).cos();
-                self.camera_dest_offset.y = 0.1 * (-1.5 * (-k).sin() - k).sin();
+                self.camera_dest_offset.x = 0.0;
+                self.camera_dest_offset.y = bob_function((0.3 * self.move_speed).sqrt(), -1.5, 0.5 * k, 1.0);
                 self.path_len += 0.1;
             }
         } else {

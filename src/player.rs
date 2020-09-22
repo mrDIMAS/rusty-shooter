@@ -256,11 +256,14 @@ impl Player {
         let mut velocity = Vec3::ZERO;
         if self.controller.move_forward {
 	    velocity += look;
-        } else if self.controller.move_backward {
+        }
+	if self.controller.move_backward {
 	    velocity -= look;
-        } else if self.controller.move_left {
+        }
+	if self.controller.move_left {
 	    velocity += side;
-        } else if self.controller.move_right {
+        }
+	if self.controller.move_right {
 	    velocity -= side;
         }
 

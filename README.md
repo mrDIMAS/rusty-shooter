@@ -19,7 +19,7 @@ cd rusty-shooter
 cargo run --release
 ```
 
-Or if you updating to latest version, do this:
+Or if you're updating to the latest version, do this:
 ```
 cd rg3d
 git pull

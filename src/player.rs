@@ -102,12 +102,12 @@ impl Default for Player {
             camera: Default::default(),
             camera_pivot: Default::default(),
             controller: Controller::default(),
-            stand_body_height: 1.05,
+            stand_body_height: 0.5,
             dest_pitch: 0.0,
             dest_yaw: 0.0,
             move_speed: 0.058,
             run_speed_multiplier: 1.75,
-            crouch_body_height: 0.15,
+            crouch_body_height: 0.07,
             yaw: 0.0,
             pitch: 0.0,
             camera_dest_offset: Vec3::ZERO,
@@ -280,7 +280,7 @@ impl Player {
             if has_ground_contact {
                 let k = (context.time.elapsed * 15.0) as f32;
                 self.camera_dest_offset.x = 0.05 * (k * 0.5).cos();
-                self.camera_dest_offset.y = 0.1 * k.sin();
+                self.camera_dest_offset.y = 0.1 * (-1.5 * (-k).sin() - k).sin();
                 self.path_len += 0.1;
             }
         } else {

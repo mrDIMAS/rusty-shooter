@@ -62,6 +62,7 @@ pub struct Player {
     pitch: f32,
     dest_pitch: f32,
     run_speed_multiplier: f32,
+    crouch_speed_multiplier: f32,
     stand_body_height: f32,
     crouch_body_height: f32,
     move_speed: f32,
@@ -107,7 +108,8 @@ impl Default for Player {
             dest_yaw: 0.0,
             move_speed: 0.058,
             run_speed_multiplier: 1.75,
-            crouch_body_height: 0.07,
+	    crouch_speed_multiplier: 0.5,
+            crouch_body_height: 0.04,
             yaw: 0.0,
             pitch: 0.0,
             camera_dest_offset: Vec3::ZERO,
@@ -241,58 +243,62 @@ impl Player {
         self.control_scheme = Some(control_scheme);
     }
 
-    fn update_movement(&mut self, context: &mut UpdateContext) {
-        let pivot = &context.scene.graph[self.character.pivot];
+    /// Mathematical function that tries to simulate the natural up-and-down shaking of the line of sight when you move
+    /// (a.k.a. "view bobbing")
+    fn view_bobbing_function(a: f32, b: f32, c: f32, d: f32) -> f32 {
+	a * (b * (-c).sin() - d * c).sin()
+    }
+
+    fn player_walk(&mut self, pivot: &Node, time_elapsed: f64, body: &mut RigidBody) {
         let look = pivot.look_vector();
         let side = pivot.side_vector();
 
-        let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
-
         let mut velocity = Vec3::ZERO;
-	if has_ground_contact {
-            if self.controller.move_forward {
-		velocity += look;
-            } else if self.controller.move_backward {
-		velocity -= look;
-            } else if self.controller.move_left {
-		velocity += side;
-            } else if self.controller.move_right {
-		velocity -= side;
-            }
-	}
+        if self.controller.move_forward {
+	    velocity += look;
+        } else if self.controller.move_backward {
+	    velocity -= look;
+        } else if self.controller.move_left {
+	    velocity += side;
+        } else if self.controller.move_right {
+	    velocity -= side;
+        }
 
-        let speed_mult = if self.controller.run {
-            self.run_speed_multiplier
-        } else {
-            1.0
-        };
-
-        let body = context.scene.physics.borrow_body_mut(self.character.body);
         if let Some(normalized_velocity) = velocity.normalized() {
-            body.set_x_velocity(normalized_velocity.x * self.move_speed * speed_mult);
-            body.set_z_velocity(normalized_velocity.z * self.move_speed * speed_mult);
-
-            let k = (context.time.elapsed * 15.0) as f32;
-
-	    // Function that tries to simulate the natural up-and-down shaking of the line of sight when you move
-	    let bob_function = | a: f32, b: f32, c: f32, d: f32 | -> f32 {
-		a * (b * (-c).sin() - d * c).sin()
+	    let speed_mult = if self.controller.crouch {
+		self.crouch_speed_multiplier
+	    } else if self.controller.run {
+		self.run_speed_multiplier
+	    } else {
+		1.0
 	    };
 
-	    // Weapon bobbing animation
-            self.weapon_dest_offset.x = 0.0;
-            self.weapon_dest_offset.y = bob_function((0.0001 * self.move_speed).sqrt(), -1.5, 0.5 * k - 2.0, 0.8);
-            self.weapon_shake_factor += 0.23;
+	    body.set_x_velocity(normalized_velocity.x * self.move_speed * speed_mult);
+	    body.set_z_velocity(normalized_velocity.z * self.move_speed * speed_mult);
 
-	    // View bobbing animation
-            if has_ground_contact {
-                self.camera_dest_offset.x = 0.0;
-                self.camera_dest_offset.y = bob_function((0.3 * self.move_speed).sqrt(), -1.5, 0.5 * k, 1.0);
-                self.path_len += 0.1;
-            }
+	    let k = (time_elapsed * 15.0) as f32;
+
+	    // Weapon bobbing (don't bob when crouching)
+	    if !self.controller.crouch {
+		self.weapon_dest_offset.y = Self::view_bobbing_function((0.0001 * self.move_speed).sqrt(), -1.5, 0.5 * k - 2.0, 0.8);
+		self.weapon_shake_factor += 0.23;
+	    }
+
+	    // View bobbing
+	    self.camera_dest_offset.y = Self::view_bobbing_function((0.3 * self.move_speed).sqrt(), -1.5, 0.5 * k, 1.0);
+	    self.path_len += 0.1;
         } else {
-            self.weapon_dest_offset = Vec3::ZERO;
+	    self.weapon_dest_offset = Vec3::ZERO;
         }
+    }
+
+    fn update_movement(&mut self, context: &mut UpdateContext) {
+        let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
+        let body = context.scene.physics.borrow_body_mut(self.character.body);
+
+	if has_ground_contact {
+	    self.player_walk(&context.scene.graph[self.character.pivot], context.time.elapsed, body);
+	}
 
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
 

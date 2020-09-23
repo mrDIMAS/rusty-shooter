@@ -113,7 +113,7 @@ impl Default for Player {
             move_speed: 0.058,
             run_speed_multiplier: 1.75,
             crouch_speed_multiplier: 0.5,
-            crouch_body_height: 0.04,
+            crouch_body_height: 0.01,
             yaw: 0.0,
             pitch: 0.0,
             camera_dest_offset: Vec3::ZERO,
@@ -127,8 +127,8 @@ impl Default for Player {
             weapon_offset: Default::default(),
             weapon_dest_offset: Default::default(),
             weapon_shake_factor: 0.0,
-            crouch_speed: 0.15,
-            stand_up_speed: 0.12,
+            crouch_speed: 0.1,
+            stand_up_speed: 0.1,
             listener_basis: Default::default(),
             control_scheme: None,
         }
@@ -265,24 +265,17 @@ impl Player {
     }
 
     /// Bob weapon when walking, center when aiming down sights, otherwise fall back to default position
-    fn get_weapon_offset(&mut self, k: f32) -> Vec3 {
-        match (self.controller.ads, self.controller.crouch) {
-            (false, false) => {
-                self.weapon_shake_factor += 0.23;
-                Vec3::new(
-                    0.0,
-                    Self::bobbing_function(
-                        (0.0001 * self.move_speed).sqrt(),
-                        -1.5,
-                        0.5 * k - 2.0,
-                        0.8,
-                    ),
-                    0.0,
-                )
-            }
-            (true, false) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
-            (true, true) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
-            (false, true) => Vec3::ZERO,
+    fn get_weapon_offset(&self, k: f32, moving: bool) -> Vec3 {
+        match (self.controller.ads, self.controller.crouch, moving) {
+            (false, false, true) => Vec3::new(
+                0.0,
+                Self::bobbing_function((0.0001 * self.move_speed).sqrt(), -1.5, 0.5 * k - 2.0, 0.8),
+                0.0,
+            ),
+            (true, false, _) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
+            (true, true, _) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
+            (false, true, _) => Vec3::ZERO,
+            (false, false, false) => Vec3::ZERO,
         }
     }
 
@@ -292,7 +285,7 @@ impl Player {
         self.path_len += 0.1;
     }
 
-    fn handle_walk(&mut self, pivot: &Node, k: f32, body: &mut RigidBody) {
+    fn get_velocity(&mut self, pivot: &Node) -> Option<Vec3> {
         let look = pivot.look_vector();
         let side = pivot.side_vector();
 
@@ -310,32 +303,37 @@ impl Player {
             velocity -= side;
         }
 
-        if let Some(normalized_velocity) = velocity.normalized() {
-            let speed_mult = if self.controller.crouch {
-                self.crouch_speed_multiplier
-            } else if self.controller.run {
-                self.run_speed_multiplier
-            } else {
-                1.0
-            };
+        velocity.normalized()
+    }
 
-            body.set_x_velocity(normalized_velocity.x * self.move_speed * speed_mult);
-            body.set_z_velocity(normalized_velocity.z * self.move_speed * speed_mult);
-
-            self.handle_view_bobbing(k);
+    fn get_speed_multiplier(&self) -> f32 {
+        if self.controller.crouch {
+            self.crouch_speed_multiplier
+        } else if self.controller.run {
+            self.run_speed_multiplier
+        } else {
+            1.0
         }
     }
 
     fn update_movement(&mut self, context: &mut UpdateContext) {
         let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
         let body = context.scene.physics.borrow_body_mut(self.character.body);
-        let k = (context.time.elapsed * 15.0) as f32;
 
-        if has_ground_contact {
-            self.handle_walk(&context.scene.graph[self.character.pivot], k, body);
+        match self.get_velocity(&context.scene.graph[self.character.pivot]) {
+            Some(velocity) => {
+                let k = (context.time.elapsed * 15.0) as f32;
+                self.weapon_dest_offset = self.get_weapon_offset(k, true);
+                if has_ground_contact {
+                    body.set_x_velocity(velocity.x * self.move_speed * self.get_speed_multiplier());
+                    body.set_z_velocity(velocity.z * self.move_speed * self.get_speed_multiplier());
+                    self.handle_view_bobbing(k);
+                }
+            }
+            // Not moving
+            None => self.weapon_dest_offset = self.get_weapon_offset(0.0, false),
         }
 
-        self.weapon_dest_offset = self.get_weapon_offset(k);
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
 
         context.scene.graph[self.character.weapon_pivot]

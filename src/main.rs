@@ -67,6 +67,8 @@ use std::{
     time::{self, Duration, Instant},
 };
 
+const FIXED_FPS: f32 = 60.0;
+
 // Define type aliases for engine structs.
 pub type UiNode = UINode<(), StubNode>;
 pub type UINodeHandle = Handle<UiNode>;
@@ -349,8 +351,7 @@ impl Game {
 
         let control_scheme = Rc::new(RefCell::new(ControlScheme::default()));
 
-        let fixed_fps = 60.0;
-        let fixed_timestep = 1.0 / fixed_fps;
+        let fixed_timestep = 1.0 / FIXED_FPS;
 
         let time = GameTime {
             clock: Instant::now(),
@@ -415,7 +416,7 @@ impl Game {
                     // Render at max speed
                     game.engine.render(fixed_timestep).unwrap();
                     // Make sure to cap update rate to 60 FPS.
-                    game.limit_fps(fixed_fps as f64);
+                    game.limit_fps(FIXED_FPS as f64);
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => {

@@ -3,6 +3,7 @@ use crate::{
     control_scheme::{ControlButton, ControlScheme},
     level::UpdateContext,
     message::Message,
+    FIXED_FPS,
 };
 use rand::Rng;
 use rg3d::{
@@ -215,22 +216,32 @@ impl Player {
     fn handle_crouch(&mut self, body: &mut RigidBody) {
         let capsule = body.get_shape_mut().as_capsule_mut();
         let current_height = capsule.get_height();
-        let new_height = if self.controller.crouch {
+        if self.controller.crouch {
             let new_height = current_height - self.crouch_speed;
             if new_height < self.crouch_body_height {
-                self.crouch_body_height
+                capsule.set_height(self.crouch_body_height);
             } else {
-                new_height
+                capsule.set_height(new_height);
             }
         } else {
-            let new_height = current_height + self.stand_up_speed;
-            if new_height > self.stand_body_height {
-                self.stand_body_height
-            } else {
-                new_height
-            }
+            let new_height = (current_height + self.stand_up_speed).min(self.stand_body_height);
+            // Divide by 2.0 because we want to know offset of cap of capsule relative to its center.
+            let offset = (new_height - capsule.get_height()) / 2.0;
+            capsule.set_height(new_height);
+
+            // Prevent "jumping" when standing up. This happens because when player stands on ground
+            // lower cap of its body's capsule touches the ground, but when we increase height, its
+            // cap become under the ground and physics engine will push it out adding some momentum
+            // to it which will look like a jump.
+
+            // Cache velocity because it is calculated using position from previous frame.
+            let vel = body.get_velocity();
+            // Push body up.
+            body.set_position(body.get_position() + Vec3::new(0.0, offset, 0.0));
+            // Set new velocity. We divide offset by FIXED_FPS because we need to find speed
+            // and its units are (units/frame - units per frame).
+            body.set_velocity(vel - Vec3::new(0.0, offset / FIXED_FPS, 0.0));
         };
-        capsule.set_height(new_height);
     }
 
     pub fn camera(&self) -> Handle<Node> {

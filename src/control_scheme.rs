@@ -38,6 +38,7 @@ pub struct ControlScheme {
     pub move_right: ControlButtonDefinition,
     pub jump: ControlButtonDefinition,
     pub crouch: ControlButtonDefinition,
+    pub ads: ControlButtonDefinition,
     pub shoot: ControlButtonDefinition,
     pub next_weapon: ControlButtonDefinition,
     pub prev_weapon: ControlButtonDefinition,
@@ -75,6 +76,10 @@ impl Default for ControlScheme {
                 description: "Crouch".to_string(),
                 button: ControlButton::Key(VirtualKeyCode::C),
             },
+            ads: ControlButtonDefinition {
+                description: "Aim Down Sights".to_string(),
+                button: ControlButton::Mouse(3),
+            },
             shoot: ControlButtonDefinition {
                 description: "Shoot".to_string(),
                 button: ControlButton::Mouse(1),
@@ -100,7 +105,7 @@ impl Default for ControlScheme {
 }
 
 impl ControlScheme {
-    pub fn buttons_mut(&mut self) -> [&mut ControlButtonDefinition; 10] {
+    pub fn buttons_mut(&mut self) -> [&mut ControlButtonDefinition; 11] {
         [
             &mut self.move_forward,
             &mut self.move_backward,
@@ -108,6 +113,7 @@ impl ControlScheme {
             &mut self.move_right,
             &mut self.jump,
             &mut self.crouch,
+            &mut self.ads,
             &mut self.shoot,
             &mut self.next_weapon,
             &mut self.prev_weapon,
@@ -115,7 +121,7 @@ impl ControlScheme {
         ]
     }
 
-    pub fn buttons(&self) -> [&ControlButtonDefinition; 10] {
+    pub fn buttons(&self) -> [&ControlButtonDefinition; 11] {
         [
             &self.move_forward,
             &self.move_backward,
@@ -123,6 +129,7 @@ impl ControlScheme {
             &self.move_right,
             &self.jump,
             &self.crouch,
+            &self.ads,
             &self.shoot,
             &self.next_weapon,
             &self.prev_weapon,

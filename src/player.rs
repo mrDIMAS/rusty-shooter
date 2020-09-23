@@ -32,6 +32,7 @@ pub struct Controller {
     move_left: bool,
     move_right: bool,
     crouch: bool,
+    ads: bool,
     jump: bool,
     run: bool,
     shoot: bool,
@@ -45,6 +46,7 @@ impl Default for Controller {
             move_left: false,
             move_right: false,
             crouch: false,
+            ads: false,
             jump: false,
             run: false,
             shoot: false,
@@ -73,6 +75,7 @@ pub struct Player {
     head_position: Vec3,
     look_direction: Vec3,
     up_direction: Vec3,
+    weapon_position: Vec3,
     weapon_offset: Vec3,
     weapon_dest_offset: Vec3,
     weapon_shake_factor: f32,
@@ -119,6 +122,7 @@ impl Default for Player {
             head_position: Vec3::ZERO,
             look_direction: Vec3::ZERO,
             up_direction: Vec3::ZERO,
+            weapon_position: Vec3::new(-0.035, -0.052, 0.02),
             weapon_offset: Default::default(),
             weapon_dest_offset: Default::default(),
             weapon_shake_factor: 0.0,
@@ -187,7 +191,7 @@ impl Player {
         let mut weapon_base_pivot = Node::Base(Default::default());
         weapon_base_pivot
             .local_transform_mut()
-            .set_position(Vec3::new(-0.035, -0.052, 0.02));
+            .set_position(Self::default().weapon_position);
         let weapon_base_pivot_handle = scene.graph.add_node(weapon_base_pivot);
         scene
             .graph
@@ -243,13 +247,41 @@ impl Player {
         self.control_scheme = Some(control_scheme);
     }
 
-    /// Mathematical function that tries to simulate the natural up-and-down shaking of the line of sight when you move
-    /// (a.k.a. "view bobbing")
-    fn view_bobbing_function(a: f32, b: f32, c: f32, d: f32) -> f32 {
+    /// Mathematical function that tries to simulate the natural up-and-down shaking of
+    /// the line of sight when you move (a.k.a. "bobbing")
+    fn bobbing_function(a: f32, b: f32, c: f32, d: f32) -> f32 {
         a * (b * (-c).sin() - d * c).sin()
     }
 
-    fn handle_walk(&mut self, pivot: &Node, time_elapsed: f64, body: &mut RigidBody) {
+    /// Bob weapon when walking, center when aiming down sights, otherwise fall back to default position
+    fn get_weapon_offset(&mut self, k: f32) -> Vec3 {
+        match (self.controller.ads, self.controller.crouch) {
+            (false, false) => {
+                self.weapon_shake_factor += 0.23;
+                Vec3::new(
+                    0.0,
+                    Self::bobbing_function(
+                        (0.0001 * self.move_speed).sqrt(),
+                        -1.5,
+                        0.5 * k - 2.0,
+                        0.8,
+                    ),
+                    0.0,
+                )
+            }
+            (true, false) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
+            (true, true) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
+            (false, true) => Vec3::ZERO,
+        }
+    }
+
+    fn handle_view_bobbing(&mut self, k: f32) {
+        self.camera_dest_offset.y =
+            Self::bobbing_function((0.3 * self.move_speed).sqrt(), -1.5, 0.5 * k, 1.0);
+        self.path_len += 0.1;
+    }
+
+    fn handle_walk(&mut self, pivot: &Node, k: f32, body: &mut RigidBody) {
         let look = pivot.look_vector();
         let side = pivot.side_vector();
 
@@ -279,40 +311,20 @@ impl Player {
             body.set_x_velocity(normalized_velocity.x * self.move_speed * speed_mult);
             body.set_z_velocity(normalized_velocity.z * self.move_speed * speed_mult);
 
-            let k = (time_elapsed * 15.0) as f32;
-
-            // Weapon bobbing (don't bob when crouching)
-            if !self.controller.crouch {
-                self.weapon_dest_offset.y = Self::view_bobbing_function(
-                    (0.0001 * self.move_speed).sqrt(),
-                    -1.5,
-                    0.5 * k - 2.0,
-                    0.8,
-                );
-                self.weapon_shake_factor += 0.23;
-            }
-
-            // View bobbing
-            self.camera_dest_offset.y =
-                Self::view_bobbing_function((0.3 * self.move_speed).sqrt(), -1.5, 0.5 * k, 1.0);
-            self.path_len += 0.1;
-        } else {
-            self.weapon_dest_offset = Vec3::ZERO;
+            self.handle_view_bobbing(k);
         }
     }
 
     fn update_movement(&mut self, context: &mut UpdateContext) {
         let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
         let body = context.scene.physics.borrow_body_mut(self.character.body);
+        let k = (context.time.elapsed * 15.0) as f32;
 
         if has_ground_contact {
-            self.handle_walk(
-                &context.scene.graph[self.character.pivot],
-                context.time.elapsed,
-                body,
-            );
+            self.handle_walk(&context.scene.graph[self.character.pivot], k, body);
         }
 
+        self.weapon_dest_offset = self.get_weapon_offset(k);
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
 
         context.scene.graph[self.character.weapon_pivot]
@@ -446,6 +458,8 @@ impl Player {
                                 self.controller.move_right = true;
                             } else if control_button == control_scheme.crouch.button {
                                 self.controller.crouch = true;
+                            } else if control_button == control_scheme.ads.button {
+                                self.controller.ads = true;
                             } else if control_button == control_scheme.run.button {
                                 self.controller.run = true;
                             } else if control_button == control_scheme.jump.button {
@@ -465,6 +479,8 @@ impl Player {
                                 self.controller.move_right = false;
                             } else if control_button == control_scheme.crouch.button {
                                 self.controller.crouch = false;
+                            } else if control_button == control_scheme.ads.button {
+                                self.controller.ads = false;
                             } else if control_button == control_scheme.run.button {
                                 self.controller.run = false;
                             }

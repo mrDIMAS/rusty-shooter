@@ -76,6 +76,24 @@ impl Hud {
                 .with_width(frame_size.0 as f32)
                 .with_height(frame_size.1 as f32)
                 .with_visibility(false)
+                .with_child(
+                    ImageBuilder::new(
+                        WidgetBuilder::new()
+                            .with_horizontal_alignment(HorizontalAlignment::Center)
+                            .with_vertical_alignment(VerticalAlignment::Center)
+                            .with_width(33.0)
+                            .with_height(33.0)
+                            .on_row(0)
+                            .on_column(1),
+                    )
+                    .with_opt_texture(utils::into_gui_texture(
+                        resource_manager.request_texture(
+                            Path::new("data/ui/crosshair.tga"),
+                            TextureKind::RGBA8,
+                        ),
+                    ))
+                    .build(ctx),
+                )
                 .with_child({
                     time = TextBuilder::new(
                         WidgetBuilder::new()

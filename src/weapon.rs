@@ -186,7 +186,7 @@ impl Weapon {
                     .with_scatter_enabled(false)
                     .cast_shadows(false),
             )
-            .with_radius(0.5)
+            .with_radius(0.3)
             .build_node(),
         );
 

@@ -791,7 +791,9 @@ impl OptionsMenu {
         let mut settings = old_settings;
 
         match message.data() {
-            UiMessageData::ScrollBar(prop) => {
+            UiMessageData::ScrollBar(prop)
+                if message.direction() == MessageDirection::FromWidget =>
+            {
                 if let ScrollBarMessage::Value(new_value) = prop {
                     if message.destination() == self.sb_sound_volume {
                         engine

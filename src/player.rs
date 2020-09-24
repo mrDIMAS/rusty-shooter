@@ -265,10 +265,11 @@ impl Player {
     }
 
     /// Bob weapon when walking, center when aiming down sights, otherwise fall back to default position
-    fn get_weapon_offset(&self, time_elapsed: f32, velocity: Option<Vec3>) -> Vec3 {
-        match (self.controller.ads, self.controller.crouch, velocity) {
-            (false, false, None) => Vec3::ZERO,
-            (false, false, Some(_)) => Vec3::new(
+    fn get_weapon_offset(&self, time_elapsed: f32, moving: bool, running: bool) -> Vec3 {
+        match (self.controller.ads, self.controller.crouch, moving, running) {
+            (_, _, true, true) => Vec3::new(0.0, -0.01, 0.0),
+            (false, false, false, _) => Vec3::ZERO,
+            (false, false, true, _) => Vec3::new(
                 0.0,
                 Self::bobbing_function(
                     0.002 * self.get_speed_multiplier().powf(2.0),
@@ -276,9 +277,9 @@ impl Player {
                 ),
                 0.0,
             ),
-            (true, false, _) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
-            (false, true, _) => Vec3::ZERO,
-            (true, true, _) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
+            (true, false, _, _) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
+            (false, true, _, _) => Vec3::new(0.0, 0.01, 0.0),
+            (true, true, _, _) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
         }
     }
 
@@ -322,20 +323,30 @@ impl Player {
     fn update_movement(&mut self, context: &mut UpdateContext) {
         let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
         let body = context.scene.physics.borrow_body_mut(self.character.body);
-        let velocity = self.get_velocity(&context.scene.graph[self.character.pivot]);
 
-        match (velocity, has_ground_contact) {
-            (Some(velocity), true) => {
+        if has_ground_contact {
+            let mut moving = false;
+            let mut sprinting = false;
+
+            if let Some(velocity) = self.get_velocity(&context.scene.graph[self.character.pivot]) {
+                moving = true;
+
                 let speed_multiplier = self.get_speed_multiplier();
+                if speed_multiplier > 1.0 {
+                    sprinting = true;
+                }
 
                 body.set_x_velocity(velocity.x * self.move_speed * speed_multiplier);
                 body.set_z_velocity(velocity.z * self.move_speed * speed_multiplier);
                 self.handle_view_bobbing(context.time.elapsed as f32, speed_multiplier);
             }
-            (_, _) => (),
+
+            self.weapon_dest_offset =
+                self.get_weapon_offset(context.time.elapsed as f32, moving, sprinting);
+        } else {
+            self.weapon_dest_offset = Vec3::new(0.0, -0.02, 0.0);
         }
 
-        self.weapon_dest_offset = self.get_weapon_offset(context.time.elapsed as f32, velocity);
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
 
         context.scene.graph[self.character.weapon_pivot]

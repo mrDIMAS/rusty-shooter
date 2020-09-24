@@ -260,28 +260,31 @@ impl Player {
 
     /// Mathematical function that tries to simulate the natural up-and-down shaking of
     /// the line of sight when you move (a.k.a. "bobbing")
-    fn bobbing_function(a: f32, b: f32, c: f32, d: f32) -> f32 {
-        a * (b * (-c).sin() - d * c).sin()
+    fn bobbing_function(intensity: f32, x: f32) -> f32 {
+        intensity * (2.0 * x + (2.0 * x).sin()).sin()
     }
 
     /// Bob weapon when walking, center when aiming down sights, otherwise fall back to default position
-    fn get_weapon_offset(&self, k: f32, moving: bool) -> Vec3 {
-        match (self.controller.ads, self.controller.crouch, moving) {
-            (false, false, true) => Vec3::new(
+    fn get_weapon_offset(&self, time_elapsed: f32, velocity: Option<Vec3>) -> Vec3 {
+        match (self.controller.ads, self.controller.crouch, velocity) {
+            (false, false, None) => Vec3::ZERO,
+            (false, false, Some(_)) => Vec3::new(
                 0.0,
-                Self::bobbing_function((0.0001 * self.move_speed).sqrt(), -1.5, 0.5 * k - 2.0, 0.8),
+                Self::bobbing_function(
+                    0.002 * self.get_speed_multiplier().powf(2.0),
+                    (time_elapsed * 7.5) - 1.0,
+                ),
                 0.0,
             ),
             (true, false, _) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
-            (true, true, _) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
             (false, true, _) => Vec3::ZERO,
-            (false, false, false) => Vec3::ZERO,
+            (true, true, _) => Vec3::new(-self.weapon_position.x, 0.01, -0.01),
         }
     }
 
-    fn handle_view_bobbing(&mut self, k: f32) {
+    fn handle_view_bobbing(&mut self, time_elapsed: f32, speed: f32) {
         self.camera_dest_offset.y =
-            Self::bobbing_function((0.3 * self.move_speed).sqrt(), -1.5, 0.5 * k, 1.0);
+            Self::bobbing_function(0.06 * speed.powf(2.0), time_elapsed * 7.5);
         self.path_len += 0.1;
     }
 
@@ -319,21 +322,20 @@ impl Player {
     fn update_movement(&mut self, context: &mut UpdateContext) {
         let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
         let body = context.scene.physics.borrow_body_mut(self.character.body);
+        let velocity = self.get_velocity(&context.scene.graph[self.character.pivot]);
 
-        match self.get_velocity(&context.scene.graph[self.character.pivot]) {
-            Some(velocity) => {
-                let k = (context.time.elapsed * 15.0) as f32;
-                self.weapon_dest_offset = self.get_weapon_offset(k, true);
-                if has_ground_contact {
-                    body.set_x_velocity(velocity.x * self.move_speed * self.get_speed_multiplier());
-                    body.set_z_velocity(velocity.z * self.move_speed * self.get_speed_multiplier());
-                    self.handle_view_bobbing(k);
-                }
+        match (velocity, has_ground_contact) {
+            (Some(velocity), true) => {
+                let speed_multiplier = self.get_speed_multiplier();
+
+                body.set_x_velocity(velocity.x * self.move_speed * speed_multiplier);
+                body.set_z_velocity(velocity.z * self.move_speed * speed_multiplier);
+                self.handle_view_bobbing(context.time.elapsed as f32, speed_multiplier);
             }
-            // Not moving
-            None => self.weapon_dest_offset = self.get_weapon_offset(0.0, false),
+            (_, _) => (),
         }
 
+        self.weapon_dest_offset = self.get_weapon_offset(context.time.elapsed as f32, velocity);
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
 
         context.scene.graph[self.character.weapon_pivot]

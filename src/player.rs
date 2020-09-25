@@ -81,6 +81,7 @@ pub struct Player {
     weapon_dest_offset: Vec3,
     crouch_speed: f32,
     stand_up_speed: f32,
+    ads_mouse_sensitivity_multiplier: f32,
     listener_basis: Mat3,
     control_scheme: Option<Rc<RefCell<ControlScheme>>>,
 }
@@ -127,6 +128,7 @@ impl Default for Player {
             weapon_dest_offset: Default::default(),
             crouch_speed: 0.1,
             stand_up_speed: 0.1,
+            ads_mouse_sensitivity_multiplier: 0.5,
             listener_basis: Default::default(),
             control_scheme: None,
         }
@@ -422,15 +424,21 @@ impl Player {
 
                 match event {
                     DeviceEvent::MouseMotion { delta } => {
-                        self.dest_yaw -= delta.0 as f32 * control_scheme.mouse_sens;
-
-                        let sens = if control_scheme.mouse_y_inverse {
-                            -control_scheme.mouse_sens
+                        let mouse_sensitivity = if self.controller.ads {
+                            control_scheme.mouse_sens * self.ads_mouse_sensitivity_multiplier
                         } else {
                             control_scheme.mouse_sens
                         };
 
-                        self.dest_pitch += delta.1 as f32 * sens;
+                        self.dest_yaw -= delta.0 as f32 * mouse_sensitivity;
+
+                        let mouse_sensitivity_y = if control_scheme.mouse_y_inverse {
+                            -mouse_sensitivity
+                        } else {
+                            mouse_sensitivity
+                        };
+
+                        self.dest_pitch += delta.1 as f32 * mouse_sensitivity_y;
                         if self.dest_pitch > 90.0 {
                             self.dest_pitch = 90.0;
                         } else if self.dest_pitch < -90.0 {

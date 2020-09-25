@@ -218,6 +218,10 @@ impl Menu {
                         self.match_menu.window,
                         MessageDirection::ToWidget,
                     ));
+                    engine.user_interface.send_message(WidgetMessage::center(
+                        self.match_menu.window,
+                        MessageDirection::ToWidget,
+                    ));
                 } else if message.destination() == self.btn_save_game {
                     self.sender.send(Message::SaveGame).unwrap();
                 } else if message.destination() == self.btn_load_game {
@@ -226,6 +230,10 @@ impl Menu {
                     self.sender.send(Message::QuitGame).unwrap();
                 } else if message.destination() == self.btn_settings {
                     engine.user_interface.send_message(WindowMessage::open(
+                        self.options_menu.window,
+                        MessageDirection::ToWidget,
+                    ));
+                    engine.user_interface.send_message(WidgetMessage::center(
                         self.options_menu.window,
                         MessageDirection::ToWidget,
                     ));

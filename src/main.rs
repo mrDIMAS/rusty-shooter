@@ -23,11 +23,12 @@ mod message;
 mod options_menu;
 mod player;
 mod projectile;
+mod settings;
 mod weapon;
 
 use crate::{
     actor::Actor, control_scheme::ControlScheme, hud::Hud, level::Level, menu::Menu,
-    message::Message,
+    message::Message, settings::Settings,
 };
 use rg3d::engine::resource_manager::ResourceManager;
 use rg3d::gui::message::MessageDirection;
@@ -340,7 +341,9 @@ impl Game {
             .with_inner_size(inner_size)
             .with_resizable(true);
 
-        let mut engine = GameEngine::new(window_builder, &events_loop).unwrap();
+        let settings = settings::Settings::load_from_file(SETTINGS_FILE);
+
+        let mut engine = GameEngine::new(window_builder, &events_loop, settings.renderer).unwrap();
         let hrtf_sphere = rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin").unwrap();
         engine.sound_context.lock().unwrap().set_renderer(
             rg3d::sound::renderer::Renderer::HrtfRenderer(rg3d::sound::hrtf::HrtfRenderer::new(
@@ -352,7 +355,7 @@ impl Game {
 
         engine.renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
-        let control_scheme = Rc::new(RefCell::new(ControlScheme::load_from_file(SETTINGS_FILE)));
+        let control_scheme = Rc::new(RefCell::new(settings.controls));
 
         let fixed_timestep = 1.0 / FIXED_FPS;
 
@@ -519,7 +522,11 @@ impl Game {
     }
 
     fn exit_game(&self, control_flow: &mut rg3d::event_loop::ControlFlow) {
-        self.control_scheme.borrow().write_to_file(SETTINGS_FILE);
+        let settings = Settings {
+            controls: self.control_scheme.borrow().clone(),
+            renderer: self.engine.renderer.get_quality_settings(),
+        };
+        settings.write_to_file(SETTINGS_FILE);
         *control_flow = ControlFlow::Exit;
     }
 

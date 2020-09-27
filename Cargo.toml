@@ -9,7 +9,7 @@ license = "MIT"
 opt-level = 2
 
 [dependencies]
-rg3d = { path = "../rg3d", version = "0.12.0", features = ["serde"] }
+rg3d = { path = "../rg3d", version = "0.12.0", features = ["serde_integration"] }
 serde = { version = "1.0.116", features = ["derive"] }
 serde_json = "1.0.57"
 rand = "0.7.0"

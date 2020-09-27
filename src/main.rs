@@ -3,6 +3,8 @@
 
 extern crate rand;
 extern crate rg3d;
+extern crate serde;
+extern crate serde_json;
 
 mod actor;
 mod bot;
@@ -68,6 +70,7 @@ use std::{
 };
 
 const FIXED_FPS: f32 = 60.0;
+const SETTINGS_FILE: &'static str = "settings.json";
 
 // Define type aliases for engine structs.
 pub type UiNode = UINode<(), StubNode>;
@@ -349,7 +352,7 @@ impl Game {
 
         engine.renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
-        let control_scheme = Rc::new(RefCell::new(ControlScheme::default()));
+        let control_scheme = Rc::new(RefCell::new(ControlScheme::load_from_file(SETTINGS_FILE)));
 
         let fixed_timestep = 1.0 / FIXED_FPS;
 
@@ -401,7 +404,7 @@ impl Game {
                         }
                     }
                     if !game.running {
-                        *control_flow = ControlFlow::Exit;
+                        game.exit_game(control_flow);
                     }
                     game.engine.get_window().request_redraw();
                 }
@@ -421,7 +424,7 @@ impl Game {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => {
                         game.destroy_level();
-                        *control_flow = ControlFlow::Exit
+                        game.exit_game(control_flow);
                     }
                     WindowEvent::Resized(new_size) => {
                         game.engine.renderer.set_frame_size(new_size.into());
@@ -513,6 +516,11 @@ impl Game {
             level.destroy(&mut self.engine);
             println!("Current level destroyed!");
         }
+    }
+
+    fn exit_game(&self, control_flow: &mut rg3d::event_loop::ControlFlow) {
+        self.control_scheme.borrow().write_to_file(SETTINGS_FILE);
+        *control_flow = ControlFlow::Exit;
     }
 
     pub fn start_new_game(&mut self, options: MatchOptions) {

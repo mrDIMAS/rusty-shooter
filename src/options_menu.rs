@@ -791,11 +791,12 @@ impl OptionsMenu {
         let mut settings = old_settings;
 
         match message.data() {
-            UiMessageData::ScrollBar(prop)
-                if message.direction() == MessageDirection::FromWidget =>
-            {
+            UiMessageData::ScrollBar(prop) if message.direction() == MessageDirection::ToWidget => {
+                println!("scrollbar");
                 if let ScrollBarMessage::Value(new_value) = prop {
                     if message.destination() == self.sb_sound_volume {
+                        println!("here");
+                        println!("{}", engine.sound_context.lock().unwrap().master_gain());
                         engine
                             .sound_context
                             .lock()
@@ -815,6 +816,7 @@ impl OptionsMenu {
                 }
             }
             UiMessageData::ListView(msg) => {
+                println!("listview");
                 if let ListViewMessage::SelectionChanged(new_value) = msg {
                     if message.destination() == self.lb_video_modes {
                         if let Some(index) = new_value {
@@ -827,6 +829,7 @@ impl OptionsMenu {
                 }
             }
             UiMessageData::CheckBox(msg) => {
+                println!("checkbox");
                 let CheckBoxMessage::Check(value) = msg;
                 let value = value.unwrap_or(false);
                 let mut control_scheme = self.control_scheme.borrow_mut();
@@ -849,6 +852,7 @@ impl OptionsMenu {
                 }
             }
             UiMessageData::Button(msg) => {
+                println!("button");
                 if let ButtonMessage::Click = msg {
                     if message.destination() == self.btn_reset_control_scheme {
                         self.control_scheme.borrow_mut().reset();

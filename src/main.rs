@@ -27,21 +27,25 @@ mod settings;
 mod weapon;
 
 use crate::{
-    actor::Actor, control_scheme::ControlScheme, hud::Hud, level::Level, menu::Menu,
-    message::Message, settings::Settings,
+    actor::Actor,
+    control_scheme::ControlScheme,
+    hud::Hud,
+    level::Level,
+    menu::Menu,
+    message::Message,
+    settings::{Settings, SoundSettings},
 };
-use rg3d::engine::resource_manager::ResourceManager;
-use rg3d::gui::message::MessageDirection;
 use rg3d::{
     core::{
         color::Color,
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
-    engine::Engine,
+    engine::{resource_manager::ResourceManager, Engine},
     event::{DeviceEvent, ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     gui::{
+        message::MessageDirection,
         message::TextMessage,
         message::UiMessage,
         node::{StubNode, UINode},
@@ -525,6 +529,9 @@ impl Game {
         let settings = Settings {
             controls: self.control_scheme.borrow().clone(),
             renderer: self.engine.renderer.get_quality_settings(),
+            sound: SoundSettings {
+                sound_volume: self.engine.sound_context.lock().unwrap().master_gain(),
+            },
         };
         settings.write_to_file(SETTINGS_FILE);
         *control_flow = ControlFlow::Exit;

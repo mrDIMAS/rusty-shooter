@@ -2,9 +2,21 @@ use rg3d::utils::log::Log;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SoundSettings {
+    pub sound_volume: f32,
+}
+
+impl Default for SoundSettings {
+    fn default() -> Self {
+        Self { sound_volume: 1.0 }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub renderer: rg3d::renderer::QualitySettings,
     pub controls: crate::control_scheme::ControlScheme,
+    pub sound: SoundSettings,
 }
 
 impl Default for Settings {
@@ -12,6 +24,7 @@ impl Default for Settings {
         Self {
             renderer: rg3d::renderer::QualitySettings::default(),
             controls: crate::control_scheme::ControlScheme::default(),
+            sound: SoundSettings::default(),
         }
     }
 }

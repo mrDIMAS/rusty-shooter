@@ -217,6 +217,7 @@ impl Menu {
                     engine.user_interface.send_message(WindowMessage::open(
                         self.match_menu.window,
                         MessageDirection::ToWidget,
+                        true,
                     ));
                     engine.user_interface.send_message(WidgetMessage::center(
                         self.match_menu.window,
@@ -232,6 +233,7 @@ impl Menu {
                     engine.user_interface.send_message(WindowMessage::open(
                         self.options_menu.window,
                         MessageDirection::ToWidget,
+                        true,
                     ));
                     engine.user_interface.send_message(WidgetMessage::center(
                         self.options_menu.window,

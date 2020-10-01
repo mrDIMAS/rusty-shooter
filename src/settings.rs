@@ -4,11 +4,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SoundSettings {
     pub sound_volume: f32,
+    pub hrtf: bool,
 }
 
 impl Default for SoundSettings {
     fn default() -> Self {
-        Self { sound_volume: 1.0 }
+        Self {
+            sound_volume: 1.0,
+            hrtf: true,
+        }
     }
 }
 

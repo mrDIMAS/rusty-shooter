@@ -219,10 +219,6 @@ impl Menu {
                         MessageDirection::ToWidget,
                         true,
                     ));
-                    engine.user_interface.send_message(WidgetMessage::center(
-                        self.match_menu.window,
-                        MessageDirection::ToWidget,
-                    ));
                 } else if message.destination() == self.btn_save_game {
                     self.sender.send(Message::SaveGame).unwrap();
                 } else if message.destination() == self.btn_load_game {
@@ -234,10 +230,6 @@ impl Menu {
                         self.options_menu.window,
                         MessageDirection::ToWidget,
                         true,
-                    ));
-                    engine.user_interface.send_message(WidgetMessage::center(
-                        self.options_menu.window,
-                        MessageDirection::ToWidget,
                     ));
                 }
             }

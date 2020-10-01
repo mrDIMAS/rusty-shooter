@@ -349,11 +349,13 @@ impl Game {
 
         let mut engine = GameEngine::new(window_builder, &events_loop, settings.renderer).unwrap();
         let hrtf_sphere = rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin").unwrap();
-        engine.sound_context.lock().unwrap().set_renderer(
-            rg3d::sound::renderer::Renderer::HrtfRenderer(rg3d::sound::hrtf::HrtfRenderer::new(
-                hrtf_sphere,
-            )),
-        );
+        if settings.sound.hrtf {
+            engine.sound_context.lock().unwrap().set_renderer(
+                rg3d::sound::renderer::Renderer::HrtfRenderer(
+                    rg3d::sound::hrtf::HrtfRenderer::new(hrtf_sphere),
+                ),
+            );
+        }
 
         effects::register_custom_emitter_factory();
 
@@ -526,11 +528,19 @@ impl Game {
     }
 
     fn exit_game(&self, control_flow: &mut rg3d::event_loop::ControlFlow) {
+        let is_hrtf = if let rg3d::sound::renderer::Renderer::HrtfRenderer(_) =
+            self.engine.sound_context.lock().unwrap().renderer()
+        {
+            true
+        } else {
+            false
+        };
         let settings = Settings {
             controls: self.control_scheme.borrow().clone(),
             renderer: self.engine.renderer.get_quality_settings(),
             sound: SoundSettings {
                 sound_volume: self.engine.sound_context.lock().unwrap().master_gain(),
+                hrtf: is_hrtf,
             },
         };
         settings.write_to_file(SETTINGS_FILE);

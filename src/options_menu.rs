@@ -3,6 +3,7 @@ use crate::{
     control_scheme::{ControlButton, ControlScheme},
     gui::{create_check_box, create_scroll_bar, create_scroll_viewer},
     message::Message,
+    settings::SoundSettings,
     GameEngine, GuiMessage, UINodeHandle,
 };
 use rg3d::gui::message::MessageDirection;
@@ -400,7 +401,7 @@ impl OptionsMenu {
                                     ScrollBarData {
                                         min: 0.0,
                                         max: 1.0,
-                                        value: 1.0,
+                                        value: engine.sound_context.lock().unwrap().master_gain(),
                                         step: 0.025,
                                         row: 0,
                                         column: 1,
@@ -452,7 +453,13 @@ impl OptionsMenu {
                                 .build(ctx),
                             )
                             .with_child({
-                                cb_use_hrtf = create_check_box(ctx, resource_manager, 2, 1, true);
+                                cb_use_hrtf = create_check_box(
+                                    ctx,
+                                    resource_manager,
+                                    2,
+                                    1,
+                                    SoundSettings::is_hrtf(&engine.sound_context.lock().unwrap()),
+                                );
                                 cb_use_hrtf
                             })
                             .with_child({
@@ -849,6 +856,18 @@ impl OptionsMenu {
                     control_scheme.shake_camera = value;
                 } else if message.destination() == self.cb_use_light_scatter {
                     settings.light_scatter_enabled = value;
+                } else if message.destination() == self.cb_use_hrtf {
+                    let mut sound_context = engine.sound_context.lock().unwrap();
+                    if value {
+                        sound_context.set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(
+                            rg3d::sound::hrtf::HrtfRenderer::new(
+                                rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin")
+                                    .unwrap(),
+                            ),
+                        ));
+                    } else {
+                        sound_context.set_renderer(rg3d::sound::renderer::Renderer::Default);
+                    }
                 }
             }
             UiMessageData::Button(msg) => {

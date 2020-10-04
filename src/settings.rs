@@ -1,4 +1,4 @@
-use rg3d::utils::log::Log;
+use rg3d::{sound::context::Context, utils::log::Log};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,6 +12,35 @@ impl Default for SoundSettings {
         Self {
             sound_volume: 1.0,
             hrtf: true,
+        }
+    }
+}
+
+impl SoundSettings {
+    pub fn is_hrtf(sound_context: &Context) -> bool {
+        if let rg3d::sound::renderer::Renderer::HrtfRenderer(_) = sound_context.renderer() {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn hrtf_on(sound_context: &mut Context) {
+        sound_context.set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(
+            rg3d::sound::hrtf::HrtfRenderer::new(
+                rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin").unwrap(),
+            ),
+        ));
+    }
+
+    pub fn hrtf_off(sound_context: &mut Context) {
+        sound_context.set_renderer(rg3d::sound::renderer::Renderer::Default);
+    }
+
+    pub fn get_from_engine(sound_context: &Context) -> Self {
+        Self {
+            sound_volume: sound_context.master_gain(),
+            hrtf: Self::is_hrtf(sound_context),
         }
     }
 }

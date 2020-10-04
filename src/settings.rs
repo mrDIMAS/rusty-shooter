@@ -47,8 +47,11 @@ impl SoundSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
+    #[serde(default)]
     pub renderer: rg3d::renderer::QualitySettings,
+    #[serde(default)]
     pub controls: crate::control_scheme::ControlScheme,
+    #[serde(default)]
     pub sound: SoundSettings,
 }
 

@@ -1,4 +1,4 @@
-use crate::{effects::EffectKind, message::Message, GameTime};
+use crate::{assets, effects::EffectKind, message::Message, GameTime};
 use rg3d::{
     core::{
         math::vec3::Vec3,
@@ -98,7 +98,7 @@ impl Item {
         match kind {
             ItemKind::Medkit => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
-                    model: "data/models/medkit.fbx",
+                    model: assets::models::items::MEDKIT,
                     scale: 1.0,
                     reactivation_interval: 20.0,
                 };
@@ -106,7 +106,7 @@ impl Item {
             }
             ItemKind::Plasma => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
-                    model: "data/models/yellow_box.FBX",
+                    model: assets::models::items::PLASMA_RIFLE_AMMO,
                     scale: 0.25,
                     reactivation_interval: 15.0,
                 };
@@ -114,7 +114,7 @@ impl Item {
             }
             ItemKind::Ak47Ammo => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
-                    model: "data/models/box_medium.FBX",
+                    model: assets::models::items::AK47_AMMO,
                     scale: 0.30,
                     reactivation_interval: 14.0,
                 };
@@ -122,7 +122,7 @@ impl Item {
             }
             ItemKind::M4Ammo => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
-                    model: "data/models/box_small.FBX",
+                    model: assets::models::items::M4_AMMO,
                     scale: 0.30,
                     reactivation_interval: 13.0,
                 };
@@ -130,7 +130,7 @@ impl Item {
             }
             ItemKind::PlasmaGun => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
-                    model: "data/models/plasma_rifle.FBX",
+                    model: assets::models::weapons::PLASMA_RIFLE,
                     scale: 3.0,
                     reactivation_interval: 30.0,
                 };
@@ -138,7 +138,7 @@ impl Item {
             }
             ItemKind::Ak47 => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
-                    model: "data/models/ak47.FBX",
+                    model: assets::models::weapons::AK47,
                     scale: 3.0,
                     reactivation_interval: 30.0,
                 };
@@ -146,7 +146,7 @@ impl Item {
             }
             ItemKind::M4 => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
-                    model: "data/models/m4.FBX",
+                    model: assets::models::weapons::M4,
                     scale: 3.0,
                     reactivation_interval: 30.0,
                 };
@@ -154,7 +154,7 @@ impl Item {
             }
             ItemKind::RocketLauncher => {
                 static DEFINITION: ItemDefinition = ItemDefinition {
-                    model: "data/models/Rpg7.FBX",
+                    model: assets::models::weapons::ROCKET_LAUNCHER,
                     scale: 3.0,
                     reactivation_interval: 30.0,
                 };

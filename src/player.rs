@@ -1,4 +1,5 @@
 use crate::{
+    assets,
     character::Character,
     control_scheme::{ControlButton, ControlScheme},
     level::UpdateContext,
@@ -545,18 +546,14 @@ impl Player {
         }
 
         if self.path_len > 2.0 {
-            let footsteps = [
-                "data/sounds/footsteps/FootStep_shoe_stone_step1.wav",
-                "data/sounds/footsteps/FootStep_shoe_stone_step2.wav",
-                "data/sounds/footsteps/FootStep_shoe_stone_step3.wav",
-                "data/sounds/footsteps/FootStep_shoe_stone_step4.wav",
-            ];
             self.character
                 .sender
                 .as_ref()
                 .unwrap()
                 .send(Message::PlaySound {
-                    path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())].into(),
+                    path: assets::sounds::footsteps::SHOE_STONE[rand::thread_rng()
+                        .gen_range(0, assets::sounds::footsteps::SHOE_STONE.len())]
+                    .into(),
                     position: self.character.position(&context.scene.physics),
                     gain: 1.0,
                     rolloff_factor: 2.0,

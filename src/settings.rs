@@ -1,3 +1,4 @@
+use crate::assets;
 use rg3d::{sound::context::Context, utils::log::Log};
 use serde::{Deserialize, Serialize};
 
@@ -28,7 +29,7 @@ impl SoundSettings {
     pub fn hrtf_on(sound_context: &mut Context) {
         sound_context.set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(
             rg3d::sound::hrtf::HrtfRenderer::new(
-                rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin").unwrap(),
+                rg3d::sound::hrtf::HrtfSphere::new(assets::sounds::HRTF_HRIR).unwrap(),
             ),
         ));
     }

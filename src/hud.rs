@@ -1,4 +1,5 @@
 use crate::{
+    assets,
     leader_board::{LeaderBoard, LeaderBoardUI},
     message::Message,
     GameEngine, GameTime, Gui, MatchOptions, UINodeHandle,
@@ -55,7 +56,7 @@ impl Hud {
         let resource_manager = &mut engine.resource_manager.lock().unwrap();
 
         let font = Font::from_file(
-            Path::new("data/ui/SquaresBold.ttf"),
+            Path::new(assets::fonts::SQUARES_BOLD),
             35.0,
             Font::default_char_set(),
         )
@@ -86,12 +87,10 @@ impl Hud {
                             .on_row(0)
                             .on_column(1),
                     )
-                    .with_opt_texture(utils::into_gui_texture(
-                        resource_manager.request_texture(
-                            Path::new("data/ui/crosshair.tga"),
-                            TextureKind::RGBA8,
-                        ),
-                    ))
+                    .with_opt_texture(utils::into_gui_texture(resource_manager.request_texture(
+                        Path::new(assets::textures::interface::CROSSHAIR),
+                        TextureKind::RGBA8,
+                    )))
                     .build(ctx),
                 )
                 .with_child({
@@ -214,7 +213,7 @@ impl Hud {
                                 )
                                 .with_opt_texture(utils::into_gui_texture(
                                     resource_manager.request_texture(
-                                        Path::new("data/ui/health_icon.png"),
+                                        Path::new(assets::textures::interface::HEALTH_ICON),
                                         TextureKind::RGBA8,
                                     ),
                                 ))
@@ -257,7 +256,7 @@ impl Hud {
                                 )
                                 .with_opt_texture(utils::into_gui_texture(
                                     resource_manager.request_texture(
-                                        Path::new("data/ui/ammo_icon.png"),
+                                        Path::new(assets::textures::interface::AMMO_ICON),
                                         TextureKind::RGBA8,
                                     ),
                                 ))
@@ -300,7 +299,7 @@ impl Hud {
                                 )
                                 .with_opt_texture(utils::into_gui_texture(
                                     resource_manager.request_texture(
-                                        Path::new("data/ui/shield_icon.png"),
+                                        Path::new(assets::textures::interface::SHIELD_ICON),
                                         TextureKind::RGBA8,
                                     ),
                                 ))

@@ -1,3 +1,4 @@
+use crate::assets;
 use rand::Rng;
 use rg3d::scene::particle_system::{
     BaseEmitter, BaseEmitterBuilder, Emitter, SphereEmitterBuilder,
@@ -148,10 +149,10 @@ fn create_steam(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: 
             height: 0.2,
             radius: 0.2,
         }))])
-        .with_opt_texture(
-            resource_manager
-                .request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8),
-        )
+        .with_opt_texture(resource_manager.request_texture(
+            Path::new(assets::textures::particles::SMOKE),
+            TextureKind::R8,
+        ))
         .build(),
     ));
 }
@@ -185,10 +186,10 @@ fn create_bullet_impact(graph: &mut Graph, resource_manager: &mut ResourceManage
         )
         .with_radius(0.01)
         .build()])
-        .with_opt_texture(
-            resource_manager
-                .request_texture(Path::new("data/particles/circle_05.png"), TextureKind::R8),
-        )
+        .with_opt_texture(resource_manager.request_texture(
+            Path::new(assets::textures::particles::CIRCLE),
+            TextureKind::R8,
+        ))
         .build(),
     ));
 }
@@ -225,10 +226,10 @@ fn create_smoke(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: 
         )
         .with_radius(0.01)
         .build()])
-        .with_opt_texture(
-            resource_manager
-                .request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8),
-        )
+        .with_opt_texture(resource_manager.request_texture(
+            Path::new(assets::textures::particles::SMOKE),
+            TextureKind::R8,
+        ))
         .build(),
     ));
 }
@@ -262,10 +263,10 @@ fn create_item_appear(graph: &mut Graph, resource_manager: &mut ResourceManager,
         )
         .with_radius(0.01)
         .build()])
-        .with_opt_texture(
-            resource_manager
-                .request_texture(Path::new("data/particles/star_09.png"), TextureKind::R8),
-        )
+        .with_opt_texture(resource_manager.request_texture(
+            Path::new(assets::textures::particles::STAR),
+            TextureKind::R8,
+        ))
         .build(),
     ));
 }

@@ -1,5 +1,6 @@
 use crate::{
-    actor::Actor, actor::ActorContainer, message::Message, projectile::ProjectileKind, GameTime,
+    actor::Actor, actor::ActorContainer, assets, message::Message, projectile::ProjectileKind,
+    GameTime,
 };
 use rg3d::{
     core::{
@@ -123,8 +124,8 @@ impl Weapon {
         match kind {
             WeaponKind::M4 => {
                 static DEFINITION: WeaponDefinition = WeaponDefinition {
-                    model: "data/models/m4.FBX",
-                    shot_sound: "data/sounds/m4_shot.ogg",
+                    model: assets::models::weapons::M4,
+                    shot_sound: assets::sounds::shot::M4,
                     ammo: 200,
                     projectile: ProjectileKind::Bullet,
                     shoot_interval: 0.15,
@@ -133,8 +134,8 @@ impl Weapon {
             }
             WeaponKind::Ak47 => {
                 static DEFINITION: WeaponDefinition = WeaponDefinition {
-                    model: "data/models/ak47.FBX",
-                    shot_sound: "data/sounds/ak47.ogg",
+                    model: assets::models::weapons::AK47,
+                    shot_sound: assets::sounds::shot::AK47,
                     ammo: 200,
                     projectile: ProjectileKind::Bullet,
                     shoot_interval: 0.15,
@@ -143,8 +144,8 @@ impl Weapon {
             }
             WeaponKind::PlasmaRifle => {
                 static DEFINITION: WeaponDefinition = WeaponDefinition {
-                    model: "data/models/plasma_rifle.FBX",
-                    shot_sound: "data/sounds/plasma_shot.ogg",
+                    model: assets::models::weapons::PLASMA_RIFLE,
+                    shot_sound: assets::sounds::shot::PLASMA_RIFLE,
                     ammo: 100,
                     projectile: ProjectileKind::Plasma,
                     shoot_interval: 0.25,
@@ -153,8 +154,8 @@ impl Weapon {
             }
             WeaponKind::RocketLauncher => {
                 static DEFINITION: WeaponDefinition = WeaponDefinition {
-                    model: "data/models/Rpg7.FBX",
-                    shot_sound: "data/sounds/grenade_launcher_fire.ogg",
+                    model: assets::models::weapons::ROCKET_LAUNCHER,
+                    shot_sound: assets::sounds::shot::ROCKET_LAUNCHER,
                     ammo: 100,
                     projectile: ProjectileKind::Rocket,
                     shoot_interval: 1.5,

@@ -1,5 +1,5 @@
 use crate::{
-    control_scheme::ControlScheme, match_menu::MatchMenu, message::Message,
+    assets, control_scheme::ControlScheme, match_menu::MatchMenu, message::Message,
     options_menu::OptionsMenu, GameEngine, Gui, GuiMessage, UINodeHandle,
 };
 use rg3d::gui::message::MessageDirection;
@@ -44,7 +44,7 @@ impl Menu {
         let frame_size = engine.renderer.get_frame_size();
 
         let font: Font = Font::from_file(
-            Path::new("data/ui/SquaresBold.ttf"),
+            Path::new(assets::fonts::SQUARES_BOLD),
             31.0,
             Font::default_char_set(),
         )

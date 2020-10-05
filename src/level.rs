@@ -1,5 +1,6 @@
 use crate::{
     actor::{Actor, ActorContainer},
+    assets,
     bot::{Bot, BotKind},
     control_scheme::ControlScheme,
     effects,
@@ -263,7 +264,7 @@ impl Level {
             .resource_manager
             .lock()
             .unwrap()
-            .request_model(Path::new("data/models/dm6.fbx"));
+            .request_model(Path::new(assets::models::maps::DM6));
         if let Some(map_model) = map_model {
             // Instantiate map
             map_root = map_model.lock().unwrap().instantiate_geometry(&mut scene);
@@ -612,7 +613,7 @@ impl Level {
                 .as_ref()
                 .unwrap()
                 .send(Message::PlaySound {
-                    path: PathBuf::from("data/sounds/item_pickup.ogg"),
+                    path: PathBuf::from(assets::sounds::ITEM_PICKUP),
                     position,
                     gain: 1.0,
                     rolloff_factor: 3.0,

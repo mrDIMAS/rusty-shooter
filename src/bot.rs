@@ -1,5 +1,6 @@
 use crate::{
     actor::{Actor, TargetDescriptor},
+    assets,
     character::Character,
     item::ItemContainer,
     level::UpdateContext,
@@ -752,16 +753,16 @@ impl Bot {
             BotKind::Mutant => {
                 static DEFINITION: BotDefinition = BotDefinition {
                     kind: BotKind::Mutant,
-                    model: "data/models/mutant.FBX",
-                    idle_animation: "data/animations/mutant/idle.fbx",
-                    walk_animation: "data/animations/mutant/walk.fbx",
-                    aim_animation: "data/animations/mutant/aim.fbx",
-                    whip_animation: "data/animations/mutant/whip.fbx",
-                    jump_animation: "data/animations/mutant/jump.fbx",
-                    falling_animation: "data/animations/mutant/falling.fbx",
-                    dying_animation: "data/animations/mutant/dying.fbx",
-                    dead_animation: "data/animations/mutant/dead.fbx",
-                    hit_reaction_animation: "data/animations/mutant/hit_reaction.fbx",
+                    model: assets::models::characters::MUTANT,
+                    idle_animation: assets::animations::mutant::IDLE,
+                    walk_animation: assets::animations::mutant::WALK,
+                    aim_animation: assets::animations::mutant::AIM,
+                    whip_animation: assets::animations::mutant::WHIP,
+                    jump_animation: assets::animations::mutant::JUMP,
+                    falling_animation: assets::animations::mutant::FALLING,
+                    dying_animation: assets::animations::mutant::DYING,
+                    dead_animation: assets::animations::mutant::DEAD,
+                    hit_reaction_animation: assets::animations::mutant::HIT_REACTION,
                     weapon_hand_name: "Mutant:RightHand",
                     left_leg_name: "Mutant:LeftUpLeg",
                     right_leg_name: "Mutant:RightUpLeg",
@@ -777,16 +778,16 @@ impl Bot {
             BotKind::Parasite => {
                 static DEFINITION: BotDefinition = BotDefinition {
                     kind: BotKind::Parasite,
-                    model: "data/models/parasite.FBX",
-                    idle_animation: "data/animations/parasite/idle.fbx",
-                    walk_animation: "data/animations/parasite/walk.fbx",
-                    aim_animation: "data/animations/parasite/aim.fbx",
-                    whip_animation: "data/animations/parasite/whip.fbx",
-                    jump_animation: "data/animations/parasite/jump.fbx",
-                    falling_animation: "data/animations/parasite/falling.fbx",
-                    dying_animation: "data/animations/parasite/dying.fbx",
-                    dead_animation: "data/animations/parasite/dead.fbx",
-                    hit_reaction_animation: "data/animations/parasite/hit_reaction.fbx",
+                    model: assets::models::characters::PARASITE,
+                    idle_animation: assets::animations::parasite::IDLE,
+                    walk_animation: assets::animations::parasite::WALK,
+                    aim_animation: assets::animations::parasite::AIM,
+                    whip_animation: assets::animations::parasite::WHIP,
+                    jump_animation: assets::animations::parasite::JUMP,
+                    falling_animation: assets::animations::parasite::FALLING,
+                    dying_animation: assets::animations::parasite::DYING,
+                    dead_animation: assets::animations::parasite::DEAD,
+                    hit_reaction_animation: assets::animations::parasite::HIT_REACTION,
                     weapon_hand_name: "RightHand",
                     left_leg_name: "LeftUpLeg",
                     right_leg_name: "RightUpLeg",
@@ -802,16 +803,16 @@ impl Bot {
             BotKind::Maw => {
                 static DEFINITION: BotDefinition = BotDefinition {
                     kind: BotKind::Maw,
-                    model: "data/models/maw.fbx",
-                    idle_animation: "data/animations/maw/idle.fbx",
-                    walk_animation: "data/animations/maw/walk.fbx",
-                    aim_animation: "data/animations/maw/aim.fbx",
-                    whip_animation: "data/animations/maw/whip.fbx",
-                    jump_animation: "data/animations/maw/jump.fbx",
-                    falling_animation: "data/animations/maw/falling.fbx",
-                    dying_animation: "data/animations/maw/dying.fbx",
-                    dead_animation: "data/animations/maw/dead.fbx",
-                    hit_reaction_animation: "data/animations/maw/hit_reaction.fbx",
+                    model: assets::models::characters::MAW,
+                    idle_animation: assets::animations::maw::IDLE,
+                    walk_animation: assets::animations::maw::WALK,
+                    aim_animation: assets::animations::maw::AIM,
+                    whip_animation: assets::animations::maw::WHIP,
+                    jump_animation: assets::animations::maw::JUMP,
+                    falling_animation: assets::animations::maw::FALLING,
+                    dying_animation: assets::animations::maw::DYING,
+                    dead_animation: assets::animations::maw::DEAD,
+                    hit_reaction_animation: assets::animations::maw::HIT_REACTION,
                     weapon_hand_name: "RightHand",
                     left_leg_name: "LeftUpLeg",
                     right_leg_name: "RightUpLeg",
@@ -1213,16 +1214,11 @@ impl Bot {
                     .pop_event()
                 {
                     if event.signal_id == LocomotionMachine::STEP_SIGNAL && has_ground_contact {
-                        let footsteps = [
-                            "data/sounds/footsteps/FootStep_shoe_stone_step1.wav",
-                            "data/sounds/footsteps/FootStep_shoe_stone_step2.wav",
-                            "data/sounds/footsteps/FootStep_shoe_stone_step3.wav",
-                            "data/sounds/footsteps/FootStep_shoe_stone_step4.wav",
-                        ];
                         sender
                             .send(Message::PlaySound {
-                                path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())]
-                                    .into(),
+                                path: assets::sounds::footsteps::SHOE_STONE[rand::thread_rng()
+                                    .gen_range(0, assets::sounds::footsteps::SHOE_STONE.len())]
+                                .into(),
                                 position,
                                 gain: 1.0,
                                 rolloff_factor: 2.0,

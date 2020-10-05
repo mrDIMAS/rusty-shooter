@@ -2,7 +2,7 @@
 //! However most of the styles are used from dark theme of rg3d-ui library so there
 //! is not much.
 
-use crate::{BuildContext, UINodeHandle};
+use crate::{assets, BuildContext, UINodeHandle};
 use rg3d::{
     core::color::Color,
     engine::resource_manager::ResourceManager,
@@ -53,7 +53,8 @@ pub fn create_scroll_bar(
             WidgetBuilder::new().with_background(Brush::Solid(Color::opaque(60, 60, 60))),
         )
         .with_opt_texture(utils::into_gui_texture(
-            resource_manager.request_texture("data/ui/circle.png", TextureKind::RGBA8),
+            resource_manager
+                .request_texture(assets::textures::interface::CIRCLE, TextureKind::RGBA8),
         ))
         .build(ctx),
     )
@@ -80,9 +81,10 @@ pub fn create_check_box(
     .checked(Some(checked))
     .with_check_mark(
         ImageBuilder::new(WidgetBuilder::new())
-            .with_opt_texture(utils::into_gui_texture(
-                resource_manager.request_texture("data/ui/check_mark.png", TextureKind::RGBA8),
-            ))
+            .with_opt_texture(utils::into_gui_texture(resource_manager.request_texture(
+                assets::textures::interface::CHECK_MARK,
+                TextureKind::RGBA8,
+            )))
             .build(ctx),
     )
     .build(ctx)

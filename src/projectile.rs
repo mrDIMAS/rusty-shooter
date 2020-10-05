@@ -1,5 +1,6 @@
 use crate::{
     actor::{Actor, ActorContainer},
+    assets,
     effects::EffectKind,
     message::Message,
     weapon::{Weapon, WeaponContainer},
@@ -113,7 +114,7 @@ impl Projectile {
                     speed: 0.15,
                     lifetime: 10.0,
                     is_kinematic: true,
-                    impact_sound: "data/sounds/bullet_impact_concrete.ogg",
+                    impact_sound: assets::sounds::impact::BULLET,
                 };
                 &DEFINITION
             }
@@ -123,7 +124,7 @@ impl Projectile {
                     speed: 5.0,
                     lifetime: 10.0,
                     is_kinematic: true,
-                    impact_sound: "data/sounds/bullet_impact_concrete.ogg",
+                    impact_sound: assets::sounds::impact::BULLET,
                 };
                 &DEFINITION
             }
@@ -133,7 +134,7 @@ impl Projectile {
                     speed: 0.5,
                     lifetime: 10.0,
                     is_kinematic: true,
-                    impact_sound: "data/sounds/explosion.ogg",
+                    impact_sound: assets::sounds::impact::ROCKET,
                 };
                 &DEFINITION
             }
@@ -160,17 +161,16 @@ impl Projectile {
                     let size = rand::thread_rng().gen_range(0.09, 0.12);
 
                     let color = Color::opaque(0, 162, 232);
-                    let model =
-                        scene.graph.add_node(Node::Sprite(
-                            SpriteBuilder::new(BaseBuilder::new())
-                                .with_size(size)
-                                .with_color(color)
-                                .with_opt_texture(resource_manager.request_texture(
-                                    "data/particles/light_01.png",
-                                    TextureKind::R8,
-                                ))
-                                .build(),
-                        ));
+                    let model = scene.graph.add_node(Node::Sprite(
+                        SpriteBuilder::new(BaseBuilder::new())
+                            .with_size(size)
+                            .with_color(color)
+                            .with_opt_texture(resource_manager.request_texture(
+                                assets::textures::particles::BULLET,
+                                TextureKind::R8,
+                            ))
+                            .build(),
+                    ));
 
                     let light = scene.graph.add_node(
                         PointLightBuilder::new(
@@ -194,27 +194,28 @@ impl Projectile {
                     (model, scene.physics.add_body(body))
                 }
                 ProjectileKind::Bullet => {
-                    let model = scene.graph.add_node(Node::Sprite(
-                        SpriteBuilder::new(
-                            BaseBuilder::new().with_local_transform(
-                                TransformBuilder::new()
-                                    .with_local_position(position)
-                                    .build(),
-                            ),
-                        )
-                        .with_size(0.05)
-                        .with_opt_texture(
-                            resource_manager
-                                .request_texture("data/particles/light_01.png", TextureKind::R8),
-                        )
-                        .build(),
-                    ));
+                    let model =
+                        scene.graph.add_node(Node::Sprite(
+                            SpriteBuilder::new(
+                                BaseBuilder::new().with_local_transform(
+                                    TransformBuilder::new()
+                                        .with_local_position(position)
+                                        .build(),
+                                ),
+                            )
+                            .with_size(0.05)
+                            .with_opt_texture(resource_manager.request_texture(
+                                assets::textures::particles::BULLET,
+                                TextureKind::R8,
+                            ))
+                            .build(),
+                        ));
 
                     (model, Handle::NONE)
                 }
                 ProjectileKind::Rocket => {
                     let resource = resource_manager
-                        .request_model("data/models/rocket.FBX")
+                        .request_model(assets::models::projectiles::ROCKET)
                         .unwrap();
                     let model = resource.lock().unwrap().instantiate_geometry(scene);
                     scene.graph[model]

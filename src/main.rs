@@ -7,6 +7,7 @@ extern crate serde;
 extern crate serde_json;
 
 mod actor;
+mod assets;
 mod bot;
 mod character;
 mod control_scheme;
@@ -255,7 +256,7 @@ pub struct SoundManager {
 impl SoundManager {
     pub fn new(context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager) -> Self {
         let buffer = resource_manager
-            .request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true)
+            .request_sound_buffer(assets::sounds::SOUNDTRACK, true)
             .unwrap();
         let music = context.lock().unwrap().add_source(
             GenericSourceBuilder::new(buffer)

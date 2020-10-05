@@ -48,9 +48,10 @@ pub fn create_scroll_bar(
     .with_min(data.min)
     .with_step(data.step)
     .with_value(data.value)
+    .with_value_precision(1)
     .with_indicator(
         ImageBuilder::new(
-            WidgetBuilder::new().with_background(Brush::Solid(Color::opaque(60, 60, 60))),
+            WidgetBuilder::new().with_background(Brush::Solid(Color::opaque(110, 110, 110))),
         )
         .with_opt_texture(utils::into_gui_texture(
             resource_manager.request_texture("data/ui/circle.png", TextureKind::RGBA8),

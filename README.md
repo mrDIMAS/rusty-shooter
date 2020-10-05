@@ -1,14 +1,19 @@
-# What is this?
+![1](pics/1.jpg?raw=true "Game 1")
 
-3d shooter written in Rust and based on [rg3d engine](https://github.com/mrDIMAS/rg3d)
+rusty-shooter is a first-person shooter game written in Rust, intended to serve as an example project for the [rg3d game engine](https://github.com/mrDIMAS/rg3d).
 
-## How to build
+## Building 
 
-Cargo.toml contains hardcoded relative path to engine `rg3d = { path = "../rg3d" }`, so you have to change this or put engine folder near the game folder to get game compile, because it always uses latest rg3d which could be not published on crates.io.
-Also make sure rg3d has all its dependent `rg3d-` crates near by of latest version from github. Again this is needed because development of game and engine (with all libraries) are goes in the same time and change could not be published on crates.io.
+`Cargo.toml` contains a hardcoded relative path to the game engine, like this:
 
-In other words you can do something like this:
 ```
+rg3d = { path = "../rg3d" }
+```
+
+In turn, rg3d hardcodes a relative path to its components `rg3d-ui`, `rg3d-core`, `rg3d-sound`, and `rg3d-physics`. This is to ensure that the latest Git versions of rg3d and all of its components are used, which are not yet published on crates.io.
+
+In other words, you need to do something like this in order to build:
+```bash
 git clone https://github.com/mrDIMAS/rg3d
 git clone https://github.com/mrDIMAS/rg3d-ui
 git clone https://github.com/mrDIMAS/rg3d-core
@@ -19,8 +24,8 @@ cd rusty-shooter
 cargo run --release
 ```
 
-Or if you're updating to the latest version, do this:
-```
+To update rusty-shooter and all the rg3d dependencies to the latest versions, do this:
+```bash
 cd rg3d
 git pull
 cd ../rg3d-ui
@@ -38,13 +43,11 @@ cargo run --release
 
 ## Gameplay video
 
-Keep in mind that it can be different from latest version!
+Keep in mind that it may differ from the latest version!
 
 [![Gameplay video](pics/rusty-shooter-youtube.PNG?raw=true "Video")](https://www.youtube.com/watch?v=UDn8ymyXPcI)
 
 ## Screenshots
-
-![1](pics/1.jpg?raw=true "Game 1")
 
 ![2](pics/2.jpg?raw=true "Game 2")
 

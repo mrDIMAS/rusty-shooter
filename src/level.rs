@@ -22,7 +22,7 @@ use rg3d::{
     },
     event::Event,
     physics::RayCastOptions,
-    renderer::debug_renderer,
+    scene,
     scene::{base::BaseBuilder, camera::CameraBuilder, node::Node, Scene},
     sound::context::Context,
     utils::{self, navmesh::Navmesh},
@@ -1049,12 +1049,14 @@ impl Level {
     }
 
     pub fn debug_draw(&self, engine: &mut GameEngine) {
-        let debug_renderer = &mut engine.renderer.debug_renderer;
+        let drawing_context = &mut engine.scenes[self.scene].drawing_context;
+
+        drawing_context.clear_lines();
 
         if let Some(navmesh) = self.navmesh.as_ref() {
             for pt in navmesh.vertices() {
                 for neighbour in pt.neighbours() {
-                    debug_renderer.add_line(debug_renderer::Line {
+                    drawing_context.add_line(scene::Line {
                         begin: pt.position(),
                         end: navmesh.vertices()[*neighbour].position(),
                         color: Default::default(),
@@ -1064,13 +1066,13 @@ impl Level {
 
             for actor in self.actors.iter() {
                 if let Actor::Bot(bot) = actor {
-                    bot.debug_draw(debug_renderer);
+                    bot.debug_draw(drawing_context);
                 }
             }
         }
 
         for death_zone in self.death_zones.iter() {
-            debug_renderer.draw_aabb(&death_zone.bounds, Color::opaque(0, 0, 200));
+            drawing_context.draw_aabb(&death_zone.bounds, Color::opaque(0, 0, 200));
         }
     }
 }

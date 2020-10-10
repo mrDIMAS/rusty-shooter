@@ -9,6 +9,7 @@ use crate::{
     GameTime,
 };
 use rand::Rng;
+use rg3d::scene::SceneDrawingContext;
 use rg3d::{
     animation::AnimationSignal,
     animation::{
@@ -27,7 +28,7 @@ use rg3d::{
         rigid_body::RigidBody,
         HitKind, RayCastOptions,
     },
-    renderer::debug_renderer::{self, DebugRenderer},
+    scene,
     scene::{base::BaseBuilder, graph::Graph, node::Node, transform::TransformBuilder, Scene},
     utils::navmesh::Navmesh,
 };
@@ -1004,18 +1005,18 @@ impl Bot {
         }
     }
 
-    pub fn debug_draw(&self, debug_renderer: &mut DebugRenderer) {
+    pub fn debug_draw(&self, context: &mut SceneDrawingContext) {
         for pts in self.path.windows(2) {
             let a = pts[0];
             let b = pts[1];
-            debug_renderer.add_line(debug_renderer::Line {
+            context.add_line(scene::Line {
                 begin: a,
                 end: b,
                 color: Color::from_rgba(255, 0, 0, 255),
             });
         }
 
-        debug_renderer.draw_frustum(&self.frustum, Color::from_rgba(0, 200, 0, 255));
+        context.draw_frustum(&self.frustum, Color::from_rgba(0, 200, 0, 255));
     }
 
     fn update_frustum(&mut self, position: Vec3, graph: &Graph) {

@@ -453,8 +453,6 @@ impl Game {
     }
 
     fn debug_render(&mut self) {
-        self.engine.renderer.debug_renderer.clear_lines();
-
         if let Some(level) = self.level.as_mut() {
             level.debug_draw(&mut self.engine);
         }

@@ -347,7 +347,9 @@ impl Game {
             .with_resizable(true);
 
         let settings = settings::Settings::load_from_file(SETTINGS_FILE);
-        let mut engine = GameEngine::new(window_builder, &events_loop, settings.renderer).unwrap();
+        let mut engine = GameEngine::new(window_builder, &events_loop).unwrap();
+
+	engine.renderer.quality_settings = settings.renderer;
 
         {
             let sound_context = &mut engine.sound_context.lock().unwrap();

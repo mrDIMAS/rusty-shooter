@@ -270,11 +270,16 @@ impl Level {
             // Create collision geometry
             let polygon_handle = scene.graph.find_by_name(map_root, "Polygon");
             if polygon_handle.is_some() {
+                let static_geom_handle =
+                    scene
+                        .physics
+                        .add_static_geometry(utils::mesh_to_static_geometry(
+                            scene.graph[polygon_handle].as_mesh(),
+                            false,
+                        ));
                 scene
-                    .physics
-                    .add_static_geometry(utils::mesh_to_static_geometry(
-                        scene.graph[polygon_handle].as_mesh(),
-                    ));
+                    .static_geometry_binder
+                    .bind(static_geom_handle, polygon_handle);
             } else {
                 println!("Unable to find Polygon node to build collision shape for level!");
             }
@@ -334,8 +339,9 @@ impl Level {
                     let end = scene.graph[end].global_position();
                     let (force, len) = (end - begin).normalized_ex();
                     let force = force.unwrap_or(Vec3::UP).scale(len / 20.0);
-                    let shape = utils::mesh_to_static_geometry(node.as_mesh());
+                    let shape = utils::mesh_to_static_geometry(node.as_mesh(), false);
                     let shape = scene.physics.add_static_geometry(shape);
+                    scene.static_geometry_binder.bind(shape, handle);
                     self.jump_pads.add(JumpPad::new(shape, force));
                 };
             } else if name.starts_with("Medkit") {

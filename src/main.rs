@@ -29,6 +29,7 @@ use crate::{
 };
 use rg3d::engine::resource_manager::ResourceManager;
 use rg3d::gui::message::MessageDirection;
+use rg3d::sound::context;
 use rg3d::{
     core::{
         color::Color,
@@ -338,11 +339,15 @@ impl Game {
             .with_resizable(true);
 
         let mut engine = GameEngine::new(window_builder, &events_loop).unwrap();
-        let hrtf_sphere = rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin").unwrap();
+        let hrtf_sphere = rg3d::sound::hrtf::HrirSphere::from_file(
+            "data/sounds/IRC_1040_C.bin",
+            context::SAMPLE_RATE,
+        )
+        .unwrap();
         engine.sound_context.lock().unwrap().set_renderer(
-            rg3d::sound::renderer::Renderer::HrtfRenderer(rg3d::sound::hrtf::HrtfRenderer::new(
-                hrtf_sphere,
-            )),
+            rg3d::sound::renderer::Renderer::HrtfRenderer(
+                rg3d::sound::renderer::hrtf::HrtfRenderer::new(hrtf_sphere),
+            ),
         );
 
         effects::register_custom_emitter_factory();

@@ -11,7 +11,6 @@ use rg3d::{
         scroll_bar::ScrollBarBuilder, scroll_viewer::ScrollViewerBuilder, widget::WidgetBuilder,
         HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
     },
-    resource::texture::TextureKind,
     utils,
 };
 
@@ -54,7 +53,7 @@ pub fn create_scroll_bar(
             WidgetBuilder::new().with_background(Brush::Solid(Color::opaque(110, 110, 110))),
         )
         .with_opt_texture(utils::into_gui_texture(
-            resource_manager.request_texture("data/ui/circle.png", TextureKind::RGBA8),
+            resource_manager.request_texture("data/ui/circle.png"),
         ))
         .build(ctx),
     )
@@ -82,7 +81,7 @@ pub fn create_check_box(
     .with_check_mark(
         ImageBuilder::new(WidgetBuilder::new())
             .with_opt_texture(utils::into_gui_texture(
-                resource_manager.request_texture("data/ui/check_mark.png", TextureKind::RGBA8),
+                resource_manager.request_texture("data/ui/check_mark.png"),
             ))
             .build(ctx),
     )

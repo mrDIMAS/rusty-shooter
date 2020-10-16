@@ -6,7 +6,6 @@ use crate::{
     CollisionGroups, GameTime,
 };
 use rand::Rng;
-use rg3d::scene::light::{BaseLightBuilder, PointLightBuilder};
 use rg3d::{
     core::{
         color::Color,
@@ -20,14 +19,17 @@ use rg3d::{
         rigid_body::{CollisionFlags, RigidBody},
         HitKind, RayCastOptions,
     },
-    resource::texture::TextureKind,
     scene::{
-        base::BaseBuilder, graph::Graph, node::Node, sprite::SpriteBuilder,
-        transform::TransformBuilder, Scene,
+        base::BaseBuilder,
+        graph::Graph,
+        light::{BaseLightBuilder, PointLightBuilder},
+        node::Node,
+        sprite::SpriteBuilder,
+        transform::TransformBuilder,
+        Scene,
     },
 };
-use std::path::PathBuf;
-use std::sync::mpsc::Sender;
+use std::{path::PathBuf, sync::mpsc::Sender};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ProjectileKind {
@@ -160,17 +162,15 @@ impl Projectile {
                     let size = rand::thread_rng().gen_range(0.09, 0.12);
 
                     let color = Color::opaque(0, 162, 232);
-                    let model =
-                        scene.graph.add_node(Node::Sprite(
-                            SpriteBuilder::new(BaseBuilder::new())
-                                .with_size(size)
-                                .with_color(color)
-                                .with_opt_texture(resource_manager.request_texture(
-                                    "data/particles/light_01.png",
-                                    TextureKind::R8,
-                                ))
-                                .build(),
-                        ));
+                    let model = scene.graph.add_node(Node::Sprite(
+                        SpriteBuilder::new(BaseBuilder::new())
+                            .with_size(size)
+                            .with_color(color)
+                            .with_opt_texture(
+                                resource_manager.request_texture("data/particles/light_01.png"),
+                            )
+                            .build(),
+                    ));
 
                     let light = scene.graph.add_node(
                         PointLightBuilder::new(
@@ -204,8 +204,7 @@ impl Projectile {
                         )
                         .with_size(0.05)
                         .with_opt_texture(
-                            resource_manager
-                                .request_texture("data/particles/light_01.png", TextureKind::R8),
+                            resource_manager.request_texture("data/particles/light_01.png"),
                         )
                         .build(),
                     ));

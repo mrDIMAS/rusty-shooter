@@ -11,7 +11,6 @@ use rg3d::{
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    resource::texture::TextureKind,
     scene::{
         base::BaseBuilder,
         graph::Graph,
@@ -23,8 +22,10 @@ use rg3d::{
         transform::TransformBuilder,
     },
 };
-use std::ops::{Deref, DerefMut};
-use std::path::Path;
+use std::{
+    ops::{Deref, DerefMut},
+    path::Path,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum EffectKind {
@@ -149,8 +150,7 @@ fn create_steam(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: 
             radius: 0.2,
         }))])
         .with_opt_texture(
-            resource_manager
-                .request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8),
+            resource_manager.request_texture(Path::new("data/particles/smoke_04.tga")),
         )
         .build(),
     ));
@@ -186,8 +186,7 @@ fn create_bullet_impact(graph: &mut Graph, resource_manager: &mut ResourceManage
         .with_radius(0.01)
         .build()])
         .with_opt_texture(
-            resource_manager
-                .request_texture(Path::new("data/particles/circle_05.png"), TextureKind::R8),
+            resource_manager.request_texture(Path::new("data/particles/circle_05.png")),
         )
         .build(),
     ));
@@ -226,8 +225,7 @@ fn create_smoke(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: 
         .with_radius(0.01)
         .build()])
         .with_opt_texture(
-            resource_manager
-                .request_texture(Path::new("data/particles/smoke_04.tga"), TextureKind::R8),
+            resource_manager.request_texture(Path::new("data/particles/smoke_04.tga")),
         )
         .build(),
     ));
@@ -262,10 +260,7 @@ fn create_item_appear(graph: &mut Graph, resource_manager: &mut ResourceManager,
         )
         .with_radius(0.01)
         .build()])
-        .with_opt_texture(
-            resource_manager
-                .request_texture(Path::new("data/particles/star_09.png"), TextureKind::R8),
-        )
+        .with_opt_texture(resource_manager.request_texture(Path::new("data/particles/star_09.png")))
         .build(),
     ));
 }

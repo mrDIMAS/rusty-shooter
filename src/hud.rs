@@ -3,8 +3,6 @@ use crate::{
     message::Message,
     GameEngine, GameTime, Gui, MatchOptions, UINodeHandle,
 };
-use rg3d::gui::message::MessageDirection;
-use rg3d::gui::ttf::SharedFont;
 use rg3d::{
     core::color::Color,
     event::{Event, WindowEvent},
@@ -13,15 +11,13 @@ use rg3d::{
         brush::Brush,
         grid::{Column, GridBuilder, Row},
         image::ImageBuilder,
-        message::TextMessage,
-        message::WidgetMessage,
+        message::{MessageDirection, TextMessage, WidgetMessage},
         stack_panel::StackPanelBuilder,
         text::TextBuilder,
-        ttf::Font,
+        ttf::{Font, SharedFont},
         widget::WidgetBuilder,
         HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
     },
-    resource::texture::TextureKind,
     utils,
 };
 use std::{
@@ -87,10 +83,7 @@ impl Hud {
                             .on_column(1),
                     )
                     .with_opt_texture(utils::into_gui_texture(
-                        resource_manager.request_texture(
-                            Path::new("data/ui/crosshair.tga"),
-                            TextureKind::RGBA8,
-                        ),
+                        resource_manager.request_texture(Path::new("data/ui/crosshair.tga")),
                     ))
                     .build(ctx),
                 )
@@ -213,10 +206,8 @@ impl Hud {
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
                                 .with_opt_texture(utils::into_gui_texture(
-                                    resource_manager.request_texture(
-                                        Path::new("data/ui/health_icon.png"),
-                                        TextureKind::RGBA8,
-                                    ),
+                                    resource_manager
+                                        .request_texture(Path::new("data/ui/health_icon.png")),
                                 ))
                                 .build(ctx),
                             )
@@ -256,10 +247,8 @@ impl Hud {
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
                                 .with_opt_texture(utils::into_gui_texture(
-                                    resource_manager.request_texture(
-                                        Path::new("data/ui/ammo_icon.png"),
-                                        TextureKind::RGBA8,
-                                    ),
+                                    resource_manager
+                                        .request_texture(Path::new("data/ui/ammo_icon.png")),
                                 ))
                                 .build(ctx),
                             )
@@ -299,10 +288,8 @@ impl Hud {
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
                                 .with_opt_texture(utils::into_gui_texture(
-                                    resource_manager.request_texture(
-                                        Path::new("data/ui/shield_icon.png"),
-                                        TextureKind::RGBA8,
-                                    ),
+                                    resource_manager
+                                        .request_texture(Path::new("data/ui/shield_icon.png")),
                                 ))
                                 .build(ctx),
                             )

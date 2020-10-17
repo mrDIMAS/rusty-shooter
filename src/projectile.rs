@@ -166,7 +166,7 @@ impl Projectile {
                         SpriteBuilder::new(BaseBuilder::new())
                             .with_size(size)
                             .with_color(color)
-                            .with_opt_texture(
+                            .with_texture(
                                 resource_manager.request_texture("data/particles/light_01.png"),
                             )
                             .build(),
@@ -203,7 +203,7 @@ impl Projectile {
                             ),
                         )
                         .with_size(0.05)
-                        .with_opt_texture(
+                        .with_texture(
                             resource_manager.request_texture("data/particles/light_01.png"),
                         )
                         .build(),

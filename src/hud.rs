@@ -82,7 +82,7 @@ impl Hud {
                             .on_row(0)
                             .on_column(1),
                     )
-                    .with_opt_texture(utils::into_gui_texture(
+                    .with_texture(utils::into_gui_texture(
                         resource_manager.request_texture(Path::new("data/ui/crosshair.tga")),
                     ))
                     .build(ctx),
@@ -205,7 +205,7 @@ impl Hud {
                                 ImageBuilder::new(
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
-                                .with_opt_texture(utils::into_gui_texture(
+                                .with_texture(utils::into_gui_texture(
                                     resource_manager
                                         .request_texture(Path::new("data/ui/health_icon.png")),
                                 ))
@@ -246,7 +246,7 @@ impl Hud {
                                 ImageBuilder::new(
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
-                                .with_opt_texture(utils::into_gui_texture(
+                                .with_texture(utils::into_gui_texture(
                                     resource_manager
                                         .request_texture(Path::new("data/ui/ammo_icon.png")),
                                 ))
@@ -287,7 +287,7 @@ impl Hud {
                                 ImageBuilder::new(
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
-                                .with_opt_texture(utils::into_gui_texture(
+                                .with_texture(utils::into_gui_texture(
                                     resource_manager
                                         .request_texture(Path::new("data/ui/shield_icon.png")),
                                 ))

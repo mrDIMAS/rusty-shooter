@@ -28,7 +28,7 @@ pub struct ScrollBarData {
 
 pub fn create_scroll_bar(
     ctx: &mut BuildContext,
-    resource_manager: &mut ResourceManager,
+    resource_manager: ResourceManager,
     data: ScrollBarData,
 ) -> UINodeHandle {
     let mut wb = WidgetBuilder::new();
@@ -62,7 +62,7 @@ pub fn create_scroll_bar(
 
 pub fn create_check_box(
     ctx: &mut BuildContext,
-    resource_manager: &mut ResourceManager,
+    resource_manager: ResourceManager,
     row: usize,
     column: usize,
     checked: bool,
@@ -90,12 +90,12 @@ pub fn create_check_box(
 
 pub fn create_scroll_viewer(
     ctx: &mut BuildContext,
-    resource_manager: &mut ResourceManager,
+    resource_manager: ResourceManager,
 ) -> UINodeHandle {
     ScrollViewerBuilder::new(WidgetBuilder::new())
         .with_horizontal_scroll_bar(create_scroll_bar(
             ctx,
-            resource_manager,
+            resource_manager.clone(),
             ScrollBarData {
                 min: 0.0,
                 max: 0.0,
@@ -110,7 +110,7 @@ pub fn create_scroll_viewer(
         ))
         .with_vertical_scroll_bar(create_scroll_bar(
             ctx,
-            resource_manager,
+            resource_manager.clone(),
             ScrollBarData {
                 min: 0.0,
                 max: 0.0,

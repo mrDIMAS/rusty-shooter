@@ -163,21 +163,22 @@ impl Item {
         }
     }
 
-    pub fn new(
+    pub async fn new(
         kind: ItemKind,
         position: Vec3,
         scene: &mut Scene,
-        resource_manager: &mut ResourceManager,
+        resource_manager: ResourceManager,
         sender: Sender<Message>,
     ) -> Self {
         let definition = Self::get_definition(kind);
 
         let model = resource_manager
             .request_model(Path::new(definition.model))
+            .await
             .unwrap()
-            .lock()
-            .unwrap()
-            .instantiate_geometry(scene);
+            .instantiate_geometry(scene)
+            .await
+            .unwrap();
 
         let pivot = scene.graph.add_node(Node::Base(
             BaseBuilder::new()

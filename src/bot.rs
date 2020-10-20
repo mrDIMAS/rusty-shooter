@@ -184,21 +184,22 @@ pub struct BotDefinition {
     pub v_aim_angle_hack: f32,
 }
 
-fn load_animation<P: AsRef<Path>>(
-    resource_manager: &mut ResourceManager,
+async fn load_animation<P: AsRef<Path>>(
+    resource_manager: ResourceManager,
     path: P,
     model: Handle<Node>,
     scene: &mut Scene,
     spine: Handle<Node>,
-) -> Result<Handle<Animation>, ()> {
+) -> Handle<Animation> {
     let animation = *resource_manager
         .request_model(path)
-        .ok_or(())?
-        .lock()
+        .await
         .unwrap()
         .retarget_animations(model, scene)
+        .await
+        .unwrap()
         .get(0)
-        .ok_or(())?;
+        .unwrap();
 
     // Disable spine animation because it is used to control vertical aim.
     scene
@@ -206,7 +207,7 @@ fn load_animation<P: AsRef<Path>>(
         .get_mut(animation)
         .set_node_track_enabled(spine, false);
 
-    Ok(animation)
+    animation
 }
 
 fn disable_leg_tracks(
@@ -256,28 +257,30 @@ impl LocomotionMachine {
     const JUMP_TO_FALLING_PARAM: &'static str = "JumpToFalling";
     const FALLING_TO_IDLE_PARAM: &'static str = "FallingToIdle";
 
-    fn new(
-        resource_manager: &mut ResourceManager,
+    async fn new(
+        resource_manager: ResourceManager,
         definition: &BotDefinition,
         model: Handle<Node>,
         scene: &mut Scene,
         spine: Handle<Node>,
-    ) -> Result<Self, ()> {
+    ) -> Self {
         let idle_animation = load_animation(
-            resource_manager,
+            resource_manager.clone(),
             definition.idle_animation,
             model,
             scene,
             spine,
-        )?;
+        )
+        .await;
 
         let walk_animation = load_animation(
-            resource_manager,
+            resource_manager.clone(),
             definition.walk_animation,
             model,
             scene,
             spine,
-        )?;
+        )
+        .await;
         scene
             .animations
             .get_mut(walk_animation)
@@ -285,19 +288,21 @@ impl LocomotionMachine {
             .add_signal(AnimationSignal::new(Self::STEP_SIGNAL, 0.8));
 
         let jump_animation = load_animation(
-            resource_manager,
+            resource_manager.clone(),
             definition.jump_animation,
             model,
             scene,
             spine,
-        )?;
+        )
+        .await;
         let falling_animation = load_animation(
             resource_manager,
             definition.falling_animation,
             model,
             scene,
             spine,
-        )?;
+        )
+        .await;
 
         let mut machine = Machine::new();
 
@@ -360,11 +365,11 @@ impl LocomotionMachine {
 
         machine.set_entry_state(idle_state);
 
-        Ok(Self {
+        Self {
             walk_animation,
             walk_state,
             machine,
-        })
+        }
     }
 
     fn is_walking(&self) -> bool {
@@ -437,20 +442,21 @@ impl Default for DyingMachine {
 impl DyingMachine {
     const DYING_TO_DEAD: &'static str = "DyingToDead";
 
-    fn new(
-        resource_manager: &mut ResourceManager,
+    async fn new(
+        resource_manager: ResourceManager,
         definition: &BotDefinition,
         model: Handle<Node>,
         scene: &mut Scene,
         spine: Handle<Node>,
-    ) -> Result<Self, ()> {
+    ) -> Self {
         let dying_animation = load_animation(
-            resource_manager,
+            resource_manager.clone(),
             definition.dying_animation,
             model,
             scene,
             spine,
-        )?;
+        )
+        .await;
         scene
             .animations
             .get_mut(dying_animation)
@@ -463,7 +469,8 @@ impl DyingMachine {
             model,
             scene,
             spine,
-        )?;
+        )
+        .await;
         scene
             .animations
             .get_mut(dead_animation)
@@ -488,12 +495,12 @@ impl DyingMachine {
             Self::DYING_TO_DEAD,
         ));
 
-        Ok(Self {
+        Self {
             machine,
             dead_state,
             dead_animation,
             dying_animation,
-        })
+        }
     }
 
     fn clean_up(&mut self, scene: &mut Scene) {
@@ -557,28 +564,30 @@ impl CombatMachine {
     const AIM_TO_HIT_REACTION_PARAM: &'static str = "AimToHitReaction";
     const WHIP_TO_HIT_REACTION_PARAM: &'static str = "WhipToHitReaction";
 
-    fn new(
-        resource_manager: &mut ResourceManager,
+    async fn new(
+        resource_manager: ResourceManager,
         definition: &BotDefinition,
         model: Handle<Node>,
         scene: &mut Scene,
         spine: Handle<Node>,
-    ) -> Result<Self, ()> {
+    ) -> Self {
         let aim_animation = load_animation(
-            resource_manager,
+            resource_manager.clone(),
             definition.aim_animation,
             model,
             scene,
             spine,
-        )?;
+        )
+        .await;
 
         let whip_animation = load_animation(
-            resource_manager,
+            resource_manager.clone(),
             definition.whip_animation,
             model,
             scene,
             spine,
-        )?;
+        )
+        .await;
         scene
             .animations
             .get_mut(whip_animation)
@@ -590,7 +599,8 @@ impl CombatMachine {
             model,
             scene,
             spine,
-        )?;
+        )
+        .await;
         scene
             .animations
             .get_mut(hit_reaction_animation)
@@ -687,12 +697,12 @@ impl CombatMachine {
                 Self::HIT_REACTION_TO_AIM_PARAM,
             ));
 
-        Ok(Self {
+        Self {
             machine,
             hit_reaction_animation,
             whip_animation,
             aim_state,
-        })
+        }
     }
 
     fn clean_up(&mut self, scene: &mut Scene) {
@@ -828,23 +838,24 @@ impl Bot {
         }
     }
 
-    pub fn new(
+    pub async fn new(
         kind: BotKind,
-        resource_manager: &mut ResourceManager,
+        resource_manager: ResourceManager,
         scene: &mut Scene,
         position: Vec3,
         sender: Sender<Message>,
-    ) -> Result<Self, ()> {
+    ) -> Self {
         let definition = Self::get_definition(kind);
 
         let body_height = 1.25;
 
         let model = resource_manager
             .request_model(Path::new(definition.model))
-            .ok_or(())?
-            .lock()
+            .await
             .unwrap()
-            .instantiate_geometry(scene);
+            .instantiate_geometry(scene)
+            .await
+            .unwrap();
 
         let spine = scene.graph.find_by_name(model, definition.spine);
         if spine.is_none() {
@@ -891,11 +902,14 @@ impl Bot {
         scene.graph.link_nodes(weapon_pivot, hand);
 
         let locomotion_machine =
-            LocomotionMachine::new(resource_manager, &definition, model, scene, spine)?;
-        let combat_machine = CombatMachine::new(resource_manager, definition, model, scene, spine)?;
-        let dying_machine = DyingMachine::new(resource_manager, definition, model, scene, spine)?;
+            LocomotionMachine::new(resource_manager.clone(), &definition, model, scene, spine)
+                .await;
+        let combat_machine =
+            CombatMachine::new(resource_manager.clone(), definition, model, scene, spine).await;
+        let dying_machine =
+            DyingMachine::new(resource_manager, definition, model, scene, spine).await;
 
-        Ok(Self {
+        Self {
             character: Character {
                 pivot,
                 body,
@@ -914,7 +928,7 @@ impl Bot {
             combat_machine,
             dying_machine,
             ..Default::default()
-        })
+        }
     }
 
     pub fn can_be_removed(&self) -> bool {

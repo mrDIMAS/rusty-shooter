@@ -35,12 +35,7 @@ pub enum EffectKind {
     Steam,
 }
 
-pub fn create(
-    kind: EffectKind,
-    graph: &mut Graph,
-    resource_manager: &mut ResourceManager,
-    pos: Vec3,
-) {
+pub fn create(kind: EffectKind, graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
     match kind {
         EffectKind::BulletImpact => create_bullet_impact(graph, resource_manager, pos),
         EffectKind::ItemAppear => create_item_appear(graph, resource_manager, pos),
@@ -123,7 +118,7 @@ pub fn register_custom_emitter_factory() {
     }
 }
 
-fn create_steam(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {
+fn create_steam(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
     graph.add_node(Node::ParticleSystem(
         ParticleSystemBuilder::new(
             BaseBuilder::new()
@@ -154,7 +149,7 @@ fn create_steam(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: 
     ));
 }
 
-fn create_bullet_impact(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {
+fn create_bullet_impact(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
     graph.add_node(Node::ParticleSystem(
         ParticleSystemBuilder::new(
             BaseBuilder::new()
@@ -188,7 +183,7 @@ fn create_bullet_impact(graph: &mut Graph, resource_manager: &mut ResourceManage
     ));
 }
 
-fn create_smoke(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {
+fn create_smoke(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
     graph.add_node(Node::ParticleSystem(
         ParticleSystemBuilder::new(
             BaseBuilder::new()
@@ -225,7 +220,7 @@ fn create_smoke(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: 
     ));
 }
 
-fn create_item_appear(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {
+fn create_item_appear(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
     graph.add_node(Node::ParticleSystem(
         ParticleSystemBuilder::new(
             BaseBuilder::new()

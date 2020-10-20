@@ -246,7 +246,7 @@ pub struct SoundManager {
 }
 
 impl SoundManager {
-    pub fn new(context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager) -> Self {
+    pub fn new(context: Arc<Mutex<Context>>, resource_manager: ResourceManager) -> Self {
         let buffer = resource_manager
             .request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true)
             .unwrap();
@@ -275,7 +275,7 @@ impl SoundManager {
         }
     }
 
-    pub fn handle_message(&mut self, resource_manager: &mut ResourceManager, message: &Message) {
+    pub fn handle_message(&mut self, resource_manager: ResourceManager, message: &Message) {
         let mut context = self.context.lock().unwrap();
 
         match message {
@@ -368,7 +368,7 @@ impl Game {
 
         let sound_manager = SoundManager::new(
             engine.sound_context.clone(),
-            &mut engine.resource_manager.lock().unwrap(),
+            engine.resource_manager.clone(),
         );
 
         let mut game = Game {
@@ -520,12 +520,12 @@ impl Game {
 
     pub fn start_new_game(&mut self, options: MatchOptions) {
         self.destroy_level();
-        self.level = Some(Level::new(
+        self.level = Some(rg3d::futures::executor::block_on(Level::new(
             &mut self.engine,
             self.control_scheme.clone(),
             self.events_sender.clone(),
             options,
-        ));
+        )));
         self.set_menu_visible(false);
     }
 
@@ -601,10 +601,14 @@ impl Game {
             }
 
             self.sound_manager
-                .handle_message(&mut self.engine.resource_manager.lock().unwrap(), &message);
+                .handle_message(self.engine.resource_manager.clone(), &message);
 
             if let Some(ref mut level) = self.level {
-                level.handle_message(&mut self.engine, &message, time);
+                rg3d::futures::executor::block_on(level.handle_message(
+                    &mut self.engine,
+                    &message,
+                    time,
+                ));
 
                 self.hud.handle_message(
                     &message,

@@ -143,9 +143,9 @@ impl Projectile {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub async fn new(
         kind: ProjectileKind,
-        resource_manager: &mut ResourceManager,
+        resource_manager: ResourceManager,
         scene: &mut Scene,
         dir: Vec3,
         position: Vec3,
@@ -214,8 +214,9 @@ impl Projectile {
                 ProjectileKind::Rocket => {
                     let resource = resource_manager
                         .request_model("data/models/rocket.FBX")
+                        .await
                         .unwrap();
-                    let model = resource.lock().unwrap().instantiate_geometry(scene);
+                    let model = resource.instantiate_geometry(scene).await.unwrap();
                     scene.graph[model]
                         .local_transform_mut()
                         .set_rotation(Quat::from(basis))

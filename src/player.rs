@@ -12,7 +12,7 @@ use rg3d::{
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
-    event::{DeviceEvent, ElementState, Event, MouseScrollDelta},
+    event::{DeviceEvent, ElementState, Event, MouseScrollDelta, WindowEvent},
     physics::{
         convex_shape::{Axis, CapsuleShape, ConvexShape},
         rigid_body::RigidBody,
@@ -366,95 +366,109 @@ impl Player {
 
     #[allow(clippy::cognitive_complexity)]
     pub fn process_input_event(&mut self, event: &Event<()>) -> bool {
+        let control_scheme = match self.control_scheme.clone() {
+            Some(x) => x,
+            None => return false,
+        };
+        let control_scheme = control_scheme.borrow();
+
+        let mut control_button = None;
+        let mut control_button_state = ElementState::Released;
+
+        // get mouse input
         if let Event::DeviceEvent { event, .. } = event {
-            if let Some(control_scheme) = self.control_scheme.clone() {
-                let control_scheme = control_scheme.borrow();
+            match event {
+                DeviceEvent::MouseMotion { delta } => {
+                    self.dest_yaw -= delta.0 as f32 * control_scheme.mouse_sens;
 
-                let mut control_button = None;
-                let mut control_button_state = ElementState::Released;
+                    let sens = if control_scheme.mouse_y_inverse {
+                        -control_scheme.mouse_sens
+                    } else {
+                        control_scheme.mouse_sens
+                    };
 
-                match event {
-                    DeviceEvent::MouseMotion { delta } => {
-                        self.dest_yaw -= delta.0 as f32 * control_scheme.mouse_sens;
-
-                        let sens = if control_scheme.mouse_y_inverse {
-                            -control_scheme.mouse_sens
-                        } else {
-                            control_scheme.mouse_sens
-                        };
-
-                        self.dest_pitch += delta.1 as f32 * sens;
-                        if self.dest_pitch > 90.0 {
-                            self.dest_pitch = 90.0;
-                        } else if self.dest_pitch < -90.0 {
-                            self.dest_pitch = -90.0;
-                        }
+                    self.dest_pitch += delta.1 as f32 * sens;
+                    if self.dest_pitch > 90.0 {
+                        self.dest_pitch = 90.0;
+                    } else if self.dest_pitch < -90.0 {
+                        self.dest_pitch = -90.0;
                     }
-
-                    DeviceEvent::Button { button, state } => {
-                        control_button = Some(ControlButton::Mouse(*button as u8));
-                        control_button_state = *state;
-                    }
-
-                    DeviceEvent::Key(input) => {
-                        if let Some(code) = input.virtual_keycode {
-                            control_button = Some(ControlButton::Key(code));
-                            control_button_state = input.state;
-                        }
-                    }
-
-                    DeviceEvent::MouseWheel { delta } => {
-                        if let MouseScrollDelta::LineDelta(_, y) = delta {
-                            if *y < 0.0 {
-                                self.prev_weapon();
-                            } else if *y > 0.0 {
-                                self.next_weapon();
-                            }
-                        }
-                    }
-
-                    _ => (),
                 }
 
-                if let Some(control_button) = control_button {
-                    match control_button_state {
-                        ElementState::Pressed => {
-                            if control_button == control_scheme.shoot.button {
-                                self.controller.shoot = true;
-                            } else if control_button == control_scheme.move_forward.button {
-                                self.controller.move_forward = true;
-                            } else if control_button == control_scheme.move_backward.button {
-                                self.controller.move_backward = true;
-                            } else if control_button == control_scheme.move_left.button {
-                                self.controller.move_left = true;
-                            } else if control_button == control_scheme.move_right.button {
-                                self.controller.move_right = true;
-                            } else if control_button == control_scheme.crouch.button {
-                                self.controller.crouch = true;
-                            } else if control_button == control_scheme.run.button {
-                                self.controller.run = true;
-                            } else if control_button == control_scheme.jump.button {
-                                self.controller.jump = true;
-                            }
-                        }
-                        ElementState::Released => {
-                            if control_button == control_scheme.shoot.button {
-                                self.controller.shoot = false;
-                            } else if control_button == control_scheme.move_forward.button {
-                                self.controller.move_forward = false;
-                            } else if control_button == control_scheme.move_backward.button {
-                                self.controller.move_backward = false;
-                            } else if control_button == control_scheme.move_left.button {
-                                self.controller.move_left = false;
-                            } else if control_button == control_scheme.move_right.button {
-                                self.controller.move_right = false;
-                            } else if control_button == control_scheme.crouch.button {
-                                self.controller.crouch = false;
-                            } else if control_button == control_scheme.run.button {
-                                self.controller.run = false;
-                            }
+                DeviceEvent::Button { button, state } => {
+                    control_button = Some(ControlButton::Mouse(*button as u8));
+                    control_button_state = *state;
+                }
+
+                DeviceEvent::Key(_input) => {
+                    // handle keyboard input via `WindowEvent` considering winit issue on macOS
+                }
+
+                DeviceEvent::MouseWheel { delta } => {
+                    if let MouseScrollDelta::LineDelta(_, y) = delta {
+                        if *y < 0.0 {
+                            self.prev_weapon();
+                        } else if *y > 0.0 {
+                            self.next_weapon();
                         }
                     }
+                }
+
+                _ => (),
+            }
+        }
+
+        // get keyboard input
+        if let Event::WindowEvent { event, .. } = event {
+            if let WindowEvent::KeyboardInput { input, .. } = event {
+                if let Some(code) = input.virtual_keycode {
+                    control_button = Some(ControlButton::Key(code));
+                    control_button_state = input.state;
+                }
+            }
+        }
+
+        // apply input
+        let control_button = match control_button {
+            Some(x) => x,
+            None => return false,
+        };
+
+        match control_button_state {
+            ElementState::Pressed => {
+                if control_button == control_scheme.shoot.button {
+                    self.controller.shoot = true;
+                } else if control_button == control_scheme.move_forward.button {
+                    self.controller.move_forward = true;
+                } else if control_button == control_scheme.move_backward.button {
+                    self.controller.move_backward = true;
+                } else if control_button == control_scheme.move_left.button {
+                    self.controller.move_left = true;
+                } else if control_button == control_scheme.move_right.button {
+                    self.controller.move_right = true;
+                } else if control_button == control_scheme.crouch.button {
+                    self.controller.crouch = true;
+                } else if control_button == control_scheme.run.button {
+                    self.controller.run = true;
+                } else if control_button == control_scheme.jump.button {
+                    self.controller.jump = true;
+                }
+            }
+            ElementState::Released => {
+                if control_button == control_scheme.shoot.button {
+                    self.controller.shoot = false;
+                } else if control_button == control_scheme.move_forward.button {
+                    self.controller.move_forward = false;
+                } else if control_button == control_scheme.move_backward.button {
+                    self.controller.move_backward = false;
+                } else if control_button == control_scheme.move_left.button {
+                    self.controller.move_left = false;
+                } else if control_button == control_scheme.move_right.button {
+                    self.controller.move_right = false;
+                } else if control_button == control_scheme.crouch.button {
+                    self.controller.crouch = false;
+                } else if control_button == control_scheme.run.button {
+                    self.controller.run = false;
                 }
             }
         }

@@ -687,8 +687,8 @@ impl Game {
     pub fn process_input_event(&mut self, event: &Event<()>) {
         self.process_dispatched_event(event);
 
-        if let Event::DeviceEvent { event, .. } = event {
-            if let DeviceEvent::Key(input) = event {
+        if let Event::WindowEvent { event, .. } = event {
+            if let WindowEvent::KeyboardInput { input, .. } = event {
                 if let ElementState::Pressed = input.state {
                     if let Some(key) = input.virtual_keycode {
                         if key == VirtualKeyCode::Escape {

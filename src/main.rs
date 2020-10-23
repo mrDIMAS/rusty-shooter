@@ -27,28 +27,24 @@ use crate::{
     actor::Actor, control_scheme::ControlScheme, hud::Hud, level::Level, menu::Menu,
     message::Message,
 };
-use rg3d::engine::resource_manager::ResourceManager;
-use rg3d::gui::message::MessageDirection;
-use rg3d::sound::context;
 use rg3d::{
     core::{
         color::Color,
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
-    engine::Engine,
-    event::{DeviceEvent, ElementState, Event, VirtualKeyCode, WindowEvent},
+    engine::{resource_manager::ResourceManager, Engine},
+    event::{ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     gui::{
-        message::TextMessage,
-        message::UiMessage,
+        message::{MessageDirection, TextMessage, UiMessage},
         node::{StubNode, UINode},
         text::TextBuilder,
         widget::WidgetBuilder,
         UserInterface,
     },
     sound::{
-        context::Context,
+        context::{self, Context},
         effects::{BaseEffect, Effect, EffectInput},
         source::{
             generic::GenericSourceBuilder, spatial::SpatialSourceBuilder, SoundSource, Status,
@@ -56,14 +52,16 @@ use rg3d::{
     },
     utils::translate_event,
 };
-use std::sync::{Arc, Mutex};
 use std::{
     cell::RefCell,
     fs::File,
     io::Write,
     path::Path,
     rc::Rc,
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        Arc, Mutex,
+    },
     thread,
     time::{self, Duration, Instant},
 };

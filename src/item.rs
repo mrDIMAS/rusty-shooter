@@ -176,9 +176,7 @@ impl Item {
             .request_model(Path::new(definition.model))
             .await
             .unwrap()
-            .instantiate_geometry(scene)
-            .await
-            .unwrap();
+            .instantiate_geometry(scene);
 
         let pivot = scene.graph.add_node(Node::Base(
             BaseBuilder::new()

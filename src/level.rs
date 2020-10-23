@@ -265,7 +265,7 @@ impl Level {
             .unwrap();
 
         // Instantiate map
-        let map_root = map_model.instantiate_geometry(&mut scene).await.unwrap();
+        let map_root = map_model.instantiate_geometry(&mut scene);
         // Create collision geometry
         let polygon_handle = scene.graph.find_by_name(map_root, "Polygon");
         if polygon_handle.is_some() {

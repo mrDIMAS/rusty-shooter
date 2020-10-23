@@ -247,11 +247,13 @@ pub struct SoundManager {
 
 impl SoundManager {
     pub fn new(context: Arc<Mutex<Context>>, resource_manager: ResourceManager) -> Self {
-        let buffer = resource_manager
-            .request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true)
-            .unwrap();
+        let buffer = rg3d::futures::executor::block_on(
+            resource_manager
+                .request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true),
+        )
+        .unwrap();
         let music = context.lock().unwrap().add_source(
-            GenericSourceBuilder::new(buffer)
+            GenericSourceBuilder::new(buffer.into())
                 .with_looping(true)
                 .with_status(Status::Playing)
                 .with_gain(0.25)
@@ -275,7 +277,7 @@ impl SoundManager {
         }
     }
 
-    pub fn handle_message(&mut self, resource_manager: ResourceManager, message: &Message) {
+    pub async fn handle_message(&mut self, resource_manager: ResourceManager, message: &Message) {
         let mut context = self.context.lock().unwrap();
 
         match message {
@@ -286,9 +288,12 @@ impl SoundManager {
                 rolloff_factor,
                 radius,
             } => {
-                let shot_buffer = resource_manager.request_sound_buffer(path, false).unwrap();
+                let shot_buffer = resource_manager
+                    .request_sound_buffer(path, false)
+                    .await
+                    .unwrap();
                 let shot_sound = SpatialSourceBuilder::new(
-                    GenericSourceBuilder::new(shot_buffer)
+                    GenericSourceBuilder::new(shot_buffer.into())
                         .with_status(Status::Playing)
                         .with_play_once(true)
                         .with_gain(*gain)
@@ -600,8 +605,10 @@ impl Game {
                 _ => (),
             }
 
-            self.sound_manager
-                .handle_message(self.engine.resource_manager.clone(), &message);
+            rg3d::futures::executor::block_on(
+                self.sound_manager
+                    .handle_message(self.engine.resource_manager.clone(), &message),
+            );
 
             if let Some(ref mut level) = self.level {
                 rg3d::futures::executor::block_on(level.handle_message(

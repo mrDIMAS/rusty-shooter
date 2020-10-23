@@ -176,9 +176,7 @@ impl Weapon {
             .request_model(Path::new(definition.model))
             .await
             .unwrap()
-            .instantiate_geometry(scene)
-            .await
-            .unwrap();
+            .instantiate_geometry(scene);
 
         let laser_dot = scene.graph.add_node(
             PointLightBuilder::new(

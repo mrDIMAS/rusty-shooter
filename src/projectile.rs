@@ -216,7 +216,7 @@ impl Projectile {
                         .request_model("data/models/rocket.FBX")
                         .await
                         .unwrap();
-                    let model = resource.instantiate_geometry(scene).await.unwrap();
+                    let model = resource.instantiate_geometry(scene);
                     scene.graph[model]
                         .local_transform_mut()
                         .set_rotation(Quat::from(basis))

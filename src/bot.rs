@@ -196,8 +196,6 @@ async fn load_animation<P: AsRef<Path>>(
         .await
         .unwrap()
         .retarget_animations(model, scene)
-        .await
-        .unwrap()
         .get(0)
         .unwrap();
 
@@ -853,9 +851,7 @@ impl Bot {
             .request_model(Path::new(definition.model))
             .await
             .unwrap()
-            .instantiate_geometry(scene)
-            .await
-            .unwrap();
+            .instantiate_geometry(scene);
 
         let spine = scene.graph.find_by_name(model, definition.spine);
         if spine.is_none() {

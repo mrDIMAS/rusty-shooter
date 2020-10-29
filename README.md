@@ -5,15 +5,10 @@
 ## How to build
 
 Cargo.toml contains hardcoded relative path to engine `rg3d = { path = "../rg3d" }`, so you have to change this or put engine folder near the game folder to get game compile, because it always uses latest rg3d which could be not published on crates.io.
-Also make sure rg3d has all its dependent `rg3d-` crates near by of latest version from github. Again this is needed because development of game and engine (with all libraries) are goes in the same time and change could not be published on crates.io.
 
 In other words you can do something like this:
 ```
 git clone https://github.com/mrDIMAS/rg3d
-git clone https://github.com/mrDIMAS/rg3d-ui
-git clone https://github.com/mrDIMAS/rg3d-core
-git clone https://github.com/mrDIMAS/rg3d-sound
-git clone https://github.com/mrDIMAS/rg3d-physics
 git clone https://github.com/mrDIMAS/rusty-shooter
 cd rusty-shooter
 cargo run --release
@@ -22,14 +17,6 @@ cargo run --release
 Or if you're updating to the latest version, do this:
 ```
 cd rg3d
-git pull
-cd ../rg3d-ui
-git pull
-cd ../rg3d-core
-git pull
-cd ../rg3d-sound
-git pull
-cd ../rg3d-physics
 git pull
 cd ../rusty-shooter
 git pull

@@ -43,19 +43,17 @@ use rg3d::{
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::{resource_manager::ResourceManager, Engine},
-    event::{DeviceEvent, ElementState, Event, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     gui::{
-        message::MessageDirection,
-        message::TextMessage,
-        message::UiMessage,
+        message::{MessageDirection, TextMessage, UiMessage},
         node::{StubNode, UINode},
         text::TextBuilder,
         widget::WidgetBuilder,
         UserInterface,
     },
     sound::{
-        context::Context,
+        context::{self, Context},
         effects::{BaseEffect, Effect, EffectInput},
         source::{
             generic::GenericSourceBuilder, spatial::SpatialSourceBuilder, SoundSource, Status,
@@ -63,14 +61,16 @@ use rg3d::{
     },
     utils::translate_event,
 };
-use std::sync::{Arc, Mutex};
 use std::{
     cell::RefCell,
     fs::File,
     io::Write,
     path::Path,
     rc::Rc,
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        Arc, Mutex,
+    },
     thread,
     time::{self, Duration, Instant},
 };
@@ -254,12 +254,14 @@ pub struct SoundManager {
 }
 
 impl SoundManager {
-    pub fn new(context: Arc<Mutex<Context>>, resource_manager: &mut ResourceManager) -> Self {
-        let buffer = resource_manager
-            .request_sound_buffer(assets::sounds::SOUNDTRACK, true)
-            .unwrap();
+    pub fn new(context: Arc<Mutex<Context>>, resource_manager: ResourceManager) -> Self {
+        let buffer = rg3d::futures::executor::block_on(
+            resource_manager
+                .request_sound_buffer(assets::sounds::SOUNDTRACK, true),
+        )
+        .unwrap();
         let music = context.lock().unwrap().add_source(
-            GenericSourceBuilder::new(buffer)
+            GenericSourceBuilder::new(buffer.into())
                 .with_looping(true)
                 .with_status(Status::Playing)
                 .with_gain(0.25)
@@ -283,7 +285,7 @@ impl SoundManager {
         }
     }
 
-    pub fn handle_message(&mut self, resource_manager: &mut ResourceManager, message: &Message) {
+    pub async fn handle_message(&mut self, resource_manager: ResourceManager, message: &Message) {
         let mut context = self.context.lock().unwrap();
 
         match message {
@@ -294,9 +296,12 @@ impl SoundManager {
                 rolloff_factor,
                 radius,
             } => {
-                let shot_buffer = resource_manager.request_sound_buffer(path, false).unwrap();
+                let shot_buffer = resource_manager
+                    .request_sound_buffer(path, false)
+                    .await
+                    .unwrap();
                 let shot_sound = SpatialSourceBuilder::new(
-                    GenericSourceBuilder::new(shot_buffer)
+                    GenericSourceBuilder::new(shot_buffer.into())
                         .with_status(Status::Playing)
                         .with_play_once(true)
                         .with_gain(*gain)
@@ -379,7 +384,7 @@ impl Game {
 
         let sound_manager = SoundManager::new(
             engine.sound_context.clone(),
-            &mut engine.resource_manager.lock().unwrap(),
+            engine.resource_manager.clone(),
         );
 
         let mut game = Game {
@@ -541,12 +546,12 @@ impl Game {
 
     pub fn start_new_game(&mut self, options: MatchOptions) {
         self.destroy_level();
-        self.level = Some(Level::new(
+        self.level = Some(rg3d::futures::executor::block_on(Level::new(
             &mut self.engine,
             self.control_scheme.clone(),
             self.events_sender.clone(),
             options,
-        ));
+        )));
         self.set_menu_visible(false);
     }
 
@@ -621,11 +626,17 @@ impl Game {
                 _ => (),
             }
 
-            self.sound_manager
-                .handle_message(&mut self.engine.resource_manager.lock().unwrap(), &message);
+            rg3d::futures::executor::block_on(
+                self.sound_manager
+                    .handle_message(self.engine.resource_manager.clone(), &message),
+            );
 
             if let Some(ref mut level) = self.level {
-                level.handle_message(&mut self.engine, &message, time);
+                rg3d::futures::executor::block_on(level.handle_message(
+                    &mut self.engine,
+                    &message,
+                    time,
+                ));
 
                 self.hud.handle_message(
                     &message,
@@ -704,8 +715,8 @@ impl Game {
     pub fn process_input_event(&mut self, event: &Event<()>) {
         self.process_dispatched_event(event);
 
-        if let Event::DeviceEvent { event, .. } = event {
-            if let DeviceEvent::Key(input) = event {
+        if let Event::WindowEvent { event, .. } = event {
+            if let WindowEvent::KeyboardInput { input, .. } = event {
                 if let ElementState::Pressed = input.state {
                     if let Some(key) = input.virtual_keycode {
                         if key == VirtualKeyCode::Escape {

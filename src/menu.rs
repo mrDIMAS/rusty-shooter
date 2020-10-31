@@ -163,7 +163,7 @@ impl Menu {
             options_menu: OptionsMenu::new(engine, control_scheme, sender.clone()),
             match_menu: MatchMenu::new(
                 &mut engine.user_interface,
-                &mut engine.resource_manager.lock().unwrap(),
+                engine.resource_manager.clone(),
                 sender,
             ),
         }

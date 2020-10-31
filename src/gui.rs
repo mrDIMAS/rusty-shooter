@@ -11,7 +11,6 @@ use rg3d::{
         scroll_bar::ScrollBarBuilder, scroll_viewer::ScrollViewerBuilder, widget::WidgetBuilder,
         HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
     },
-    resource::texture::TextureKind,
     utils,
 };
 
@@ -29,7 +28,7 @@ pub struct ScrollBarData {
 
 pub fn create_scroll_bar(
     ctx: &mut BuildContext,
-    resource_manager: &mut ResourceManager,
+    resource_manager: ResourceManager,
     data: ScrollBarData,
 ) -> UINodeHandle {
     let mut wb = WidgetBuilder::new();
@@ -53,9 +52,8 @@ pub fn create_scroll_bar(
         ImageBuilder::new(
             WidgetBuilder::new().with_background(Brush::Solid(Color::opaque(110, 110, 110))),
         )
-        .with_opt_texture(utils::into_gui_texture(
-            resource_manager
-                .request_texture(assets::textures::interface::CIRCLE, TextureKind::RGBA8),
+        .with_texture(utils::into_gui_texture(
+            resource_manager.request_texture(assets::textures::interface::CIRCLE),
         ))
         .build(ctx),
     )
@@ -64,7 +62,7 @@ pub fn create_scroll_bar(
 
 pub fn create_check_box(
     ctx: &mut BuildContext,
-    resource_manager: &mut ResourceManager,
+    resource_manager: ResourceManager,
     row: usize,
     column: usize,
     checked: bool,
@@ -82,10 +80,9 @@ pub fn create_check_box(
     .checked(Some(checked))
     .with_check_mark(
         ImageBuilder::new(WidgetBuilder::new())
-            .with_opt_texture(utils::into_gui_texture(resource_manager.request_texture(
-                assets::textures::interface::CHECK_MARK,
-                TextureKind::RGBA8,
-            )))
+            .with_texture(utils::into_gui_texture(
+                resource_manager.request_texture(assets::textures::interface::CHECK_MARK),
+            ))
             .build(ctx),
     )
     .build(ctx)
@@ -93,12 +90,12 @@ pub fn create_check_box(
 
 pub fn create_scroll_viewer(
     ctx: &mut BuildContext,
-    resource_manager: &mut ResourceManager,
+    resource_manager: ResourceManager,
 ) -> UINodeHandle {
     ScrollViewerBuilder::new(WidgetBuilder::new())
         .with_horizontal_scroll_bar(create_scroll_bar(
             ctx,
-            resource_manager,
+            resource_manager.clone(),
             ScrollBarData {
                 min: 0.0,
                 max: 0.0,
@@ -113,7 +110,7 @@ pub fn create_scroll_viewer(
         ))
         .with_vertical_scroll_bar(create_scroll_bar(
             ctx,
-            resource_manager,
+            resource_manager.clone(),
             ScrollBarData {
                 min: 0.0,
                 max: 0.0,

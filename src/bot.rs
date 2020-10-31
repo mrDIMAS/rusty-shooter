@@ -9,12 +9,10 @@ use crate::{
     GameTime,
 };
 use rand::Rng;
-use rg3d::scene::SceneDrawingContext;
 use rg3d::{
-    animation::AnimationSignal,
     animation::{
         machine::{self, Machine, PoseNode, State},
-        Animation,
+        Animation, AnimationSignal,
     },
     core::{
         color::Color,
@@ -28,12 +26,18 @@ use rg3d::{
         rigid_body::RigidBody,
         HitKind, RayCastOptions,
     },
-    scene,
-    scene::{base::BaseBuilder, graph::Graph, node::Node, transform::TransformBuilder, Scene},
+    resource::model::Model,
+    scene::{
+        self, base::BaseBuilder, graph::Graph, node::Node, transform::TransformBuilder, Scene,
+        SceneDrawingContext,
+    },
     utils::navmesh::Navmesh,
 };
-use std::ops::{Deref, DerefMut};
-use std::{path::Path, sync::mpsc::Sender};
+use std::{
+    ops::{Deref, DerefMut},
+    path::Path,
+    sync::mpsc::Sender,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum BotKind {
@@ -185,29 +189,18 @@ pub struct BotDefinition {
     pub v_aim_angle_hack: f32,
 }
 
-fn load_animation<P: AsRef<Path>>(
-    resource_manager: &mut ResourceManager,
-    path: P,
-    model: Handle<Node>,
+fn prepare_animation(
     scene: &mut Scene,
+    model: Model,
+    root: Handle<Node>,
     spine: Handle<Node>,
-) -> Result<Handle<Animation>, ()> {
-    let animation = *resource_manager
-        .request_model(path)
-        .ok_or(())?
-        .lock()
-        .unwrap()
-        .retarget_animations(model, scene)
-        .get(0)
-        .ok_or(())?;
-
-    // Disable spine animation because it is used to control vertical aim.
+) -> Handle<Animation> {
+    let animation = model.retarget_animations(root, scene)[0];
     scene
         .animations
         .get_mut(animation)
         .set_node_track_enabled(spine, false);
-
-    Ok(animation)
+    animation
 }
 
 fn disable_leg_tracks(
@@ -257,48 +250,30 @@ impl LocomotionMachine {
     const JUMP_TO_FALLING_PARAM: &'static str = "JumpToFalling";
     const FALLING_TO_IDLE_PARAM: &'static str = "FallingToIdle";
 
-    fn new(
-        resource_manager: &mut ResourceManager,
+    async fn new(
+        resource_manager: ResourceManager,
         definition: &BotDefinition,
         model: Handle<Node>,
         scene: &mut Scene,
         spine: Handle<Node>,
-    ) -> Result<Self, ()> {
-        let idle_animation = load_animation(
-            resource_manager,
-            definition.idle_animation,
-            model,
-            scene,
-            spine,
-        )?;
+    ) -> Self {
+        let (idle_animation, walk_animation, jump_animation, falling_animation) = rg3d::futures::join!(
+            resource_manager.request_model(definition.idle_animation),
+            resource_manager.request_model(definition.walk_animation),
+            resource_manager.request_model(definition.jump_animation),
+            resource_manager.request_model(definition.falling_animation)
+        );
 
-        let walk_animation = load_animation(
-            resource_manager,
-            definition.walk_animation,
-            model,
-            scene,
-            spine,
-        )?;
+        let idle_animation = prepare_animation(scene, idle_animation.unwrap(), model, spine);
+        let walk_animation = prepare_animation(scene, walk_animation.unwrap(), model, spine);
+        let jump_animation = prepare_animation(scene, jump_animation.unwrap(), model, spine);
+        let falling_animation = prepare_animation(scene, falling_animation.unwrap(), model, spine);
+
         scene
             .animations
             .get_mut(walk_animation)
             .add_signal(AnimationSignal::new(Self::STEP_SIGNAL, 0.4))
             .add_signal(AnimationSignal::new(Self::STEP_SIGNAL, 0.8));
-
-        let jump_animation = load_animation(
-            resource_manager,
-            definition.jump_animation,
-            model,
-            scene,
-            spine,
-        )?;
-        let falling_animation = load_animation(
-            resource_manager,
-            definition.falling_animation,
-            model,
-            scene,
-            spine,
-        )?;
 
         let mut machine = Machine::new();
 
@@ -361,11 +336,11 @@ impl LocomotionMachine {
 
         machine.set_entry_state(idle_state);
 
-        Ok(Self {
+        Self {
             walk_animation,
             walk_state,
             machine,
-        })
+        }
     }
 
     fn is_walking(&self) -> bool {
@@ -438,33 +413,27 @@ impl Default for DyingMachine {
 impl DyingMachine {
     const DYING_TO_DEAD: &'static str = "DyingToDead";
 
-    fn new(
-        resource_manager: &mut ResourceManager,
+    async fn new(
+        resource_manager: ResourceManager,
         definition: &BotDefinition,
         model: Handle<Node>,
         scene: &mut Scene,
         spine: Handle<Node>,
-    ) -> Result<Self, ()> {
-        let dying_animation = load_animation(
-            resource_manager,
-            definition.dying_animation,
-            model,
-            scene,
-            spine,
-        )?;
+    ) -> Self {
+        let (dying_animation, dead_animation) = rg3d::futures::join!(
+            resource_manager.request_model(definition.dying_animation),
+            resource_manager.request_model(definition.dead_animation)
+        );
+
+        let dying_animation = prepare_animation(scene, dying_animation.unwrap(), model, spine);
+        let dead_animation = prepare_animation(scene, dead_animation.unwrap(), model, spine);
+
         scene
             .animations
             .get_mut(dying_animation)
             .set_enabled(false)
             .set_speed(1.5);
 
-        let dead_animation = load_animation(
-            resource_manager,
-            definition.dead_animation,
-            model,
-            scene,
-            spine,
-        )?;
         scene
             .animations
             .get_mut(dead_animation)
@@ -489,12 +458,12 @@ impl DyingMachine {
             Self::DYING_TO_DEAD,
         ));
 
-        Ok(Self {
+        Self {
             machine,
             dead_state,
             dead_animation,
             dying_animation,
-        })
+        }
     }
 
     fn clean_up(&mut self, scene: &mut Scene) {
@@ -558,40 +527,29 @@ impl CombatMachine {
     const AIM_TO_HIT_REACTION_PARAM: &'static str = "AimToHitReaction";
     const WHIP_TO_HIT_REACTION_PARAM: &'static str = "WhipToHitReaction";
 
-    fn new(
-        resource_manager: &mut ResourceManager,
+    async fn new(
+        resource_manager: ResourceManager,
         definition: &BotDefinition,
         model: Handle<Node>,
         scene: &mut Scene,
         spine: Handle<Node>,
-    ) -> Result<Self, ()> {
-        let aim_animation = load_animation(
-            resource_manager,
-            definition.aim_animation,
-            model,
-            scene,
-            spine,
-        )?;
+    ) -> Self {
+        let (aim_animation, whip_animation, hit_reaction_animation) = rg3d::futures::join!(
+            resource_manager.request_model(definition.aim_animation),
+            resource_manager.request_model(definition.whip_animation),
+            resource_manager.request_model(definition.hit_reaction_animation)
+        );
 
-        let whip_animation = load_animation(
-            resource_manager,
-            definition.whip_animation,
-            model,
-            scene,
-            spine,
-        )?;
+        let aim_animation = prepare_animation(scene, aim_animation.unwrap(), model, spine);
+        let whip_animation = prepare_animation(scene, whip_animation.unwrap(), model, spine);
+        let hit_reaction_animation =
+            prepare_animation(scene, hit_reaction_animation.unwrap(), model, spine);
+
         scene
             .animations
             .get_mut(whip_animation)
             .add_signal(AnimationSignal::new(Self::HIT_SIGNAL, 0.9));
 
-        let hit_reaction_animation = load_animation(
-            resource_manager,
-            definition.hit_reaction_animation,
-            model,
-            scene,
-            spine,
-        )?;
         scene
             .animations
             .get_mut(hit_reaction_animation)
@@ -688,12 +646,12 @@ impl CombatMachine {
                 Self::HIT_REACTION_TO_AIM_PARAM,
             ));
 
-        Ok(Self {
+        Self {
             machine,
             hit_reaction_animation,
             whip_animation,
             aim_state,
-        })
+        }
     }
 
     fn clean_up(&mut self, scene: &mut Scene) {
@@ -829,21 +787,20 @@ impl Bot {
         }
     }
 
-    pub fn new(
+    pub async fn new(
         kind: BotKind,
-        resource_manager: &mut ResourceManager,
+        resource_manager: ResourceManager,
         scene: &mut Scene,
         position: Vec3,
         sender: Sender<Message>,
-    ) -> Result<Self, ()> {
+    ) -> Self {
         let definition = Self::get_definition(kind);
 
         let body_height = 1.25;
 
         let model = resource_manager
             .request_model(Path::new(definition.model))
-            .ok_or(())?
-            .lock()
+            .await
             .unwrap()
             .instantiate_geometry(scene);
 
@@ -892,11 +849,14 @@ impl Bot {
         scene.graph.link_nodes(weapon_pivot, hand);
 
         let locomotion_machine =
-            LocomotionMachine::new(resource_manager, &definition, model, scene, spine)?;
-        let combat_machine = CombatMachine::new(resource_manager, definition, model, scene, spine)?;
-        let dying_machine = DyingMachine::new(resource_manager, definition, model, scene, spine)?;
+            LocomotionMachine::new(resource_manager.clone(), &definition, model, scene, spine)
+                .await;
+        let combat_machine =
+            CombatMachine::new(resource_manager.clone(), definition, model, scene, spine).await;
+        let dying_machine =
+            DyingMachine::new(resource_manager, definition, model, scene, spine).await;
 
-        Ok(Self {
+        Self {
             character: Character {
                 pivot,
                 body,
@@ -915,7 +875,7 @@ impl Bot {
             combat_machine,
             dying_machine,
             ..Default::default()
-        })
+        }
     }
 
     pub fn can_be_removed(&self) -> bool {

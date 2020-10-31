@@ -4,8 +4,6 @@ use crate::{
     message::Message,
     GameEngine, GameTime, Gui, MatchOptions, UINodeHandle,
 };
-use rg3d::gui::message::MessageDirection;
-use rg3d::gui::ttf::SharedFont;
 use rg3d::{
     core::color::Color,
     event::{Event, WindowEvent},
@@ -14,15 +12,13 @@ use rg3d::{
         brush::Brush,
         grid::{Column, GridBuilder, Row},
         image::ImageBuilder,
-        message::TextMessage,
-        message::WidgetMessage,
+        message::{MessageDirection, TextMessage, WidgetMessage},
         stack_panel::StackPanelBuilder,
         text::TextBuilder,
-        ttf::Font,
+        ttf::{Font, SharedFont},
         widget::WidgetBuilder,
         HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
     },
-    resource::texture::TextureKind,
     utils,
 };
 use std::{
@@ -53,7 +49,7 @@ impl Hud {
 
         let frame_size = engine.renderer.get_frame_size();
         let ctx = &mut engine.user_interface.build_ctx();
-        let resource_manager = &mut engine.resource_manager.lock().unwrap();
+        let resource_manager = engine.resource_manager.clone();
 
         let font = Font::from_file(
             Path::new(assets::fonts::SQUARES_BOLD),
@@ -87,10 +83,10 @@ impl Hud {
                             .on_row(0)
                             .on_column(1),
                     )
-                    .with_opt_texture(utils::into_gui_texture(resource_manager.request_texture(
-                        Path::new(assets::textures::interface::CROSSHAIR),
-                        TextureKind::RGBA8,
-                    )))
+                    .with_texture(utils::into_gui_texture(
+                        resource_manager
+                            .request_texture(Path::new(assets::textures::interface::CROSSHAIR)),
+                    ))
                     .build(ctx),
                 )
                 .with_child({
@@ -211,11 +207,10 @@ impl Hud {
                                 ImageBuilder::new(
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
-                                .with_opt_texture(utils::into_gui_texture(
-                                    resource_manager.request_texture(
-                                        Path::new(assets::textures::interface::HEALTH_ICON),
-                                        TextureKind::RGBA8,
-                                    ),
+                                .with_texture(utils::into_gui_texture(
+                                    resource_manager.request_texture(Path::new(
+                                        assets::textures::interface::HEALTH_ICON,
+                                    )),
                                 ))
                                 .build(ctx),
                             )
@@ -254,11 +249,10 @@ impl Hud {
                                 ImageBuilder::new(
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
-                                .with_opt_texture(utils::into_gui_texture(
-                                    resource_manager.request_texture(
-                                        Path::new(assets::textures::interface::AMMO_ICON),
-                                        TextureKind::RGBA8,
-                                    ),
+                                .with_texture(utils::into_gui_texture(
+                                    resource_manager.request_texture(Path::new(
+                                        assets::textures::interface::AMMO_ICON,
+                                    )),
                                 ))
                                 .build(ctx),
                             )
@@ -297,11 +291,10 @@ impl Hud {
                                 ImageBuilder::new(
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
-                                .with_opt_texture(utils::into_gui_texture(
-                                    resource_manager.request_texture(
-                                        Path::new(assets::textures::interface::SHIELD_ICON),
-                                        TextureKind::RGBA8,
-                                    ),
+                                .with_texture(utils::into_gui_texture(
+                                    resource_manager.request_texture(Path::new(
+                                        assets::textures::interface::SHIELD_ICON,
+                                    )),
                                 ))
                                 .build(ctx),
                             )

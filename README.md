@@ -15,10 +15,6 @@ In turn, rg3d hardcodes a relative path to its components `rg3d-ui`, `rg3d-core`
 In other words, you need to do something like this in order to build:
 ```bash
 git clone https://github.com/mrDIMAS/rg3d
-git clone https://github.com/mrDIMAS/rg3d-ui
-git clone https://github.com/mrDIMAS/rg3d-core
-git clone https://github.com/mrDIMAS/rg3d-sound
-git clone https://github.com/mrDIMAS/rg3d-physics
 git clone https://github.com/mrDIMAS/rusty-shooter
 cd rusty-shooter
 cargo run --release
@@ -27,14 +23,6 @@ cargo run --release
 To update rusty-shooter and all the rg3d dependencies to the latest versions, do this:
 ```bash
 cd rg3d
-git pull
-cd ../rg3d-ui
-git pull
-cd ../rg3d-core
-git pull
-cd ../rg3d-sound
-git pull
-cd ../rg3d-physics
 git pull
 cd ../rusty-shooter
 git pull

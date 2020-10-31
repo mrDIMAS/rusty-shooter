@@ -12,7 +12,6 @@ use rg3d::{
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    resource::texture::TextureKind,
     scene::{
         base::BaseBuilder,
         graph::Graph,
@@ -24,8 +23,10 @@ use rg3d::{
         transform::TransformBuilder,
     },
 };
-use std::ops::{Deref, DerefMut};
-use std::path::Path;
+use std::{
+    ops::{Deref, DerefMut},
+    path::Path,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum EffectKind {
@@ -35,12 +36,7 @@ pub enum EffectKind {
     Steam,
 }
 
-pub fn create(
-    kind: EffectKind,
-    graph: &mut Graph,
-    resource_manager: &mut ResourceManager,
-    pos: Vec3,
-) {
+pub fn create(kind: EffectKind, graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
     match kind {
         EffectKind::BulletImpact => create_bullet_impact(graph, resource_manager, pos),
         EffectKind::ItemAppear => create_item_appear(graph, resource_manager, pos),
@@ -123,7 +119,7 @@ pub fn register_custom_emitter_factory() {
     }
 }
 
-fn create_steam(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {
+fn create_steam(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
     graph.add_node(Node::ParticleSystem(
         ParticleSystemBuilder::new(
             BaseBuilder::new()
@@ -149,15 +145,14 @@ fn create_steam(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: 
             height: 0.2,
             radius: 0.2,
         }))])
-        .with_opt_texture(resource_manager.request_texture(
-            Path::new(assets::textures::particles::SMOKE),
-            TextureKind::R8,
-        ))
+        .with_texture(
+            resource_manager.request_texture(Path::new(assets::textures::particles::SMOKE)),
+        )
         .build(),
     ));
 }
 
-fn create_bullet_impact(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {
+fn create_bullet_impact(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
     graph.add_node(Node::ParticleSystem(
         ParticleSystemBuilder::new(
             BaseBuilder::new()
@@ -186,15 +181,14 @@ fn create_bullet_impact(graph: &mut Graph, resource_manager: &mut ResourceManage
         )
         .with_radius(0.01)
         .build()])
-        .with_opt_texture(resource_manager.request_texture(
-            Path::new(assets::textures::particles::CIRCLE),
-            TextureKind::R8,
-        ))
+        .with_texture(
+            resource_manager.request_texture(Path::new(assets::textures::particles::CIRCLE)),
+        )
         .build(),
     ));
 }
 
-fn create_smoke(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {
+fn create_smoke(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
     graph.add_node(Node::ParticleSystem(
         ParticleSystemBuilder::new(
             BaseBuilder::new()
@@ -226,15 +220,14 @@ fn create_smoke(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: 
         )
         .with_radius(0.01)
         .build()])
-        .with_opt_texture(resource_manager.request_texture(
-            Path::new(assets::textures::particles::SMOKE),
-            TextureKind::R8,
-        ))
+        .with_texture(
+            resource_manager.request_texture(Path::new(assets::textures::particles::SMOKE)),
+        )
         .build(),
     ));
 }
 
-fn create_item_appear(graph: &mut Graph, resource_manager: &mut ResourceManager, pos: Vec3) {
+fn create_item_appear(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
     graph.add_node(Node::ParticleSystem(
         ParticleSystemBuilder::new(
             BaseBuilder::new()
@@ -263,10 +256,9 @@ fn create_item_appear(graph: &mut Graph, resource_manager: &mut ResourceManager,
         )
         .with_radius(0.01)
         .build()])
-        .with_opt_texture(resource_manager.request_texture(
-            Path::new(assets::textures::particles::STAR),
-            TextureKind::R8,
-        ))
+        .with_texture(
+            resource_manager.request_texture(Path::new(assets::textures::particles::STAR)),
+        )
         .build(),
     ));
 }

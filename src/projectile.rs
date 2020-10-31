@@ -7,7 +7,6 @@ use crate::{
     CollisionGroups, GameTime,
 };
 use rand::Rng;
-use rg3d::scene::light::{BaseLightBuilder, PointLightBuilder};
 use rg3d::{
     core::{
         color::Color,
@@ -21,14 +20,17 @@ use rg3d::{
         rigid_body::{CollisionFlags, RigidBody},
         HitKind, RayCastOptions,
     },
-    resource::texture::TextureKind,
     scene::{
-        base::BaseBuilder, graph::Graph, node::Node, sprite::SpriteBuilder,
-        transform::TransformBuilder, Scene,
+        base::BaseBuilder,
+        graph::Graph,
+        light::{BaseLightBuilder, PointLightBuilder},
+        node::Node,
+        sprite::SpriteBuilder,
+        transform::TransformBuilder,
+        Scene,
     },
 };
-use std::path::PathBuf;
-use std::sync::mpsc::Sender;
+use std::{path::PathBuf, sync::mpsc::Sender};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ProjectileKind {
@@ -142,9 +144,9 @@ impl Projectile {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub async fn new(
         kind: ProjectileKind,
-        resource_manager: &mut ResourceManager,
+        resource_manager: ResourceManager,
         scene: &mut Scene,
         dir: Vec3,
         position: Vec3,
@@ -165,10 +167,9 @@ impl Projectile {
                         SpriteBuilder::new(BaseBuilder::new())
                             .with_size(size)
                             .with_color(color)
-                            .with_opt_texture(resource_manager.request_texture(
-                                assets::textures::particles::BULLET,
-                                TextureKind::R8,
-                            ))
+                            .with_texture(
+                                resource_manager.request_texture(assets::textures::particles::BULLET),
+                            )
                             .build(),
                     ));
 
@@ -194,30 +195,29 @@ impl Projectile {
                     (model, scene.physics.add_body(body))
                 }
                 ProjectileKind::Bullet => {
-                    let model =
-                        scene.graph.add_node(Node::Sprite(
-                            SpriteBuilder::new(
-                                BaseBuilder::new().with_local_transform(
-                                    TransformBuilder::new()
-                                        .with_local_position(position)
-                                        .build(),
-                                ),
-                            )
-                            .with_size(0.05)
-                            .with_opt_texture(resource_manager.request_texture(
-                                assets::textures::particles::BULLET,
-                                TextureKind::R8,
-                            ))
-                            .build(),
-                        ));
+                    let model = scene.graph.add_node(Node::Sprite(
+                        SpriteBuilder::new(
+                            BaseBuilder::new().with_local_transform(
+                                TransformBuilder::new()
+                                    .with_local_position(position)
+                                    .build(),
+                            ),
+                        )
+                        .with_size(0.05)
+                        .with_texture(
+                            resource_manager.request_texture(assets::textures::particles::BULLET),
+                        )
+                        .build(),
+                    ));
 
                     (model, Handle::NONE)
                 }
                 ProjectileKind::Rocket => {
                     let resource = resource_manager
-                        .request_model(assets::models::projectiles::ROCKET)
+                        .request_model(assets::models::projecticles::ROCKET)
+                        .await
                         .unwrap();
-                    let model = resource.lock().unwrap().instantiate_geometry(scene);
+                    let model = resource.instantiate_geometry(scene);
                     scene.graph[model]
                         .local_transform_mut()
                         .set_rotation(Quat::from(basis))

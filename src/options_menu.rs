@@ -72,7 +72,7 @@ impl OptionsMenu {
             .collect();
 
         let ctx = &mut engine.user_interface.build_ctx();
-        let resource_manager = &mut engine.resource_manager.lock().unwrap();
+        let resource_manager = engine.resource_manager.clone();
 
         let common_row = Row::strict(36.0);
 
@@ -128,7 +128,10 @@ impl OptionsMenu {
                                         .on_row(0)
                                         .with_margin(margin),
                                 )
-                                .with_scroll_viewer(create_scroll_viewer(ctx, resource_manager))
+                                .with_scroll_viewer(create_scroll_viewer(
+                                    ctx,
+                                    resource_manager.clone(),
+                                ))
                                 .with_items({
                                     let mut items = Vec::new();
                                     for video_mode in video_modes.iter() {
@@ -187,7 +190,7 @@ impl OptionsMenu {
                             )
                             .with_child({
                                 cb_fullscreen =
-                                    create_check_box(ctx, resource_manager, 1, 1, false);
+                                    create_check_box(ctx, resource_manager.clone(), 1, 1, false);
                                 cb_fullscreen
                             })
                             // Spot Shadows Enabled
@@ -205,7 +208,7 @@ impl OptionsMenu {
                             .with_child({
                                 cb_spot_shadows = create_check_box(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     2,
                                     1,
                                     settings.spot_shadows_enabled,
@@ -227,7 +230,7 @@ impl OptionsMenu {
                             .with_child({
                                 cb_soft_spot_shadows = create_check_box(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     3,
                                     1,
                                     settings.spot_soft_shadows,
@@ -249,7 +252,7 @@ impl OptionsMenu {
                             .with_child({
                                 sb_spot_shadow_distance = create_scroll_bar(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     ScrollBarData {
                                         min: 1.0,
                                         max: 15.0,
@@ -279,7 +282,7 @@ impl OptionsMenu {
                             .with_child({
                                 cb_point_shadows = create_check_box(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     5,
                                     1,
                                     settings.point_shadows_enabled,
@@ -301,7 +304,7 @@ impl OptionsMenu {
                             .with_child({
                                 cb_soft_point_shadows = create_check_box(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     6,
                                     1,
                                     settings.point_soft_shadows,
@@ -323,7 +326,7 @@ impl OptionsMenu {
                             .with_child({
                                 sb_point_shadow_distance = create_scroll_bar(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     ScrollBarData {
                                         min: 1.0,
                                         max: 15.0,
@@ -352,7 +355,7 @@ impl OptionsMenu {
                             .with_child({
                                 cb_use_light_scatter = create_check_box(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     8,
                                     1,
                                     settings.light_scatter_enabled,
@@ -397,7 +400,7 @@ impl OptionsMenu {
                             .with_child({
                                 sb_sound_volume = create_scroll_bar(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     ScrollBarData {
                                         min: 0.0,
                                         max: 1.0,
@@ -426,7 +429,7 @@ impl OptionsMenu {
                             .with_child({
                                 sb_music_volume = create_scroll_bar(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     ScrollBarData {
                                         min: 0.0,
                                         max: 1.0,
@@ -455,7 +458,7 @@ impl OptionsMenu {
                             .with_child({
                                 cb_use_hrtf = create_check_box(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     2,
                                     1,
                                     SoundSettings::is_hrtf(&engine.sound_context.lock().unwrap()),
@@ -532,7 +535,7 @@ impl OptionsMenu {
                             .with_child({
                                 sb_mouse_sens = create_scroll_bar(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     ScrollBarData {
                                         min: 0.05,
                                         max: 2.0,
@@ -561,7 +564,7 @@ impl OptionsMenu {
                             .with_child({
                                 cb_mouse_y_inverse = create_check_box(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     1,
                                     1,
                                     control_scheme.borrow().mouse_y_inverse,
@@ -582,7 +585,7 @@ impl OptionsMenu {
                             .with_child({
                                 cb_smooth_mouse = create_check_box(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     2,
                                     1,
                                     control_scheme.borrow().smooth_mouse,
@@ -603,7 +606,7 @@ impl OptionsMenu {
                             .with_child({
                                 cb_shake_camera = create_check_box(
                                     ctx,
-                                    resource_manager,
+                                    resource_manager.clone(),
                                     3,
                                     1,
                                     control_scheme.borrow().shake_camera,

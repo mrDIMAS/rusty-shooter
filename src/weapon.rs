@@ -165,9 +165,9 @@ impl Weapon {
         }
     }
 
-    pub fn new(
+    pub async fn new(
         kind: WeaponKind,
-        resource_manager: &mut ResourceManager,
+        resource_manager: ResourceManager,
         scene: &mut Scene,
         sender: Sender<Message>,
     ) -> Weapon {
@@ -175,8 +175,7 @@ impl Weapon {
 
         let model = resource_manager
             .request_model(Path::new(definition.model))
-            .unwrap()
-            .lock()
+            .await
             .unwrap()
             .instantiate_geometry(scene);
 

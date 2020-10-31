@@ -27,10 +27,12 @@ impl SoundSettings {
     }
 
     pub fn hrtf_on(sound_context: &mut Context) {
+        let hrtf_sphere = rg3d::sound::hrtf::HrirSphere::from_file(
+            assets::sounds::HRTF_HRIR,
+            context::SAMPLE_RATE,
+        );
         sound_context.set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(
-            rg3d::sound::hrtf::HrtfRenderer::new(
-                rg3d::sound::hrtf::HrtfSphere::new(assets::sounds::HRTF_HRIR).unwrap(),
-            ),
+            rg3d::sound::hrtf::HrtfRenderer::new(hrtf_sphere),
         ));
     }
 

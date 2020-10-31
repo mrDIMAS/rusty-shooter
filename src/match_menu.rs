@@ -31,11 +31,7 @@ pub struct MatchMenu {
 }
 
 impl MatchMenu {
-    pub fn new(
-        ui: &mut Gui,
-        resource_manager: &mut ResourceManager,
-        sender: Sender<Message>,
-    ) -> Self {
+    pub fn new(ui: &mut Gui, resource_manager: ResourceManager, sender: Sender<Message>) -> Self {
         let common_row = Row::strict(36.0);
 
         let ctx = &mut ui.build_ctx();
@@ -90,7 +86,7 @@ impl MatchMenu {
                         .with_child({
                             sb_time_limit = create_scroll_bar(
                                 ctx,
-                                resource_manager,
+                                resource_manager.clone(),
                                 ScrollBarData {
                                     min: 5.0,
                                     max: 60.0,
@@ -113,7 +109,7 @@ impl MatchMenu {
                         .with_child({
                             sb_frag_limit = create_scroll_bar(
                                 ctx,
-                                resource_manager,
+                                resource_manager.clone(),
                                 ScrollBarData {
                                     min: 10.0,
                                     max: 200.0,

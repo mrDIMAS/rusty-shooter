@@ -10,7 +10,7 @@ use rand::Rng;
 use rg3d::core::algebra::{Matrix3, UnitQuaternion, Vector3};
 use rg3d::physics::dynamics::{BodyStatus, RigidBodyBuilder};
 use rg3d::physics::geometry::{ColliderBuilder, InteractionGroups};
-use rg3d::physics::na::Translation3;
+use rg3d::physics::na::{Isometry3, Translation3};
 use rg3d::scene::physics::RayCastOptions;
 use rg3d::scene::RigidBodyHandle;
 use rg3d::{
@@ -184,7 +184,7 @@ impl Projectile {
 
                     scene.graph.link_nodes(light, model);
 
-                    let collider = ColliderBuilder::ball(size).build();
+                    let collider = ColliderBuilder::ball(size).sensor(true).build();
                     let body = RigidBodyBuilder::new(BodyStatus::Kinematic)
                         .translation(position.x, position.y, position.z)
                         .build();
@@ -296,7 +296,7 @@ impl Projectile {
             scene.physics.cast_ray(
                 RayCastOptions {
                     ray,
-                    max_len: std::f32::MAX,
+                    max_len: ray.dir.norm(),
                     groups: InteractionGroups::all(),
                     sort_results: true,
                 },
@@ -335,7 +335,7 @@ impl Projectile {
 
         // Movement of kinematic projectiles are controlled explicitly.
         if self.definition.is_kinematic {
-            let total_velocity = self.initial_velocity + self.dir.scale(self.definition.speed);
+            let total_velocity = self.dir.scale(self.definition.speed);
 
             // Special case for projectiles with rigid body.
             if self.body.is_some() {
@@ -369,9 +369,13 @@ impl Projectile {
 
                 // Move rigid body explicitly.
                 let mut body = scene.physics.bodies.get_mut(self.body.into()).unwrap();
-                body.position.translation = Translation3 {
-                    vector: body.position.translation.vector + total_velocity,
+                let position = Isometry3 {
+                    rotation: Default::default(),
+                    translation: Translation3 {
+                        vector: body.position.translation.vector + total_velocity,
+                    },
                 };
+                body.set_next_kinematic_position(position);
             } else {
                 // We have just model - move it.
                 scene.graph[self.model]

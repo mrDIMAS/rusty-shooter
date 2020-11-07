@@ -1,15 +1,19 @@
+use crate::rg3d::core::math::Matrix4Ext;
+use crate::rg3d::core::math::Vector3Ext;
 use crate::{
     actor::Actor, actor::ActorContainer, message::Message, projectile::ProjectileKind, GameTime,
 };
+use rg3d::core::algebra::{Matrix3, Vector3};
+use rg3d::core::math::ray::Ray;
+use rg3d::physics::geometry::InteractionGroups;
+use rg3d::scene::physics::{Physics, RayCastOptions};
 use rg3d::{
     core::{
         color::Color,
-        math::{mat3::Mat3, ray::Ray, vec3::Vec3},
         pool::{Handle, Pool, PoolIteratorMut},
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    physics::{HitKind, Physics, RayCastOptions},
     scene::{
         base::BaseBuilder,
         graph::Graph,
@@ -58,10 +62,10 @@ pub struct Weapon {
     model: Handle<Node>,
     laser_dot: Handle<Node>,
     shot_point: Handle<Node>,
-    offset: Vec3,
-    dest_offset: Vec3,
+    offset: Vector3<f32>,
+    dest_offset: Vector3<f32>,
     last_shot_time: f64,
-    shot_position: Vec3,
+    shot_position: Vector3<f32>,
     owner: Handle<Actor>,
     ammo: u32,
     pub definition: &'static WeaponDefinition,
@@ -82,11 +86,11 @@ impl Default for Weapon {
             kind: WeaponKind::M4,
             laser_dot: Handle::NONE,
             model: Handle::NONE,
-            offset: Vec3::ZERO,
+            offset: Vector3::default(),
             shot_point: Handle::NONE,
-            dest_offset: Vec3::ZERO,
+            dest_offset: Vector3::default(),
             last_shot_time: 0.0,
-            shot_position: Vec3::ZERO,
+            shot_position: Vector3::default(),
             owner: Handle::NONE,
             ammo: 250,
             definition: Self::get_definition(WeaponKind::M4),
@@ -219,14 +223,14 @@ impl Weapon {
     pub fn update(&mut self, scene: &mut Scene, actors: &ActorContainer) {
         self.offset.follow(&self.dest_offset, 0.2);
 
-        self.update_laser_sight(&mut scene.graph, &scene.physics, actors);
+        self.update_laser_sight(&mut scene.graph, &mut scene.physics, actors);
 
         let node = &mut scene.graph[self.model];
         node.local_transform_mut().set_position(self.offset);
         self.shot_position = node.global_position();
     }
 
-    pub fn get_shot_position(&self, graph: &Graph) -> Vec3 {
+    pub fn get_shot_position(&self, graph: &Graph) -> Vector3<f32> {
         if self.shot_point.is_some() {
             graph[self.shot_point].global_position()
         } else {
@@ -235,7 +239,7 @@ impl Weapon {
         }
     }
 
-    pub fn get_shot_direction(&self, graph: &Graph) -> Vec3 {
+    pub fn get_shot_direction(&self, graph: &Graph) -> Vector3<f32> {
         graph[self.model].look_vector()
     }
 
@@ -243,7 +247,7 @@ impl Weapon {
         self.kind
     }
 
-    pub fn world_basis(&self, graph: &Graph) -> Mat3 {
+    pub fn world_basis(&self, graph: &Graph) -> Matrix3<f32> {
         graph[self.model].global_transform().basis()
     }
 
@@ -251,27 +255,43 @@ impl Weapon {
         self.ammo += amount;
     }
 
-    fn update_laser_sight(&self, graph: &mut Graph, physics: &Physics, actors: &ActorContainer) {
-        let mut laser_dot_position = Vec3::ZERO;
+    fn update_laser_sight(
+        &self,
+        graph: &mut Graph,
+        physics: &mut Physics,
+        actors: &ActorContainer,
+    ) {
+        let mut laser_dot_position = Vector3::default();
         let model = &graph[self.model];
         let begin = model.global_position();
         let end = begin + model.look_vector().scale(100.0);
         if let Some(ray) = Ray::from_two_points(&begin, &end) {
-            let mut result = Vec::new();
-            if physics.ray_cast(&ray, RayCastOptions::default(), &mut result) {
-                'hit_loop: for hit in result {
-                    // Filter hit with owner capsule
-                    if let HitKind::Body(body) = hit.kind {
-                        for (handle, actor) in actors.pair_iter() {
-                            if self.owner == handle && actor.body == body {
-                                continue 'hit_loop;
-                            }
-                        }
+            let mut query_buffer = Vec::default();
+            physics.cast_ray(
+                RayCastOptions {
+                    ray,
+                    max_len: std::f32::MAX,
+                    groups: InteractionGroups::all(),
+                    sort_results: true,
+                },
+                &mut query_buffer,
+            );
+            'hit_loop: for hit in query_buffer.iter() {
+                // Filter hit with owner capsule
+                let body = physics.colliders.get(hit.collider.into()).unwrap().parent();
+                for (handle, actor) in actors.pair_iter() {
+                    if self.owner == handle && actor.body == body.into() {
+                        continue 'hit_loop;
                     }
-                    let offset = hit.normal.normalized().unwrap_or_default().scale(0.2);
-                    laser_dot_position = hit.position + offset;
-                    break 'hit_loop;
                 }
+
+                let offset = hit
+                    .normal
+                    .try_normalize(std::f32::EPSILON)
+                    .unwrap_or_default()
+                    .scale(0.2);
+                laser_dot_position = hit.position.coords + offset;
+                break 'hit_loop;
             }
         }
 
@@ -296,7 +316,7 @@ impl Weapon {
         if self.ammo != 0 && time.elapsed - self.last_shot_time >= self.definition.shoot_interval {
             self.ammo -= 1;
 
-            self.offset = Vec3::new(0.0, 0.0, -0.05);
+            self.offset = Vector3::new(0.0, 0.0, -0.05);
             self.last_shot_time = time.elapsed;
 
             let position = self.get_shot_position(&scene.graph);

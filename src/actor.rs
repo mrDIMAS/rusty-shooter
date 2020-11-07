@@ -2,7 +2,7 @@ use crate::{
     bot::Bot, character::Character, level::UpdateContext, message::Message, player::Player,
 };
 use rg3d::core::{
-    math::vec3::Vec3,
+    algebra::Vector3,
     pool::{Handle, Pool, PoolIterator, PoolIteratorMut, PoolPairIterator, PoolPairIteratorMut},
     visitor::{Visit, VisitResult, Visitor},
 };
@@ -102,7 +102,7 @@ pub struct TargetDescriptor {
     pub handle: Handle<Actor>,
     pub ptr: *const Actor,
     pub health: f32,
-    pub position: Vec3,
+    pub position: Vector3<f32>,
 }
 
 #[derive(Default)]
@@ -169,10 +169,15 @@ impl ActorContainer {
             }
             if !is_dead {
                 for (item_handle, item) in context.items.pair_iter() {
-                    let body = context.scene.physics.borrow_body(actor.get_body());
+                    let body = context
+                        .scene
+                        .physics
+                        .bodies
+                        .get(actor.get_body().into())
+                        .unwrap();
                     let distance = (context.scene.graph[item.get_pivot()].global_position()
-                        - body.get_position())
-                    .len();
+                        - body.position.translation.vector)
+                        .norm();
                     if distance < 1.25 && !item.is_picked_up() {
                         actor
                             .sender
@@ -187,9 +192,16 @@ impl ActorContainer {
                 }
             }
 
+            // TODO: rapier does not provide contact info yet.
             // Actors can jump on jump pads.
+            /*
             for jump_pad in context.jump_pads.iter() {
-                let body = context.scene.physics.borrow_body_mut(actor.get_body());
+                let body = context
+                    .scene
+                    .physics
+                    .bodies
+                    .get_mut(actor.get_body().into())
+                    .unwrap();
                 let mut push = false;
                 for contact in body.get_contacts() {
                     if contact.static_geom == jump_pad.get_shape() {
@@ -200,7 +212,7 @@ impl ActorContainer {
                 if push {
                     body.set_velocity(jump_pad.get_force());
                 }
-            }
+            }*/
 
             if actor.can_be_removed() {
                 // Abuse the fact that actor has sender and use it to send message.

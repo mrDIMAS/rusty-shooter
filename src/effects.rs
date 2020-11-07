@@ -1,4 +1,5 @@
 use rand::Rng;
+use rg3d::core::algebra::Vector3;
 use rg3d::scene::particle_system::{
     BaseEmitter, BaseEmitterBuilder, Emitter, SphereEmitterBuilder,
 };
@@ -6,7 +7,6 @@ use rg3d::{
     core::{
         color::Color,
         color_gradient::{ColorGradient, GradientPoint},
-        math::vec3::Vec3,
         numeric_range::NumericRange,
         visitor::{Visit, VisitResult, Visitor},
     },
@@ -35,7 +35,12 @@ pub enum EffectKind {
     Steam,
 }
 
-pub fn create(kind: EffectKind, graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
+pub fn create(
+    kind: EffectKind,
+    graph: &mut Graph,
+    resource_manager: ResourceManager,
+    pos: Vector3<f32>,
+) {
     match kind {
         EffectKind::BulletImpact => create_bullet_impact(graph, resource_manager, pos),
         EffectKind::ItemAppear => create_item_appear(graph, resource_manager, pos),
@@ -105,7 +110,7 @@ impl Emit for CylinderEmitter {
         let radius = scale.sqrt() * self.radius;
         let x = radius * theta.cos();
         let y = radius * theta.sin();
-        particle.position = Vec3::new(x, y, z);
+        particle.position = Vector3::new(x, y, z);
     }
 }
 
@@ -118,13 +123,13 @@ pub fn register_custom_emitter_factory() {
     }
 }
 
-fn create_steam(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
+fn create_steam(graph: &mut Graph, resource_manager: ResourceManager, pos: Vector3<f32>) {
     graph.add_node(Node::ParticleSystem(
         ParticleSystemBuilder::new(
             BaseBuilder::new()
                 .with_local_transform(TransformBuilder::new().with_local_position(pos).build()),
         )
-        .with_acceleration(Vec3::new(0.0, -0.01, 0.0))
+        .with_acceleration(Vector3::new(0.0, -0.01, 0.0))
         .with_color_over_lifetime_gradient({
             let mut gradient = ColorGradient::new();
             gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(150, 150, 150, 0)));
@@ -149,14 +154,14 @@ fn create_steam(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3)
     ));
 }
 
-fn create_bullet_impact(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
+fn create_bullet_impact(graph: &mut Graph, resource_manager: ResourceManager, pos: Vector3<f32>) {
     graph.add_node(Node::ParticleSystem(
         ParticleSystemBuilder::new(
             BaseBuilder::new()
                 .with_lifetime(1.0)
                 .with_local_transform(TransformBuilder::new().with_local_position(pos).build()),
         )
-        .with_acceleration(Vec3::new(0.0, -10.0, 0.0))
+        .with_acceleration(Vector3::new(0.0, -10.0, 0.0))
         .with_color_over_lifetime_gradient({
             let mut gradient = ColorGradient::new();
             gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(255, 255, 0, 0)));
@@ -183,14 +188,14 @@ fn create_bullet_impact(graph: &mut Graph, resource_manager: ResourceManager, po
     ));
 }
 
-fn create_smoke(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
+fn create_smoke(graph: &mut Graph, resource_manager: ResourceManager, pos: Vector3<f32>) {
     graph.add_node(Node::ParticleSystem(
         ParticleSystemBuilder::new(
             BaseBuilder::new()
                 .with_lifetime(5.0)
                 .with_local_transform(TransformBuilder::new().with_local_position(pos).build()),
         )
-        .with_acceleration(Vec3::new(0.0, 0.0, 0.0))
+        .with_acceleration(Vector3::new(0.0, 0.0, 0.0))
         .with_color_over_lifetime_gradient({
             let mut gradient = ColorGradient::new();
             gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(150, 150, 150, 0)));
@@ -220,14 +225,14 @@ fn create_smoke(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3)
     ));
 }
 
-fn create_item_appear(graph: &mut Graph, resource_manager: ResourceManager, pos: Vec3) {
+fn create_item_appear(graph: &mut Graph, resource_manager: ResourceManager, pos: Vector3<f32>) {
     graph.add_node(Node::ParticleSystem(
         ParticleSystemBuilder::new(
             BaseBuilder::new()
                 .with_lifetime(1.4)
                 .with_local_transform(TransformBuilder::new().with_local_position(pos).build()),
         )
-        .with_acceleration(Vec3::new(0.0, -6.0, 0.0))
+        .with_acceleration(Vector3::new(0.0, -6.0, 0.0))
         .with_color_over_lifetime_gradient({
             let mut gradient = ColorGradient::new();
             gradient.add_point(GradientPoint::new(0.00, Color::from_rgba(255, 255, 0, 0)));

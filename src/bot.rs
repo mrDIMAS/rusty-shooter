@@ -1,3 +1,4 @@
+use crate::rg3d::core::math::Vector3Ext;
 use crate::{
     actor::{Actor, TargetDescriptor},
     character::Character,
@@ -8,23 +9,25 @@ use crate::{
     GameTime,
 };
 use rand::Rng;
+use rg3d::core::algebra::Point3;
+use rg3d::physics::dynamics::{BodyStatus, RigidBodyBuilder};
+use rg3d::physics::geometry::{ColliderBuilder, InteractionGroups};
+use rg3d::physics::ncollide::query;
+use rg3d::scene::physics::{Physics, RayCastOptions};
+use rg3d::scene::RigidBodyHandle;
 use rg3d::{
     animation::{
         machine::{self, Machine, PoseNode, State},
         Animation, AnimationSignal,
     },
     core::{
+        algebra::{Matrix4, UnitQuaternion, Vector3},
         color::Color,
-        math::{frustum::Frustum, mat4::Mat4, quat::Quat, ray::Ray, vec3::Vec3, SmoothAngle},
+        math::{frustum::Frustum, ray::Ray, SmoothAngle},
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    physics::{
-        convex_shape::{Axis, CapsuleShape, ConvexShape},
-        rigid_body::RigidBody,
-        HitKind, RayCastOptions,
-    },
     resource::model::Model,
     scene::{
         self, base::BaseBuilder, graph::Graph, node::Node, transform::TransformBuilder, Scene,
@@ -67,7 +70,7 @@ impl BotKind {
 }
 
 pub struct Target {
-    position: Vec3,
+    position: Vector3<f32>,
     handle: Handle<Actor>,
 }
 
@@ -102,14 +105,14 @@ pub struct Bot {
     dying_machine: DyingMachine,
     last_health: f32,
     restoration_time: f32,
-    path: Vec<Vec3>,
-    move_target: Vec3,
+    path: Vec<Vector3<f32>>,
+    move_target: Vector3<f32>,
     current_path_point: usize,
     frustum: Frustum,
     last_poi_update_time: f64,
-    point_of_interest: Vec3,
+    point_of_interest: Vector3<f32>,
     last_path_rebuild_time: f64,
-    last_move_dir: Vec3,
+    last_move_dir: Vector3<f32>,
     spine: Handle<Node>,
     yaw: SmoothAngle,
     pitch: SmoothAngle,
@@ -790,7 +793,7 @@ impl Bot {
         kind: BotKind,
         resource_manager: ResourceManager,
         scene: &mut Scene,
-        position: Vec3,
+        position: Vector3<f32>,
         sender: Sender<Message>,
     ) -> Self {
         let definition = Self::get_definition(kind);
@@ -812,21 +815,28 @@ impl Bot {
             let pivot = scene.graph.add_node(Node::Base(Default::default()));
             scene.graph.link_nodes(model, pivot);
             let transform = scene.graph[model].local_transform_mut();
-            transform.set_position(Vec3::new(0.0, -body_height * 0.5, 0.0));
-            transform.set_scale(Vec3::new(
+            transform.set_position(Vector3::new(0.0, -body_height * 0.5, 0.0));
+            transform.set_scale(Vector3::new(
                 definition.scale,
                 definition.scale,
                 definition.scale,
             ));
 
-            let capsule_shape = CapsuleShape::new(0.28, body_height, Axis::Y);
-            let mut capsule_body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
-            capsule_body.set_friction(Vec3::new(0.2, 0.0, 0.2));
-            capsule_body.set_position(position);
-            let body = scene.physics.add_body(capsule_body);
-            scene.physics_binder.bind(pivot, body);
+            let mut capsule_body = RigidBodyBuilder::new(BodyStatus::Dynamic)
+                .translation(position.x, position.y, position.z)
+                .build();
+            let body = scene.physics.bodies.insert(capsule_body);
+            scene.physics_binder.bind(pivot, body.into());
 
-            (pivot, body)
+            scene.physics.colliders.insert(
+                ColliderBuilder::capsule_y(body_height * 0.5, 0.28)
+                    .friction(0.2)
+                    .build(),
+                body.into(),
+                &mut scene.physics.bodies,
+            );
+
+            (pivot, RigidBodyHandle::from(body))
         };
 
         let hand = scene.graph.find_by_name(model, definition.weapon_hand_name);
@@ -835,10 +845,15 @@ impl Bot {
             BaseBuilder::new()
                 .with_local_transform(
                     TransformBuilder::new()
-                        .with_local_scale(Vec3::new(wpn_scale, wpn_scale, wpn_scale))
+                        .with_local_scale(Vector3::new(wpn_scale, wpn_scale, wpn_scale))
                         .with_local_rotation(
-                            Quat::from_axis_angle(Vec3::RIGHT, std::f32::consts::FRAC_PI_2)
-                                * Quat::from_axis_angle(Vec3::UP, -std::f32::consts::FRAC_PI_2),
+                            UnitQuaternion::from_axis_angle(
+                                &Vector3::x_axis(),
+                                std::f32::consts::FRAC_PI_2,
+                            ) * UnitQuaternion::from_axis_angle(
+                                &Vector3::y_axis(),
+                                -std::f32::consts::FRAC_PI_2,
+                            ),
                         )
                         .build(),
                 )
@@ -888,34 +903,36 @@ impl Bot {
     fn select_target(
         &mut self,
         self_handle: Handle<Actor>,
-        scene: &Scene,
+        scene: &mut Scene,
         targets: &[TargetDescriptor],
     ) {
         self.target = None;
         let position = self.character.position(&scene.physics);
         let mut closest_distance = std::f32::MAX;
-        let mut raycast_results = Vec::new();
+
         'target_loop: for desc in targets {
             if desc.handle != self_handle && self.frustum.is_contains_point(desc.position) {
-                if let Some(ray) = Ray::from_two_points(&position, &desc.position) {
-                    let options = RayCastOptions {
-                        ignore_bodies: false,
-                        ignore_static_geometries: false,
+                let mut query_buffer = Vec::default();
+                scene.physics.cast_ray(
+                    RayCastOptions {
+                        ray: Ray::from_two_points(&desc.position, &position).unwrap_or_default(),
+                        groups: InteractionGroups::all(),
+                        max_len: std::f32::MAX,
                         sort_results: true,
-                    };
-                    if scene.physics.ray_cast(&ray, options, &mut raycast_results) {
-                        'hit_loop: for hit in raycast_results.iter() {
-                            match hit.kind {
-                                HitKind::StaticTriangle { .. } => {
-                                    // Target is behind something.
-                                    continue 'target_loop;
-                                }
-                                HitKind::Body(handle) => {
-                                    if self.character.body == handle {
-                                        continue 'hit_loop;
-                                    }
-                                }
-                            }
+                    },
+                    &mut query_buffer,
+                );
+
+                'hit_loop: for hit in query_buffer.iter() {
+                    let collider = scene.physics.colliders.get(hit.collider.into()).unwrap();
+                    let body = collider.parent();
+
+                    if collider.shape().as_trimesh().is_some() {
+                        // Target is behind something.
+                        continue 'target_loop;
+                    } else {
+                        if self.character.body == body.into() {
+                            continue 'hit_loop;
                         }
                     }
                 }
@@ -978,21 +995,22 @@ impl Bot {
         context.draw_frustum(&self.frustum, Color::from_rgba(0, 200, 0, 255));
     }
 
-    fn update_frustum(&mut self, position: Vec3, graph: &Graph) {
-        let head_pos = position + Vec3::new(0.0, 0.8, 0.0);
+    fn update_frustum(&mut self, position: Vector3<f32>, graph: &Graph) {
+        let head_pos = position + Vector3::new(0.0, 0.8, 0.0);
         let up = graph[self.model].up_vector();
         let look_at = head_pos + graph[self.model].look_vector();
-        let view_matrix = Mat4::look_at(head_pos, look_at, up).unwrap_or_default();
-        let projection_matrix = Mat4::perspective(60.0f32.to_radians(), 16.0 / 9.0, 0.1, 7.0);
+        let view_matrix = Matrix4::look_at_rh(&Point3::from(head_pos), &Point3::from(look_at), &up);
+        let projection_matrix =
+            Matrix4::new_perspective(16.0 / 9.0, 60.0f32.to_radians(), 0.1, 7.0);
         let view_projection_matrix = projection_matrix * view_matrix;
         self.frustum = Frustum::from(view_projection_matrix).unwrap();
     }
 
-    fn aim_vertically(&mut self, look_dir: Vec3, graph: &mut Graph, time: GameTime) {
+    fn aim_vertically(&mut self, look_dir: Vector3<f32>, graph: &mut Graph, time: GameTime) {
         let angle = self.pitch.angle();
         self.pitch
             .set_target(
-                look_dir.dot(&Vec3::UP).acos() - std::f32::consts::PI / 2.0
+                look_dir.dot(&Vector3::y()).acos() - std::f32::consts::PI / 2.0
                     + self.definition.v_aim_angle_hack.to_radians(),
             )
             .update(time.delta);
@@ -1000,23 +1018,26 @@ impl Bot {
         if self.spine.is_some() {
             graph[self.spine]
                 .local_transform_mut()
-                .set_rotation(Quat::from_axis_angle(Vec3::RIGHT, angle));
+                .set_rotation(UnitQuaternion::from_axis_angle(&Vector3::x_axis(), angle));
         }
     }
 
-    fn aim_horizontally(&mut self, look_dir: Vec3, graph: &mut Graph, time: GameTime) {
+    fn aim_horizontally(&mut self, look_dir: Vector3<f32>, physics: &mut Physics, time: GameTime) {
         let angle = self.yaw.angle();
         self.yaw
             .set_target(look_dir.x.atan2(look_dir.z))
             .update(time.delta);
 
-        graph[self.character.pivot]
-            .local_transform_mut()
-            .set_rotation(Quat::from_axis_angle(Vec3::UP, angle));
+        physics
+            .bodies
+            .get_mut(self.body.into())
+            .unwrap()
+            .position
+            .rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), angle);
     }
 
-    fn rebuild_path(&mut self, position: Vec3, navmesh: &mut Navmesh, time: GameTime) {
-        let from = position - Vec3::new(0.0, 1.0, 0.0);
+    fn rebuild_path(&mut self, position: Vector3<f32>, navmesh: &mut Navmesh, time: GameTime) {
+        let from = position - Vector3::new(0.0, 1.0, 0.0);
         if let Some(from_index) = navmesh.query_closest(from) {
             if let Some(to_index) = navmesh.query_closest(self.point_of_interest) {
                 self.current_path_point = 0;
@@ -1047,21 +1068,29 @@ impl Bot {
             self.select_point_of_interest(context.items, context.scene, &context.time);
 
             let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
-            let body = context.scene.physics.borrow_body_mut(self.character.body);
+            let mut body = context
+                .scene
+                .physics
+                .bodies
+                .get_mut(self.character.body.into())
+                .unwrap();
             let (in_close_combat, look_dir) = match self.target.as_ref() {
-                None => (false, self.point_of_interest - body.get_position()),
+                None => (
+                    false,
+                    self.point_of_interest - body.position.translation.vector,
+                ),
                 Some(target) => {
-                    let d = target.position - body.get_position();
+                    let d = target.position - body.position.translation.vector;
                     let close_combat_threshold = 2.0;
-                    (d.len() <= close_combat_threshold, d)
+                    (d.norm() <= close_combat_threshold, d)
                 }
             };
 
-            let position = body.get_position();
+            let position = body.position.translation.vector;
 
             if let Some(path_point) = self.path.get(self.current_path_point) {
                 self.move_target = *path_point;
-                if self.move_target.distance(&position) <= 2.0
+                if self.move_target.metric_distance(&position) <= 2.0
                     && self.current_path_point < self.path.len() - 1
                 {
                     self.current_path_point += 1;
@@ -1070,33 +1099,9 @@ impl Bot {
 
             self.update_frustum(position, &context.scene.graph);
 
-            if let Some(look_dir) = look_dir.normalized() {
-                self.aim_vertically(look_dir, &mut context.scene.graph, context.time);
-                self.aim_horizontally(look_dir, &mut context.scene.graph, context.time);
-
-                if !in_close_combat {
-                    if has_ground_contact {
-                        if let Some(move_dir) = (self.move_target - position).normalized() {
-                            let vel =
-                                move_dir.scale(self.definition.walk_speed * context.time.delta);
-                            body.set_x_velocity(vel.x);
-                            body.set_z_velocity(vel.z);
-                            self.last_move_dir = move_dir;
-                        }
-                    } else {
-                        // A bit of air control. This helps jump of ledges when there is jump pad below bot.
-                        let vel = self
-                            .last_move_dir
-                            .scale(self.definition.walk_speed * context.time.delta);
-                        body.set_x_velocity(vel.x);
-                        body.set_z_velocity(vel.z);
-                    }
-                }
-            }
-
             let need_jump = look_dir.y >= 0.3 && has_ground_contact && in_close_combat;
             if need_jump {
-                body.set_y_velocity(0.08);
+                body.linvel.y = 0.08;
             }
             let was_damaged = self.character.health < self.last_health;
             if was_damaged {
@@ -1111,6 +1116,31 @@ impl Bot {
             }
             let can_aim = self.restoration_time <= 0.0;
             self.last_health = self.character.health;
+
+            if !in_close_combat {
+                if has_ground_contact {
+                    if let Some(move_dir) =
+                        (self.move_target - position).try_normalize(std::f32::EPSILON)
+                    {
+                        let vel = move_dir.scale(self.definition.walk_speed);
+                        body.linvel.x = vel.x;
+                        body.linvel.z = vel.z;
+                        self.last_move_dir = move_dir;
+                    }
+                } else {
+                    // A bit of air control. This helps jump of ledges when there is jump pad below bot.
+                    let vel = self.last_move_dir.scale(self.definition.walk_speed);
+                    body.linvel.x = vel.x;
+                    body.linvel.z = vel.z;
+                }
+            }
+
+            std::mem::drop(body);
+
+            if let Some(look_dir) = look_dir.try_normalize(std::f32::EPSILON) {
+                self.aim_vertically(look_dir, &mut context.scene.graph, context.time);
+                self.aim_horizontally(look_dir, &mut context.scene.physics, context.time);
+            }
 
             self.locomotion_machine.apply(
                 context.scene,
@@ -1138,7 +1168,7 @@ impl Bot {
                     sender
                         .send(Message::ShootWeapon {
                             weapon: *weapon,
-                            initial_velocity: Vec3::ZERO,
+                            initial_velocity: Vector3::default(),
                             direction: Some(look_dir),
                         })
                         .unwrap();
@@ -1218,7 +1248,7 @@ impl Bot {
         }
     }
 
-    pub fn set_point_of_interest(&mut self, poi: Vec3, time: GameTime) {
+    pub fn set_point_of_interest(&mut self, poi: Vector3<f32>, time: GameTime) {
         self.point_of_interest = poi;
         self.last_poi_update_time = time.elapsed;
     }

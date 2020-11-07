@@ -1,7 +1,8 @@
+use crate::rg3d::core::math::Vector3Ext;
 use crate::{effects::EffectKind, message::Message, GameTime};
+use rg3d::core::algebra::Vector3;
 use rg3d::{
     core::{
-        math::vec3::Vec3,
         pool::{Handle, Pool, PoolIterator, PoolPairIterator},
         visitor::{Visit, VisitResult, Visitor},
     },
@@ -59,8 +60,8 @@ pub struct Item {
     kind: ItemKind,
     pivot: Handle<Node>,
     model: Handle<Node>,
-    offset: Vec3,
-    dest_offset: Vec3,
+    offset: Vector3<f32>,
+    dest_offset: Vector3<f32>,
     offset_factor: f32,
     reactivation_timer: f32,
     active: bool,
@@ -165,7 +166,7 @@ impl Item {
 
     pub async fn new(
         kind: ItemKind,
-        position: Vec3,
+        position: Vector3<f32>,
         scene: &mut Scene,
         resource_manager: ResourceManager,
         sender: Sender<Message>,
@@ -183,7 +184,7 @@ impl Item {
                 .with_local_transform(
                     TransformBuilder::new()
                         .with_local_position(position)
-                        .with_local_scale(Vec3::new(
+                        .with_local_scale(Vector3::new(
                             definition.scale,
                             definition.scale,
                             definition.scale,
@@ -208,7 +209,7 @@ impl Item {
         self.pivot
     }
 
-    pub fn position(&self, graph: &Graph) -> Vec3 {
+    pub fn position(&self, graph: &Graph) -> Vector3<f32> {
         graph[self.pivot].global_position()
     }
 
@@ -216,7 +217,7 @@ impl Item {
         self.offset_factor += 1.2 * time.delta;
 
         let amp = 0.085;
-        self.dest_offset = Vec3::new(0.0, amp + amp * self.offset_factor.sin(), 0.0);
+        self.dest_offset = Vector3::new(0.0, amp + amp * self.offset_factor.sin(), 0.0);
         self.offset.follow(&self.dest_offset, 0.2);
 
         let position = graph[self.pivot].global_position();

@@ -18,7 +18,8 @@ use crate::{
     weapon::{Weapon, WeaponKind},
     MatchOptions,
 };
-use rg3d::core::{math::mat3::Mat3, math::vec3::Vec3, pool::Handle};
+use rg3d::core::algebra::{Matrix3, Vector3};
+use rg3d::core::pool::Handle;
 use std::path::PathBuf;
 
 #[derive(Debug)]
@@ -29,7 +30,7 @@ pub enum Message {
     },
     AddBot {
         kind: BotKind,
-        position: Vec3,
+        position: Vector3<f32>,
         name: Option<String>,
     },
     RemoveActor {
@@ -56,26 +57,26 @@ pub enum Message {
     },
     SpawnItem {
         kind: ItemKind,
-        position: Vec3,
+        position: Vector3<f32>,
         adjust_height: bool,
         lifetime: Option<f32>,
     },
     CreateProjectile {
         kind: ProjectileKind,
-        position: Vec3,
-        direction: Vec3,
-        initial_velocity: Vec3,
+        position: Vector3<f32>,
+        direction: Vector3<f32>,
+        initial_velocity: Vector3<f32>,
         owner: Handle<Weapon>,
-        basis: Mat3,
+        basis: Matrix3<f32>,
     },
     ShootWeapon {
         weapon: Handle<Weapon>,
-        initial_velocity: Vec3,
-        direction: Option<Vec3>,
+        initial_velocity: Vector3<f32>,
+        direction: Option<Vector3<f32>>,
     },
     PlaySound {
         path: PathBuf,
-        position: Vec3,
+        position: Vector3<f32>,
         gain: f32,
         rolloff_factor: f32,
         radius: f32,
@@ -93,7 +94,7 @@ pub enum Message {
     },
     CreateEffect {
         kind: EffectKind,
-        position: Vec3,
+        position: Vector3<f32>,
     },
     SpawnPlayer,
     /// HUD listens such events and puts them into queue.

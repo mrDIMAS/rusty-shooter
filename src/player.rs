@@ -1,3 +1,4 @@
+use crate::rg3d::core::math::Vector3Ext;
 use crate::{
     character::Character,
     control_scheme::{ControlButton, ControlScheme},
@@ -6,17 +7,16 @@ use crate::{
     FIXED_FPS,
 };
 use rand::Rng;
+use rg3d::core::algebra::{Matrix3, UnitQuaternion, Vector3};
+use rg3d::physics::dynamics::{BodyStatus, RigidBodyBuilder};
+use rg3d::physics::geometry::ColliderBuilder;
+use rg3d::scene::physics::Physics;
 use rg3d::{
     core::{
-        math::{mat3::Mat3, quat::Quat, vec3::Vec3},
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
     event::{DeviceEvent, ElementState, Event, MouseScrollDelta, WindowEvent},
-    physics::{
-        convex_shape::{Axis, CapsuleShape, ConvexShape},
-        rigid_body::RigidBody,
-    },
     scene::{base::BaseBuilder, camera::CameraBuilder, node::Node, Scene},
     sound::context::Context,
 };
@@ -66,19 +66,19 @@ pub struct Player {
     stand_body_height: f32,
     crouch_body_height: f32,
     move_speed: f32,
-    camera_offset: Vec3,
-    camera_dest_offset: Vec3,
+    camera_offset: Vector3<f32>,
+    camera_dest_offset: Vector3<f32>,
     path_len: f32,
-    feet_position: Vec3,
-    head_position: Vec3,
-    look_direction: Vec3,
-    up_direction: Vec3,
-    weapon_offset: Vec3,
-    weapon_dest_offset: Vec3,
+    feet_position: Vector3<f32>,
+    head_position: Vector3<f32>,
+    look_direction: Vector3<f32>,
+    up_direction: Vector3<f32>,
+    weapon_offset: Vector3<f32>,
+    weapon_dest_offset: Vector3<f32>,
     weapon_shake_factor: f32,
     crouch_speed: f32,
     stand_up_speed: f32,
-    listener_basis: Mat3,
+    listener_basis: Matrix3<f32>,
     control_scheme: Option<Rc<RefCell<ControlScheme>>>,
 }
 
@@ -106,18 +106,18 @@ impl Default for Player {
             stand_body_height: 1.05,
             dest_pitch: 0.0,
             dest_yaw: 0.0,
-            move_speed: 0.058,
+            move_speed: 3.48,
             run_speed_multiplier: 1.75,
             crouch_body_height: 0.15,
             yaw: 0.0,
             pitch: 0.0,
-            camera_dest_offset: Vec3::ZERO,
-            camera_offset: Vec3::ZERO,
+            camera_dest_offset: Vector3::default(),
+            camera_offset: Vector3::default(),
             path_len: 0.0,
-            feet_position: Vec3::ZERO,
-            head_position: Vec3::ZERO,
-            look_direction: Vec3::ZERO,
-            up_direction: Vec3::ZERO,
+            feet_position: Vector3::default(),
+            head_position: Vector3::default(),
+            look_direction: Vector3::default(),
+            up_direction: Vector3::default(),
             weapon_offset: Default::default(),
             weapon_dest_offset: Default::default(),
             weapon_shake_factor: 0.0,
@@ -160,33 +160,32 @@ impl Player {
 
         let height = Self::default().stand_body_height;
         let mut camera_pivot = Node::Base(Default::default());
-        camera_pivot.local_transform_mut().set_position(Vec3 {
-            x: 0.0,
-            y: height - 0.20,
-            z: 0.0,
-        });
+        camera_pivot
+            .local_transform_mut()
+            .set_position(Vector3::new(0.0, height - 0.20, 0.0));
         let camera_pivot_handle = scene.graph.add_node(camera_pivot);
         scene.graph.link_nodes(camera_handle, camera_pivot_handle);
 
+        let capsule_shape = ColliderBuilder::capsule_y(height * 0.5, 0.35)
+            .friction(0.2)
+            .build();
+        let body = RigidBodyBuilder::new(BodyStatus::Dynamic)
+            .can_sleep(false)
+            .build();
+        let body_handle = scene.physics.bodies.insert(body);
+        scene
+            .physics
+            .colliders
+            .insert(capsule_shape, body_handle, &mut scene.physics.bodies);
         let mut pivot = Node::Base(Default::default());
-        pivot.local_transform_mut().set_position(Vec3 {
-            x: -1.0,
-            y: 0.0,
-            z: 1.0,
-        });
-
-        let capsule_shape = CapsuleShape::new(0.35, height, Axis::Y);
-        let mut body = RigidBody::new(ConvexShape::Capsule(capsule_shape));
-        body.set_friction(Vec3::new(0.2, 0.0, 0.2));
-        let body_handle = scene.physics.add_body(body);
         let pivot_handle = scene.graph.add_node(pivot);
-        scene.physics_binder.bind(pivot_handle, body_handle);
+        scene.physics_binder.bind(pivot_handle, body_handle.into());
         scene.graph.link_nodes(camera_pivot_handle, pivot_handle);
 
         let mut weapon_base_pivot = Node::Base(Default::default());
         weapon_base_pivot
             .local_transform_mut()
-            .set_position(Vec3::new(-0.065, -0.052, 0.02));
+            .set_position(Vector3::new(-0.065, -0.052, 0.02));
         let weapon_base_pivot_handle = scene.graph.add_node(weapon_base_pivot);
         scene
             .graph
@@ -201,7 +200,7 @@ impl Player {
         Player {
             character: Character {
                 pivot: pivot_handle,
-                body: body_handle,
+                body: body_handle.into(),
                 weapon_pivot: weapon_pivot_handle,
                 sender: Some(sender),
                 name: "Player".to_owned(),
@@ -213,7 +212,9 @@ impl Player {
         }
     }
 
-    fn handle_crouch(&mut self, body: &mut RigidBody) {
+    // TODO: rapier does not support scaling of collider yet.
+    /*
+    fn handle_crouch(&mut self, body: &mut RigidBody, physics: &mut Physics) {
         let capsule = body.get_shape_mut().as_capsule_mut();
         let current_height = capsule.get_height();
         if self.controller.crouch {
@@ -237,12 +238,12 @@ impl Player {
             // Cache velocity because it is calculated using position from previous frame.
             let vel = body.get_velocity();
             // Push body up.
-            body.set_position(body.get_position() + Vec3::new(0.0, offset, 0.0));
+            body.set_position(body.get_position() + Vector3::new(0.0, offset, 0.0));
             // Set new velocity. We divide offset by FIXED_FPS because we need to find speed
             // and its units are (units/frame - units per frame).
-            body.set_velocity(vel - Vec3::new(0.0, offset / FIXED_FPS, 0.0));
+            body.set_velocity(vel - Vector3::new(0.0, offset / FIXED_FPS, 0.0));
         };
-    }
+    }*/
 
     pub fn camera(&self) -> Handle<Node> {
         self.camera
@@ -259,7 +260,7 @@ impl Player {
 
         let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
 
-        let mut velocity = Vec3::ZERO;
+        let mut velocity = Vector3::default();
         if self.controller.move_forward {
             velocity += look;
         }
@@ -279,10 +280,16 @@ impl Player {
             1.0
         };
 
-        let body = context.scene.physics.borrow_body_mut(self.character.body);
-        if let Some(normalized_velocity) = velocity.normalized() {
-            body.set_x_velocity(normalized_velocity.x * self.move_speed * speed_mult);
-            body.set_z_velocity(normalized_velocity.z * self.move_speed * speed_mult);
+        let mut body = context
+            .scene
+            .physics
+            .bodies
+            .get_mut(self.character.body.into())
+            .unwrap();
+        body.angvel = Default::default();
+        if let Some(normalized_velocity) = velocity.try_normalize(std::f32::EPSILON) {
+            body.linvel.x = normalized_velocity.x * self.move_speed * speed_mult;
+            body.linvel.z = normalized_velocity.z * self.move_speed * speed_mult;
 
             self.weapon_dest_offset.x = 0.01 * (self.weapon_shake_factor * 0.5).cos();
             self.weapon_dest_offset.y = 0.005 * self.weapon_shake_factor.sin();
@@ -295,7 +302,7 @@ impl Player {
                 self.path_len += 0.1;
             }
         } else {
-            self.weapon_dest_offset = Vec3::ZERO;
+            self.weapon_dest_offset = Vector3::default();
         }
 
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
@@ -306,20 +313,20 @@ impl Player {
 
         if self.controller.jump {
             if has_ground_contact {
-                body.set_y_velocity(0.07);
+                body.linvel.y = 4.2;
             }
             self.controller.jump = false;
         }
 
-        self.handle_crouch(body);
+        //self.handle_crouch(body);
 
-        self.feet_position = body.get_position();
-        self.feet_position.y -= body.get_shape().as_capsule().get_height();
+        self.feet_position = body.position.translation.vector;
+        self.feet_position.y -= self.stand_body_height;
 
         if self.control_scheme.as_ref().unwrap().borrow().shake_camera {
             self.camera_offset.follow(&self.camera_dest_offset, 0.1);
         } else {
-            self.camera_offset = Vec3::ZERO;
+            self.camera_offset = Vector3::default();
         }
 
         let camera_node = &mut context.scene.graph[self.camera];
@@ -330,11 +337,11 @@ impl Player {
         self.head_position = camera_node.global_position();
         self.look_direction = camera_node.look_vector();
         self.up_direction = camera_node.up_vector();
-        self.listener_basis = Mat3::from_vectors(
+        self.listener_basis = Matrix3::from_columns(&[
             camera_node.side_vector(),
             camera_node.up_vector(),
             -camera_node.look_vector(),
-        );
+        ]);
 
         if self.control_scheme.clone().unwrap().borrow().smooth_mouse {
             self.yaw += (self.dest_yaw - self.yaw) * 0.2;
@@ -344,13 +351,15 @@ impl Player {
             self.pitch = self.dest_pitch;
         }
 
-        context.scene.graph[self.character.pivot]
-            .local_transform_mut()
-            .set_rotation(Quat::from_axis_angle(Vec3::UP, self.yaw.to_radians()));
+        body.position.rotation =
+            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), self.yaw.to_radians());
 
         context.scene.graph[self.camera_pivot]
             .local_transform_mut()
-            .set_rotation(Quat::from_axis_angle(Vec3::RIGHT, self.pitch.to_radians()));
+            .set_rotation(UnitQuaternion::from_axis_angle(
+                &Vector3::x_axis(),
+                self.pitch.to_radians(),
+            ));
     }
 
     fn update_listener(&mut self, sound_context: Arc<Mutex<Context>>) {
@@ -487,8 +496,10 @@ impl Player {
             let velocity = context
                 .scene
                 .physics
-                .borrow_body(self.character.body)
-                .get_velocity();
+                .bodies
+                .get(self.character.body.into())
+                .unwrap()
+                .linvel;
 
             if self.controller.shoot {
                 self.character

@@ -1,27 +1,25 @@
-use rg3d::{
-    core::{
-        math::vec3::Vec3,
-        pool::{Handle, Pool, PoolIterator},
-        visitor::{Visit, VisitResult, Visitor},
-    },
-    physics::static_geometry::StaticGeometry,
+use rg3d::core::algebra::Vector3;
+use rg3d::core::{
+    pool::{Handle, Pool, PoolIterator},
+    visitor::{Visit, VisitResult, Visitor},
 };
+use rg3d::scene::RigidBodyHandle;
 
 pub struct JumpPad {
-    force: Vec3,
-    shape: Handle<StaticGeometry>,
+    force: Vector3<f32>,
+    body: RigidBodyHandle,
 }
 
 impl JumpPad {
-    pub fn new(shape: Handle<StaticGeometry>, force: Vec3) -> JumpPad {
-        Self { force, shape }
+    pub fn new(shape: RigidBodyHandle, force: Vector3<f32>) -> JumpPad {
+        Self { force, body: shape }
     }
 
-    pub fn get_shape(&self) -> Handle<StaticGeometry> {
-        self.shape
+    pub fn get_shape(&self) -> RigidBodyHandle {
+        self.body
     }
 
-    pub fn get_force(&self) -> Vec3 {
+    pub fn get_force(&self) -> Vector3<f32> {
         self.force
     }
 }
@@ -30,7 +28,7 @@ impl Default for JumpPad {
     fn default() -> Self {
         Self {
             force: Default::default(),
-            shape: Default::default(),
+            body: Default::default(),
         }
     }
 }
@@ -40,7 +38,7 @@ impl Visit for JumpPad {
         visitor.enter_region(name)?;
 
         self.force.visit("From", visitor)?;
-        self.shape.visit("Shape", visitor)?;
+        self.body.visit("Shape", visitor)?;
 
         visitor.leave_region()
     }

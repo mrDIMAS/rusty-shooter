@@ -13,15 +13,18 @@ use crate::{
     GameEngine, GameTime, MatchOptions,
 };
 use rand::Rng;
+use rg3d::core::algebra::Matrix3;
+use rg3d::physics::geometry::InteractionGroups;
+use rg3d::scene::physics::RayCastOptions;
 use rg3d::{
     core::{
+        algebra::Vector3,
         color::Color,
-        math::{aabb::AxisAlignedBoundingBox, mat3::Mat3, ray::Ray, vec3::*, PositionProvider},
+        math::{aabb::AxisAlignedBoundingBox, ray::Ray, PositionProvider},
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
     event::Event,
-    physics::RayCastOptions,
     scene,
     scene::{base::BaseBuilder, camera::CameraBuilder, node::Node, Scene},
     sound::context::Context,
@@ -34,6 +37,8 @@ use std::{
     rc::Rc,
     sync::{mpsc::Sender, Arc, Mutex},
 };
+
+use crate::rg3d::core::math::Vector3Ext;
 
 pub const RESPAWN_TIME: f32 = 4.0;
 
@@ -56,7 +61,7 @@ pub struct Level {
     pub leader_board: LeaderBoard,
     respawn_list: Vec<RespawnEntry>,
     spectator_camera: Handle<Node>,
-    target_spectator_position: Vec3,
+    target_spectator_position: Vector3<f32>,
 }
 
 impl Default for Level {
@@ -269,16 +274,10 @@ impl Level {
         // Create collision geometry
         let polygon_handle = scene.graph.find_by_name(map_root, "Polygon");
         if polygon_handle.is_some() {
-            let static_geom_handle =
-                scene
-                    .physics
-                    .add_static_geometry(utils::mesh_to_static_geometry(
-                        scene.graph[polygon_handle].as_mesh(),
-                        false,
-                    ));
-            scene
-                .static_geometry_binder
-                .bind(static_geom_handle, polygon_handle);
+            let collider = scene
+                .physics
+                .mesh_to_trimesh(scene.graph[polygon_handle].as_mesh());
+            scene.physics_binder.bind(polygon_handle, collider);
         } else {
             println!("Unable to find Polygon node to build collision shape for level!");
         }
@@ -341,11 +340,12 @@ impl Level {
                 if begin.is_some() && end.is_some() {
                     let begin = scene.graph[begin].global_position();
                     let end = scene.graph[end].global_position();
-                    let (force, len) = (end - begin).normalized_ex();
-                    let force = force.unwrap_or(Vec3::UP).scale(len / 20.0);
-                    let shape = utils::mesh_to_static_geometry(node.as_mesh(), false);
-                    let shape = scene.physics.add_static_geometry(shape);
-                    scene.static_geometry_binder.bind(shape, handle);
+                    let d = end - begin;
+                    let len = d.norm();
+                    let force = d.try_normalize(std::f32::EPSILON);
+                    let force = force.unwrap_or(Vector3::y()).scale(len / 20.0);
+                    let shape = scene.physics.mesh_to_trimesh(node.as_mesh());
+                    scene.physics_binder.bind(handle, shape);
                     self.jump_pads.add(JumpPad::new(shape, force));
                 };
             } else if name.starts_with("Medkit") {
@@ -418,17 +418,19 @@ impl Level {
         &self.weapons
     }
 
-    fn pick(&self, engine: &mut GameEngine, from: Vec3, to: Vec3) -> Vec3 {
-        let scene = &engine.scenes[self.scene];
+    fn pick(&self, engine: &mut GameEngine, from: Vector3<f32>, to: Vector3<f32>) -> Vector3<f32> {
+        let scene = &mut engine.scenes[self.scene];
         if let Some(ray) = Ray::from_two_points(&from, &to) {
-            let mut intersections = Vec::new();
             let options = RayCastOptions {
-                ignore_bodies: true,
-                ..Default::default()
+                ray,
+                max_len: std::f32::MAX,
+                groups: InteractionGroups::all(),
+                sort_results: true,
             };
-            scene.physics.ray_cast(&ray, options, &mut intersections);
-            if let Some(pt) = intersections.first() {
-                pt.position
+            let mut query_buffer = Vec::default();
+            scene.physics.cast_ray(options, &mut query_buffer);
+            if let Some(pt) = query_buffer.first() {
+                pt.position.coords
             } else {
                 from
             }
@@ -484,7 +486,7 @@ impl Level {
         &mut self,
         engine: &mut GameEngine,
         kind: BotKind,
-        position: Vec3,
+        position: Vector3<f32>,
         name: Option<String>,
     ) -> Handle<Actor> {
         let scene = &mut engine.scenes[self.scene];
@@ -542,7 +544,9 @@ impl Level {
         let spawn_position = self
             .spawn_points
             .get(index)
-            .map_or(Vec3::ZERO, |pt| pt.position);
+            .map_or(Vector3::default(), |pt| {
+                pt.position + Vector3::new(0.0, 1.5, 0.0)
+            });
         let scene = &mut engine.scenes[self.scene];
         if let Node::Camera(spectator_camera) = &mut scene.graph[self.spectator_camera] {
             spectator_camera.set_enabled(false);
@@ -656,11 +660,11 @@ impl Level {
         &mut self,
         engine: &mut GameEngine,
         kind: ProjectileKind,
-        position: Vec3,
-        direction: Vec3,
-        initial_velocity: Vec3,
+        position: Vector3<f32>,
+        direction: Vector3<f32>,
+        initial_velocity: Vector3<f32>,
         owner: Handle<Weapon>,
-        basis: Mat3,
+        basis: Matrix3<f32>,
     ) {
         let scene = &mut engine.scenes[self.scene];
         let projectile = Projectile::new(
@@ -682,9 +686,9 @@ impl Level {
         &mut self,
         engine: &mut GameEngine,
         weapon_handle: Handle<Weapon>,
-        initial_velocity: Vec3,
+        initial_velocity: Vector3<f32>,
         time: GameTime,
-        direction: Option<Vec3>,
+        direction: Option<Vector3<f32>>,
     ) {
         if self.weapons.contains(weapon_handle) {
             let scene = &mut engine.scenes[self.scene];
@@ -694,8 +698,8 @@ impl Level {
                 let position = weapon.get_shot_position(&scene.graph);
                 let direction = direction
                     .unwrap_or_else(|| weapon.get_shot_direction(&scene.graph))
-                    .normalized()
-                    .unwrap_or_else(|| Vec3::LOOK);
+                    .try_normalize(std::f32::EPSILON)
+                    .unwrap_or_else(|| Vector3::z());
                 let basis = weapon.world_basis(&scene.graph);
                 self.create_projectile(
                     engine,
@@ -724,7 +728,7 @@ impl Level {
             let mut sum_distance = 0.0;
             for actor in self.actors.iter() {
                 let position = actor.position(&scene.physics);
-                sum_distance += pt.position.distance(&position);
+                sum_distance += pt.position.metric_distance(&position);
             }
             if sum_distance > max_distance {
                 max_distance = sum_distance;
@@ -744,7 +748,7 @@ impl Level {
         let spawn_position = self
             .spawn_points
             .get(index)
-            .map_or(Vec3::ZERO, |pt| pt.position);
+            .map_or(Vector3::default(), |pt| pt.position);
 
         let bot = self.add_bot(engine, kind, spawn_position, name).await;
 
@@ -813,12 +817,12 @@ impl Level {
         &mut self,
         engine: &mut GameEngine,
         kind: ItemKind,
-        position: Vec3,
+        position: Vector3<f32>,
         adjust_height: bool,
         lifetime: Option<f32>,
     ) {
         let position = if adjust_height {
-            self.pick(engine, position, position - Vec3::new(0.0, 1000.0, 0.0))
+            self.pick(engine, position, position - Vector3::new(0.0, 1000.0, 0.0))
         } else {
             position
         };
@@ -963,23 +967,24 @@ impl Level {
                     }
                     // Use ray casting to get target position for spectator camera, it is used to
                     // create "dropping head" effect.
-                    let ray =
-                        Ray::from_two_points(&position, &(position - Vec3::new(0.0, 1000.0, 0.0)))
-                            .unwrap();
+                    let ray = Ray::from_two_points(
+                        &position,
+                        &(position - Vector3::new(0.0, 1000.0, 0.0)),
+                    )
+                    .unwrap();
                     let options = RayCastOptions {
-                        ignore_bodies: true,
-                        ignore_static_geometries: false,
+                        ray,
+                        max_len: std::f32::MAX,
+                        groups: InteractionGroups::all(),
                         sort_results: true,
                     };
-                    let mut result = Vec::new();
-                    if scene.physics.ray_cast(&ray, options, &mut result) {
-                        if let Some(hit) = result.first() {
-                            self.target_spectator_position = hit.position;
-                            // Prevent see-thru-floor
-                            self.target_spectator_position.y += 0.1;
-                        } else {
-                            self.target_spectator_position = position;
-                        }
+
+                    let mut query_buffer = Vec::default();
+                    scene.physics.cast_ray(options, &mut query_buffer);
+                    if let Some(hit) = query_buffer.first() {
+                        self.target_spectator_position = hit.position.coords;
+                        // Prevent see-thru-floor
+                        self.target_spectator_position.y += 0.1;
                     } else {
                         self.target_spectator_position = position;
                     }
@@ -1122,7 +1127,7 @@ impl Level {
 }
 
 pub struct SpawnPoint {
-    position: Vec3,
+    position: Vector3<f32>,
 }
 
 impl Default for SpawnPoint {

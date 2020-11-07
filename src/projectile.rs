@@ -1,3 +1,4 @@
+use crate::rg3d::core::math::Vector3Ext;
 use crate::{
     actor::{Actor, ActorContainer},
     effects::EffectKind,
@@ -6,19 +7,20 @@ use crate::{
     CollisionGroups, GameTime,
 };
 use rand::Rng;
+use rg3d::core::algebra::{Matrix3, UnitQuaternion, Vector3};
+use rg3d::physics::dynamics::{BodyStatus, RigidBodyBuilder};
+use rg3d::physics::geometry::{ColliderBuilder, InteractionGroups};
+use rg3d::physics::na::Translation3;
+use rg3d::scene::physics::RayCastOptions;
+use rg3d::scene::RigidBodyHandle;
 use rg3d::{
     core::{
         color::Color,
-        math::{mat3::Mat3, quat::Quat, ray::Ray, vec3::Vec3},
+        math::ray::Ray,
         pool::{Handle, Pool, PoolIteratorMut},
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    physics::{
-        convex_shape::{ConvexShape, SphereShape},
-        rigid_body::{CollisionFlags, RigidBody},
-        HitKind, RayCastOptions,
-    },
     scene::{
         base::BaseBuilder,
         graph::Graph,
@@ -64,16 +66,16 @@ pub struct Projectile {
     /// rockets, plasma balls could have rigid body to detect collisions with
     /// environment. Some projectiles do not have rigid body - they're ray-based -
     /// interaction with environment handled with ray cast.
-    body: Handle<RigidBody>,
-    dir: Vec3,
+    body: RigidBodyHandle,
+    dir: Vector3<f32>,
     lifetime: f32,
     rotation_angle: f32,
     /// Handle of weapons from which projectile was fired.
     pub owner: Handle<Weapon>,
-    initial_velocity: Vec3,
+    initial_velocity: Vector3<f32>,
     /// Position of projectile on the previous frame, it is used to simulate
     /// continuous intersection detection from fast moving projectiles.
-    last_position: Vec3,
+    last_position: Vector3<f32>,
     definition: &'static ProjectileDefinition,
     pub sender: Option<Sender<Message>>,
 }
@@ -147,12 +149,12 @@ impl Projectile {
         kind: ProjectileKind,
         resource_manager: ResourceManager,
         scene: &mut Scene,
-        dir: Vec3,
-        position: Vec3,
+        dir: Vector3<f32>,
+        position: Vector3<f32>,
         owner: Handle<Weapon>,
-        initial_velocity: Vec3,
+        initial_velocity: Vector3<f32>,
         sender: Sender<Message>,
-        basis: Mat3,
+        basis: Matrix3<f32>,
     ) -> Self {
         let definition = Self::get_definition(kind);
 
@@ -182,16 +184,21 @@ impl Projectile {
 
                     scene.graph.link_nodes(light, model);
 
-                    let mut body = RigidBody::new(ConvexShape::Sphere(SphereShape::new(size)));
-                    body.set_gravity(Vec3::ZERO);
-                    body.set_position(position);
-                    body.collision_group = CollisionGroups::Projectile as u64;
-                    // Projectile-Projectile collisions is disabled.
-                    body.collision_mask =
-                        CollisionGroups::All as u64 & !(CollisionGroups::Projectile as u64);
-                    body.collision_flags = CollisionFlags::DISABLE_COLLISION_RESPONSE;
+                    let collider = ColliderBuilder::ball(size).build();
+                    let body = RigidBodyBuilder::new(BodyStatus::Kinematic)
+                        .translation(position.x, position.y, position.z)
+                        .build();
+                    let body_handle = scene.physics.bodies.insert(body);
+                    scene.physics.colliders.insert(
+                        collider,
+                        body_handle,
+                        &mut scene.physics.bodies,
+                    );
 
-                    (model, scene.physics.add_body(body))
+                    let body_handle = RigidBodyHandle::from(body_handle);
+                    scene.physics_binder.bind(model, body_handle);
+
+                    (model, body_handle)
                 }
                 ProjectileKind::Bullet => {
                     let model = scene.graph.add_node(Node::Sprite(
@@ -209,7 +216,7 @@ impl Projectile {
                         .build(),
                     ));
 
-                    (model, Handle::NONE)
+                    (model, Default::default())
                 }
                 ProjectileKind::Rocket => {
                     let resource = resource_manager
@@ -219,7 +226,7 @@ impl Projectile {
                     let model = resource.instantiate_geometry(scene);
                     scene.graph[model]
                         .local_transform_mut()
-                        .set_rotation(Quat::from(basis))
+                        .set_rotation(UnitQuaternion::from_matrix(&basis))
                         .set_position(position);
                     let light = scene.graph.add_node(
                         PointLightBuilder::new(
@@ -230,20 +237,16 @@ impl Projectile {
                         .build_node(),
                     );
                     scene.graph.link_nodes(light, model);
-                    (model, Handle::NONE)
+                    (model, Default::default())
                 }
             }
         };
-
-        if model.is_some() && body.is_some() {
-            scene.physics_binder.bind(model, body);
-        }
 
         Self {
             lifetime: definition.lifetime,
             body,
             initial_velocity,
-            dir: dir.normalized().unwrap_or(Vec3::UP),
+            dir: dir.try_normalize(std::f32::EPSILON).unwrap_or(Vector3::y()),
             kind,
             model,
             last_position: position,
@@ -271,7 +274,14 @@ impl Projectile {
     ) {
         // Fetch current position of projectile.
         let position = if self.body.is_some() {
-            scene.physics.borrow_body(self.body).get_position()
+            scene
+                .physics
+                .bodies
+                .get(self.body.into())
+                .unwrap()
+                .position
+                .translation
+                .vector
         } else {
             scene.graph[self.model].global_position()
         };
@@ -282,34 +292,42 @@ impl Projectile {
         // Do ray based intersection tests for every kind of projectiles. This will help to handle
         // fast moving projectiles.
         if let Some(ray) = Ray::from_two_points(&self.last_position, &position) {
-            let mut result = Vec::new();
-            if scene
-                .physics
-                .ray_cast(&ray, RayCastOptions::default(), &mut result)
-            {
-                // List of hits sorted by distance from ray origin.
-                'hit_loop: for hit in result.iter() {
-                    if let HitKind::Body(body) = hit.kind {
-                        for (actor_handle, actor) in actors.pair_iter() {
-                            if actor.get_body() == body && self.owner.is_some() {
-                                let weapon = &weapons[self.owner];
-                                // Ignore intersections with owners of weapon.
-                                if weapon.owner() != actor_handle {
-                                    hits.push(Hit {
-                                        actor: actor_handle,
-                                        who: weapon.owner(),
-                                    });
+            let mut query_buffer = Vec::default();
+            scene.physics.cast_ray(
+                RayCastOptions {
+                    ray,
+                    max_len: std::f32::MAX,
+                    groups: InteractionGroups::all(),
+                    sort_results: true,
+                },
+                &mut query_buffer,
+            );
 
-                                    self.kill();
-                                    effect_position = Some(hit.position);
-                                    break 'hit_loop;
-                                }
+            // List of hits sorted by distance from ray origin.
+            'hit_loop: for hit in query_buffer.iter() {
+                let collider = scene.physics.colliders.get(hit.collider.into()).unwrap();
+                let body = collider.parent();
+
+                if collider.shape().as_trimesh().is_some() {
+                    self.kill();
+                    effect_position = Some(hit.position.coords);
+                    break 'hit_loop;
+                } else {
+                    for (actor_handle, actor) in actors.pair_iter() {
+                        if actor.get_body() == body.into() && self.owner.is_some() {
+                            let weapon = &weapons[self.owner];
+                            // Ignore intersections with owners of weapon.
+                            if weapon.owner() != actor_handle {
+                                hits.push(Hit {
+                                    actor: actor_handle,
+                                    who: weapon.owner(),
+                                });
+
+                                self.kill();
+                                effect_position = Some(hit.position.coords);
+                                break 'hit_loop;
                             }
                         }
-                    } else {
-                        self.kill();
-                        effect_position = Some(hit.position);
-                        break 'hit_loop;
                     }
                 }
             }
@@ -321,6 +339,8 @@ impl Projectile {
 
             // Special case for projectiles with rigid body.
             if self.body.is_some() {
+                // TODO
+                /*
                 for contact in scene.physics.borrow_body(self.body).get_contacts() {
                     let mut owner_contact = false;
 
@@ -345,13 +365,13 @@ impl Projectile {
                         self.kill();
                         effect_position = Some(contact.position);
                     }
-                }
+                }*/
 
                 // Move rigid body explicitly.
-                scene
-                    .physics
-                    .borrow_body_mut(self.body)
-                    .offset_by(total_velocity);
+                let mut body = scene.physics.bodies.get_mut(self.body.into()).unwrap();
+                body.position.translation = Translation3 {
+                    vector: body.position.translation.vector + total_velocity,
+                };
             } else {
                 // We have just model - move it.
                 scene.graph[self.model]
@@ -367,7 +387,7 @@ impl Projectile {
 
         // Reduce initial velocity down to zero over time. This is needed because projectile
         // stabilizes its movement over time.
-        self.initial_velocity.follow(&Vec3::ZERO, 0.15);
+        self.initial_velocity.follow(&Vector3::default(), 0.15);
 
         self.lifetime -= time.delta;
 
@@ -415,13 +435,17 @@ impl Projectile {
         self.last_position = position;
     }
 
-    pub fn get_position(&self, graph: &Graph) -> Vec3 {
+    pub fn get_position(&self, graph: &Graph) -> Vector3<f32> {
         graph[self.model].global_position()
     }
 
     fn clean_up(&mut self, scene: &mut Scene) {
         if self.body.is_some() {
-            scene.physics.remove_body(self.body);
+            scene.physics.bodies.remove(
+                self.body.into(),
+                &mut scene.physics.colliders,
+                &mut scene.physics.joints,
+            );
         }
         if self.model.is_some() {
             scene.graph.remove_node(self.model);

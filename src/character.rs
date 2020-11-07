@@ -1,11 +1,12 @@
 use crate::{message::Message, weapon::Weapon};
+use rg3d::core::algebra::Vector3;
+use rg3d::scene::physics::Physics;
+use rg3d::scene::RigidBodyHandle;
 use rg3d::{
     core::{
-        math::vec3::Vec3,
         pool::Handle,
         visitor::{Visit, VisitError, VisitResult, Visitor},
     },
-    physics::{rigid_body::RigidBody, Physics},
     scene::{node::Node, Scene},
 };
 use std::sync::mpsc::Sender;
@@ -13,7 +14,7 @@ use std::sync::mpsc::Sender;
 pub struct Character {
     pub name: String,
     pub pivot: Handle<Node>,
-    pub body: Handle<RigidBody>,
+    pub body: RigidBodyHandle,
     pub health: f32,
     pub armor: f32,
     pub weapons: Vec<Handle<Weapon>>,
@@ -61,7 +62,7 @@ impl Default for Character {
         Self {
             name: Default::default(),
             pivot: Handle::NONE,
-            body: Handle::NONE,
+            body: Default::default(),
             health: 100.0,
             armor: 100.0,
             weapons: Vec::new(),
@@ -92,18 +93,21 @@ impl Visit for Character {
 }
 
 impl Character {
-    pub fn get_body(&self) -> Handle<RigidBody> {
+    pub fn get_body(&self) -> RigidBodyHandle {
         self.body
     }
 
     pub fn has_ground_contact(&self, physics: &Physics) -> bool {
+        // TODO: rapier does not provide contact info yet.
+        /*
         let body = physics.borrow_body(self.body);
         for contact in body.get_contacts() {
             if contact.normal.y >= 0.7 {
                 return true;
             }
         }
-        false
+        false*/
+        true
     }
 
     pub fn set_team(&mut self, team: Team) {
@@ -122,14 +126,24 @@ impl Character {
         self.armor
     }
 
-    pub fn set_position(&mut self, physics: &mut Physics, position: Vec3) {
+    pub fn set_position(&mut self, physics: &mut Physics, position: Vector3<f32>) {
         physics
-            .borrow_body_mut(self.get_body())
-            .set_position(position);
+            .bodies
+            .get_mut(self.get_body().into())
+            .unwrap()
+            .position
+            .translation
+            .vector = position;
     }
 
-    pub fn position(&self, physics: &Physics) -> Vec3 {
-        physics.borrow_body(self.get_body()).get_position()
+    pub fn position(&self, physics: &Physics) -> Vector3<f32> {
+        physics
+            .bodies
+            .get(self.get_body().into())
+            .unwrap()
+            .position
+            .translation
+            .vector
     }
 
     pub fn damage(&mut self, amount: f32) {
@@ -235,6 +249,10 @@ impl Character {
 
     pub fn clean_up(&mut self, scene: &mut Scene) {
         scene.remove_node(self.pivot);
-        scene.physics.remove_body(self.body);
+        scene.physics.bodies.remove(
+            self.body.into(),
+            &mut scene.physics.colliders,
+            &mut scene.physics.joints,
+        );
     }
 }

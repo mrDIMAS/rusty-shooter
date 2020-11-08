@@ -1,6 +1,7 @@
 use crate::{message::Message, weapon::Weapon};
 use rg3d::core::algebra::Vector3;
-use rg3d::scene::physics::Physics;
+use rg3d::core::math::ray::Ray;
+use rg3d::scene::physics::{Physics, RayCastOptions};
 use rg3d::scene::RigidBodyHandle;
 use rg3d::{
     core::{
@@ -97,17 +98,33 @@ impl Character {
         self.body
     }
 
+    /// TODO: This has to be done using contact info, but rapier does not
+    ///  let to access it yet.
     pub fn has_ground_contact(&self, physics: &Physics) -> bool {
-        // TODO: rapier does not provide contact info yet.
-        /*
-        let body = physics.borrow_body(self.body);
-        for contact in body.get_contacts() {
-            if contact.normal.y >= 0.7 {
+        let position = self.position(physics);
+        let ray = Ray::from_two_points(&position, &(position - Vector3::new(0.0, 1.0, 0.0)))
+            .unwrap_or_default();
+        let mut query_buffer = Vec::new();
+        physics.cast_ray(
+            RayCastOptions {
+                ray,
+                max_len: ray.dir.norm(),
+                groups: Default::default(),
+                sort_results: true,
+            },
+            &mut query_buffer,
+        );
+        for intersection in query_buffer {
+            let body = physics
+                .colliders
+                .get(intersection.collider.into())
+                .unwrap()
+                .parent();
+            if body != self.body.into() && intersection.normal.y >= 0.7 {
                 return true;
             }
         }
-        false*/
-        true
+        false
     }
 
     pub fn set_team(&mut self, team: Team) {

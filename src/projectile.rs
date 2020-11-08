@@ -1,4 +1,3 @@
-use crate::rg3d::core::math::Vector3Ext;
 use crate::{
     actor::{Actor, ActorContainer},
     effects::EffectKind,
@@ -7,31 +6,33 @@ use crate::{
     CollisionGroups, GameTime,
 };
 use rand::Rng;
-use rg3d::core::algebra::{Matrix3, UnitQuaternion, Vector3};
-use rg3d::physics::dynamics::{BodyStatus, RigidBodyBuilder};
-use rg3d::physics::geometry::{ColliderBuilder, InteractionGroups};
-use rg3d::physics::na::{Isometry3, Translation3};
-use rg3d::scene::physics::RayCastOptions;
-use rg3d::scene::RigidBodyHandle;
 use rg3d::{
     core::{
+        algebra::{Matrix3, UnitQuaternion, Vector3},
         color::Color,
         math::ray::Ray,
+        math::Vector3Ext,
         pool::{Handle, Pool, PoolIteratorMut},
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
+    physics::{
+        dynamics::{BodyStatus, RigidBodyBuilder},
+        geometry::{ColliderBuilder, InteractionGroups, Proximity, ProximityEvent},
+        na::{Isometry3, Translation3},
+    },
     scene::{
         base::BaseBuilder,
         graph::Graph,
         light::{BaseLightBuilder, PointLightBuilder},
         node::Node,
+        physics::RayCastOptions,
         sprite::SpriteBuilder,
         transform::TransformBuilder,
-        Scene,
+        RigidBodyHandle, Scene,
     },
 };
-use std::{path::PathBuf, sync::mpsc::Sender};
+use std::{collections::HashSet, path::PathBuf, sync::mpsc::Sender};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ProjectileKind {
@@ -78,6 +79,7 @@ pub struct Projectile {
     last_position: Vector3<f32>,
     definition: &'static ProjectileDefinition,
     pub sender: Option<Sender<Message>>,
+    hits: HashSet<Hit>,
 }
 
 impl Default for Projectile {
@@ -94,6 +96,7 @@ impl Default for Projectile {
             last_position: Default::default(),
             definition: Self::get_definition(ProjectileKind::Plasma),
             sender: None,
+            hits: Default::default(),
         }
     }
 }
@@ -286,7 +289,6 @@ impl Projectile {
             scene.graph[self.model].global_position()
         };
 
-        let mut hits: Vec<Hit> = Vec::new();
         let mut effect_position = None;
 
         // Do ray based intersection tests for every kind of projectiles. This will help to handle
@@ -318,7 +320,7 @@ impl Projectile {
                             let weapon = &weapons[self.owner];
                             // Ignore intersections with owners of weapon.
                             if weapon.owner() != actor_handle {
-                                hits.push(Hit {
+                                self.hits.insert(Hit {
                                     actor: actor_handle,
                                     who: weapon.owner(),
                                 });
@@ -339,34 +341,6 @@ impl Projectile {
 
             // Special case for projectiles with rigid body.
             if self.body.is_some() {
-                // TODO
-                /*
-                for contact in scene.physics.borrow_body(self.body).get_contacts() {
-                    let mut owner_contact = false;
-
-                    // Check if we got contact with any actor and damage it then.
-                    for (actor_handle, actor) in actors.pair_iter() {
-                        if contact.body == actor.get_body() && self.owner.is_some() {
-                            // Prevent self-damage.
-                            let weapon = &weapons[self.owner];
-                            if weapon.owner() != actor_handle {
-                                hits.push(Hit {
-                                    actor: actor_handle,
-                                    who: weapon.owner(),
-                                });
-                            } else {
-                                // Make sure that projectile won't die on contact with owner.
-                                owner_contact = true;
-                            }
-                        }
-                    }
-
-                    if !owner_contact {
-                        self.kill();
-                        effect_position = Some(contact.position);
-                    }
-                }*/
-
                 // Move rigid body explicitly.
                 let mut body = scene.physics.bodies.get_mut(self.body.into()).unwrap();
                 let position = Isometry3 {
@@ -420,11 +394,7 @@ impl Projectile {
                 .unwrap();
         }
 
-        // List of hit actors can contain same actor multiple times in a row because this list could
-        // be filled from ray casting as well as from contact information of rigid body, fix this
-        // to not damage actor twice or more times with one projectile.
-        hits.dedup_by(|a, b| a.actor == b.actor);
-        for hit in hits {
+        for hit in self.hits.drain() {
             self.sender
                 .as_ref()
                 .unwrap()
@@ -437,6 +407,61 @@ impl Projectile {
         }
 
         self.last_position = position;
+    }
+
+    /// Some projectiles have just proximity sensors which used to detect contacts with
+    /// environment and actors. We have to handle proximity events separately.
+    pub fn handle_proximity(
+        &mut self,
+        proximity_event: &ProximityEvent,
+        scene: &mut Scene,
+        actors: &ActorContainer,
+        weapons: &WeaponContainer,
+    ) {
+        if proximity_event.new_status == Proximity::Intersecting
+            || proximity_event.new_status == Proximity::WithinMargin
+        {
+            let mut owner_contact = false;
+
+            let body_a = scene
+                .physics
+                .colliders
+                .get(proximity_event.collider1)
+                .unwrap()
+                .parent();
+            let body_b = scene
+                .physics
+                .colliders
+                .get(proximity_event.collider2)
+                .unwrap()
+                .parent();
+
+            // Check if we got contact with any actor and damage it then.
+            for (actor_handle, actor) in actors.pair_iter() {
+                if (body_a == actor.get_body().into() && body_b == self.body.into()
+                    || body_b == actor.get_body().into() && body_a == self.body.into())
+                    && self.owner.is_some()
+                {
+                    dbg!();
+
+                    // Prevent self-damage.
+                    let weapon = &weapons[self.owner];
+                    if weapon.owner() != actor_handle {
+                        self.hits.insert(Hit {
+                            actor: actor_handle,
+                            who: weapon.owner(),
+                        });
+                    } else {
+                        // Make sure that projectile won't die on contact with owner.
+                        owner_contact = true;
+                    }
+                }
+            }
+
+            if !owner_contact {
+                self.kill();
+            }
+        }
     }
 
     pub fn get_position(&self, graph: &Graph) -> Vector3<f32> {
@@ -457,6 +482,7 @@ impl Projectile {
     }
 }
 
+#[derive(Hash, Eq, PartialEq)]
 struct Hit {
     actor: Handle<Actor>,
     who: Handle<Actor>,

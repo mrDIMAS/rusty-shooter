@@ -1,4 +1,3 @@
-use crate::rg3d::core::math::Vector3Ext;
 use crate::{
     actor::{Actor, TargetDescriptor},
     character::Character,
@@ -9,29 +8,33 @@ use crate::{
     GameTime,
 };
 use rand::Rng;
-use rg3d::core::algebra::Point3;
-use rg3d::physics::dynamics::{BodyStatus, RigidBodyBuilder};
-use rg3d::physics::geometry::{ColliderBuilder, InteractionGroups};
-use rg3d::physics::ncollide::query;
-use rg3d::scene::physics::{Physics, RayCastOptions};
-use rg3d::scene::RigidBodyHandle;
 use rg3d::{
     animation::{
         machine::{self, Machine, PoseNode, State},
         Animation, AnimationSignal,
     },
     core::{
-        algebra::{Matrix4, UnitQuaternion, Vector3},
+        algebra::{Matrix4, Point3, UnitQuaternion, Vector3},
         color::Color,
-        math::{frustum::Frustum, ray::Ray, SmoothAngle},
+        math::{frustum::Frustum, ray::Ray, SmoothAngle, Vector3Ext},
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
+    physics::{
+        dynamics::{BodyStatus, RigidBodyBuilder},
+        geometry::{ColliderBuilder, InteractionGroups},
+        ncollide::query,
+    },
     resource::model::Model,
     scene::{
-        self, base::BaseBuilder, graph::Graph, node::Node, transform::TransformBuilder, Scene,
-        SceneDrawingContext,
+        self,
+        base::BaseBuilder,
+        graph::Graph,
+        node::Node,
+        physics::{Physics, RayCastOptions},
+        transform::TransformBuilder,
+        RigidBodyHandle, Scene, SceneDrawingContext,
     },
     utils::navmesh::Navmesh,
 };
@@ -69,6 +72,7 @@ impl BotKind {
     }
 }
 
+#[derive(Debug)]
 pub struct Target {
     position: Vector3<f32>,
     handle: Handle<Actor>,
@@ -910,14 +914,15 @@ impl Bot {
         let position = self.character.position(&scene.physics);
         let mut closest_distance = std::f32::MAX;
 
+        let mut query_buffer = Vec::default();
         'target_loop: for desc in targets {
             if desc.handle != self_handle && self.frustum.is_contains_point(desc.position) {
-                let mut query_buffer = Vec::default();
+                let ray = Ray::from_two_points(&desc.position, &position).unwrap_or_default();
                 scene.physics.cast_ray(
                     RayCastOptions {
-                        ray: Ray::from_two_points(&desc.position, &position).unwrap_or_default(),
+                        ray,
                         groups: InteractionGroups::all(),
-                        max_len: std::f32::MAX,
+                        max_len: ray.dir.norm(),
                         sort_results: true,
                     },
                     &mut query_buffer,
@@ -931,6 +936,7 @@ impl Bot {
                         // Target is behind something.
                         continue 'target_loop;
                     } else {
+                        // Prevent setting self as target.
                         if self.character.body == body.into() {
                             continue 'hit_loop;
                         }

@@ -13,34 +13,36 @@ use crate::{
     GameEngine, GameTime, MatchOptions,
 };
 use rand::Rng;
-use rg3d::core::algebra::Matrix3;
-use rg3d::physics::geometry::{ContactEvent, InteractionGroups, ProximityEvent};
-use rg3d::scene::physics::RayCastOptions;
 use rg3d::{
     core::{
-        algebra::Vector3,
+        algebra::{Matrix3, Vector3},
         color::Color,
-        math::{aabb::AxisAlignedBoundingBox, ray::Ray, PositionProvider},
+        math::{aabb::AxisAlignedBoundingBox, ray::Ray, PositionProvider, Vector3Ext},
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
     event::Event,
-    scene,
-    scene::{base::BaseBuilder, camera::CameraBuilder, node::Node, Scene},
+    physics::{
+        geometry::{ContactEvent, InteractionGroups, ProximityEvent},
+        pipeline::{ChannelEventCollector, EventHandler},
+    },
+    scene::{
+        self, base::BaseBuilder, camera::CameraBuilder, node::Node, physics::RayCastOptions, Scene,
+    },
     sound::context::Context,
     utils::{self, navmesh::Navmesh},
 };
-use std::path::PathBuf;
 use std::{
     cell::RefCell,
     path::Path,
+    path::PathBuf,
     rc::Rc,
-    sync::{mpsc::Sender, Arc, Mutex},
+    sync::{
+        mpsc::Sender,
+        mpsc::{channel, Receiver},
+        Arc, Mutex,
+    },
 };
-
-use crate::rg3d::core::math::Vector3Ext;
-use rg3d::physics::pipeline::{ChannelEventCollector, EventHandler};
-use std::sync::mpsc::{channel, Receiver};
 
 pub const RESPAWN_TIME: f32 = 4.0;
 
@@ -939,6 +941,12 @@ impl Level {
         self.time += time.delta;
         self.update_respawn(time);
         let scene = &mut engine.scenes[self.scene];
+        while let Ok(proximity_event) = self.proximity_events_receiver.as_ref().unwrap().try_recv()
+        {
+            for proj in self.projectiles.iter_mut() {
+                proj.handle_proximity(&proximity_event, scene, &self.actors, &self.weapons);
+            }
+        }
         self.update_spectator_camera(scene);
         self.update_death_zones(scene);
         self.weapons.update(scene, &self.actors);
@@ -957,10 +965,6 @@ impl Level {
         self.actors.update(&mut ctx);
         while let Ok(contact_event) = self.contact_events_receiver.as_ref().unwrap().try_recv() {
             self.actors.handle_event(&contact_event, &mut ctx);
-        }
-        while let Ok(_proximity_event) = self.proximity_events_receiver.as_ref().unwrap().try_recv()
-        {
-            // Just drain proximity events. We don't need them.
         }
         self.update_game_ending();
     }
@@ -1106,7 +1110,7 @@ impl Level {
         }
     }
 
-    pub fn set_message_sender(&mut self, sender: Sender<Message>) {
+    pub fn set_message_sender(&mut self, sender: Sender<Message>, engine: &mut GameEngine) {
         self.sender = Some(sender.clone());
 
         // Attach new sender to all event sources.
@@ -1119,6 +1123,17 @@ impl Level {
         for projectile in self.projectiles.iter_mut() {
             projectile.sender = Some(sender.clone());
         }
+
+        let (proximity_events_sender, proximity_events_receiver) = crossbeam::channel::unbounded();
+        let (contact_events_sender, contact_events_receiver) = crossbeam::channel::unbounded();
+
+        self.proximity_events_receiver = Some(proximity_events_receiver);
+        self.contact_events_receiver = Some(contact_events_receiver);
+
+        engine.scenes[self.scene].physics.event_handler = Box::new(ChannelEventCollector::new(
+            proximity_events_sender.clone(),
+            contact_events_sender.clone(),
+        ));
     }
 
     pub fn debug_draw(&self, engine: &mut GameEngine) {

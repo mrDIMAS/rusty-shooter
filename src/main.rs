@@ -501,7 +501,7 @@ impl Game {
 
         // Set control scheme for player.
         if let Some(level) = &mut self.level {
-            level.set_message_sender(self.events_sender.clone());
+            level.set_message_sender(self.events_sender.clone(), &mut self.engine);
             level.build_navmesh(&mut self.engine);
             level.control_scheme = Some(self.control_scheme.clone());
             let player = level.get_player();

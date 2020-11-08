@@ -6,6 +6,7 @@ use rg3d::core::{
     pool::{Handle, Pool, PoolIterator, PoolIteratorMut, PoolPairIterator, PoolPairIteratorMut},
     visitor::{Visit, VisitResult, Visitor},
 };
+use rg3d::physics::geometry::{ContactEvent, ProximityEvent};
 use rg3d::scene::Scene;
 use std::ops::{Deref, DerefMut};
 
@@ -192,28 +193,6 @@ impl ActorContainer {
                 }
             }
 
-            // TODO: rapier does not provide contact info yet.
-            // Actors can jump on jump pads.
-            /*
-            for jump_pad in context.jump_pads.iter() {
-                let body = context
-                    .scene
-                    .physics
-                    .bodies
-                    .get_mut(actor.get_body().into())
-                    .unwrap();
-                let mut push = false;
-                for contact in body.get_contacts() {
-                    if contact.static_geom == jump_pad.get_shape() {
-                        push = true;
-                        break;
-                    }
-                }
-                if push {
-                    body.set_velocity(jump_pad.get_force());
-                }
-            }*/
-
             if actor.can_be_removed() {
                 // Abuse the fact that actor has sender and use it to send message.
                 actor
@@ -223,6 +202,30 @@ impl ActorContainer {
                     .unwrap()
                     .send(Message::RespawnActor { actor: handle })
                     .unwrap();
+            }
+        }
+    }
+
+    pub fn handle_event(&mut self, contact_event: &ContactEvent, context: &mut UpdateContext) {
+        if let &ContactEvent::Started(a, b) = contact_event {
+            for actor in self.pool.iter_mut() {
+                for jump_pad in context.jump_pads.iter() {
+                    let mut body = context
+                        .scene
+                        .physics
+                        .bodies
+                        .get_mut(actor.get_body().into())
+                        .unwrap();
+                    let capsule_collider = body.colliders()[0];
+                    let coll_a = context.scene.physics.colliders.get(a).unwrap().parent();
+                    let coll_b = context.scene.physics.colliders.get(b).unwrap().parent();
+
+                    if capsule_collider == a && coll_b == jump_pad.rigid_body().into()
+                        || capsule_collider == b && coll_a == jump_pad.rigid_body().into()
+                    {
+                        body.linvel = jump_pad.get_force();
+                    }
+                }
             }
         }
     }

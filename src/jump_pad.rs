@@ -15,7 +15,7 @@ impl JumpPad {
         Self { force, body: shape }
     }
 
-    pub fn get_shape(&self) -> RigidBodyHandle {
+    pub fn rigid_body(&self) -> RigidBodyHandle {
         self.body
     }
 

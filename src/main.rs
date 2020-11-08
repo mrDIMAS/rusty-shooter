@@ -1,6 +1,7 @@
 #![deny(unsafe_code)]
 #![deny(unused_must_use)]
 
+extern crate crossbeam;
 extern crate rand;
 extern crate rg3d;
 

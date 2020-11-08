@@ -14,7 +14,7 @@ use crate::{
 };
 use rand::Rng;
 use rg3d::core::algebra::Matrix3;
-use rg3d::physics::geometry::InteractionGroups;
+use rg3d::physics::geometry::{ContactEvent, InteractionGroups, ProximityEvent};
 use rg3d::scene::physics::RayCastOptions;
 use rg3d::{
     core::{
@@ -39,6 +39,8 @@ use std::{
 };
 
 use crate::rg3d::core::math::Vector3Ext;
+use rg3d::physics::pipeline::{ChannelEventCollector, EventHandler};
+use std::sync::mpsc::{channel, Receiver};
 
 pub const RESPAWN_TIME: f32 = 4.0;
 
@@ -62,6 +64,8 @@ pub struct Level {
     respawn_list: Vec<RespawnEntry>,
     spectator_camera: Handle<Node>,
     target_spectator_position: Vector3<f32>,
+    proximity_events_receiver: Option<crossbeam::channel::Receiver<ProximityEvent>>,
+    contact_events_receiver: Option<crossbeam::channel::Receiver<ContactEvent>>,
 }
 
 impl Default for Level {
@@ -86,6 +90,8 @@ impl Default for Level {
             respawn_list: Default::default(),
             spectator_camera: Default::default(),
             target_spectator_position: Default::default(),
+            proximity_events_receiver: None,
+            contact_events_receiver: None,
         }
     }
 }
@@ -254,6 +260,14 @@ impl Level {
     ) -> Level {
         let mut scene = Scene::new();
 
+        let (proximity_events_sender, proximity_events_receiver) = crossbeam::channel::unbounded();
+        let (contact_events_sender, contact_events_receiver) = crossbeam::channel::unbounded();
+
+        scene.physics.event_handler = Box::new(ChannelEventCollector::new(
+            proximity_events_sender.clone(),
+            contact_events_sender.clone(),
+        ));
+
         // Spectator camera is used when there is no player on level.
         // This includes situation when player is dead - all dead actors are removed
         // from level.
@@ -289,6 +303,8 @@ impl Level {
             map_root,
             options,
             spectator_camera,
+            contact_events_receiver: Some(contact_events_receiver),
+            proximity_events_receiver: Some(proximity_events_receiver),
             ..Default::default()
         };
 
@@ -343,7 +359,7 @@ impl Level {
                     let d = end - begin;
                     let len = d.norm();
                     let force = d.try_normalize(std::f32::EPSILON);
-                    let force = force.unwrap_or(Vector3::y()).scale(len / 20.0);
+                    let force = force.unwrap_or(Vector3::y()).scale(len * 3.0);
                     let shape = scene.physics.mesh_to_trimesh(node.as_mesh());
                     scene.physics_binder.bind(handle, shape);
                     self.jump_pads.add(JumpPad::new(shape, force));
@@ -929,7 +945,7 @@ impl Level {
         self.projectiles
             .update(scene, &self.actors, &self.weapons, time);
         self.items.update(scene, time);
-        self.actors.update(&mut UpdateContext {
+        let mut ctx = UpdateContext {
             time,
             scene,
             sound_context: engine.sound_context.clone(),
@@ -937,7 +953,15 @@ impl Level {
             jump_pads: &self.jump_pads,
             navmesh: self.navmesh.as_mut(),
             weapons: &self.weapons,
-        });
+        };
+        self.actors.update(&mut ctx);
+        while let Ok(contact_event) = self.contact_events_receiver.as_ref().unwrap().try_recv() {
+            self.actors.handle_event(&contact_event, &mut ctx);
+        }
+        while let Ok(_proximity_event) = self.proximity_events_receiver.as_ref().unwrap().try_recv()
+        {
+            // Just drain proximity events. We don't need them.
+        }
         self.update_game_ending();
     }
 

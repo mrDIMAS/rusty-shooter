@@ -24,24 +24,20 @@ use rg3d::{
     event::Event,
     physics::{
         geometry::{ContactEvent, InteractionGroups, ProximityEvent},
-        pipeline::{ChannelEventCollector, EventHandler},
+        pipeline::ChannelEventCollector,
     },
     scene::{
         self, base::BaseBuilder, camera::CameraBuilder, node::Node, physics::RayCastOptions, Scene,
     },
     sound::context::Context,
-    utils::{self, navmesh::Navmesh},
+    utils::navmesh::Navmesh,
 };
 use std::{
     cell::RefCell,
     path::Path,
     path::PathBuf,
     rc::Rc,
-    sync::{
-        mpsc::Sender,
-        mpsc::{channel, Receiver},
-        Arc, Mutex,
-    },
+    sync::{mpsc::Sender, Arc, Mutex},
 };
 
 pub const RESPAWN_TIME: f32 = 4.0;

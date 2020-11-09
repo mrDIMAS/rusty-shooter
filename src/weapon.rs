@@ -1,24 +1,22 @@
-use crate::rg3d::core::math::Matrix4Ext;
-use crate::rg3d::core::math::Vector3Ext;
 use crate::{
     actor::Actor, actor::ActorContainer, message::Message, projectile::ProjectileKind, GameTime,
 };
-use rg3d::core::algebra::{Matrix3, Vector3};
-use rg3d::core::math::ray::Ray;
-use rg3d::physics::geometry::InteractionGroups;
-use rg3d::scene::physics::{Physics, RayCastOptions};
 use rg3d::{
     core::{
+        algebra::{Matrix3, Vector3},
         color::Color,
+        math::{ray::Ray, Matrix4Ext, Vector3Ext},
         pool::{Handle, Pool, PoolIteratorMut},
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
+    physics::geometry::InteractionGroups,
     scene::{
         base::BaseBuilder,
         graph::Graph,
         light::{BaseLightBuilder, PointLightBuilder},
         node::Node,
+        physics::{Physics, RayCastOptions},
         Scene,
     },
 };

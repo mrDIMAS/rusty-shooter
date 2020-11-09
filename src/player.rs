@@ -1,28 +1,28 @@
-use crate::rg3d::core::math::Vector3Ext;
 use crate::{
     character::Character,
     control_scheme::{ControlButton, ControlScheme},
     level::UpdateContext,
     message::Message,
-    FIXED_FPS,
 };
 use rand::Rng;
-use rg3d::core::algebra::{Matrix3, UnitQuaternion, Vector3};
-use rg3d::physics::dynamics::{BodyStatus, RigidBodyBuilder};
-use rg3d::physics::geometry::ColliderBuilder;
-use rg3d::scene::physics::Physics;
 use rg3d::{
     core::{
+        algebra::{Matrix3, UnitQuaternion, Vector3},
+        math::Vector3Ext,
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
     event::{DeviceEvent, ElementState, Event, MouseScrollDelta, WindowEvent},
+    physics::{
+        dynamics::{BodyStatus, RigidBodyBuilder},
+        geometry::ColliderBuilder,
+    },
     scene::{base::BaseBuilder, camera::CameraBuilder, node::Node, Scene},
     sound::context::Context,
 };
-use std::ops::{Deref, DerefMut};
 use std::{
     cell::RefCell,
+    ops::{Deref, DerefMut},
     rc::Rc,
     sync::{mpsc::Sender, Arc, Mutex},
 };
@@ -177,7 +177,7 @@ impl Player {
             .physics
             .colliders
             .insert(capsule_shape, body_handle, &mut scene.physics.bodies);
-        let mut pivot = Node::Base(Default::default());
+        let pivot = Node::Base(Default::default());
         let pivot_handle = scene.graph.add_node(pivot);
         scene.physics_binder.bind(pivot_handle, body_handle.into());
         scene.graph.link_nodes(camera_pivot_handle, pivot_handle);

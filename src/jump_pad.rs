@@ -1,9 +1,11 @@
-use rg3d::core::algebra::Vector3;
-use rg3d::core::{
-    pool::{Handle, Pool, PoolIterator},
-    visitor::{Visit, VisitResult, Visitor},
+use rg3d::{
+    core::{
+        algebra::Vector3,
+        pool::{Handle, Pool, PoolIterator},
+        visitor::{Visit, VisitResult, Visitor},
+    },
+    scene::RigidBodyHandle,
 };
-use rg3d::scene::RigidBodyHandle;
 
 pub struct JumpPad {
     force: Vector3<f32>,

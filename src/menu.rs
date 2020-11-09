@@ -2,15 +2,13 @@ use crate::{
     control_scheme::ControlScheme, match_menu::MatchMenu, message::Message,
     options_menu::OptionsMenu, GameEngine, Gui, GuiMessage, UINodeHandle,
 };
-use rg3d::gui::message::MessageDirection;
-use rg3d::gui::ttf::SharedFont;
 use rg3d::{
     event::{Event, WindowEvent},
     gui::{
         button::ButtonBuilder,
         grid::{Column, GridBuilder, Row},
-        message::{ButtonMessage, UiMessageData, WidgetMessage, WindowMessage},
-        ttf::Font,
+        message::{ButtonMessage, MessageDirection, UiMessageData, WidgetMessage, WindowMessage},
+        ttf::{Font, SharedFont},
         widget::WidgetBuilder,
         window::{WindowBuilder, WindowTitle},
         Thickness,

@@ -1,13 +1,17 @@
 use crate::{
     bot::Bot, character::Character, level::UpdateContext, message::Message, player::Player,
 };
-use rg3d::core::{
-    algebra::Vector3,
-    pool::{Handle, Pool, PoolIterator, PoolIteratorMut, PoolPairIterator, PoolPairIteratorMut},
-    visitor::{Visit, VisitResult, Visitor},
+use rg3d::{
+    core::{
+        algebra::Vector3,
+        pool::{
+            Handle, Pool, PoolIterator, PoolIteratorMut, PoolPairIterator, PoolPairIteratorMut,
+        },
+        visitor::{Visit, VisitResult, Visitor},
+    },
+    physics::geometry::ContactEvent,
+    scene::Scene,
 };
-use rg3d::physics::geometry::{ContactEvent, ProximityEvent};
-use rg3d::scene::Scene;
 use std::ops::{Deref, DerefMut};
 
 #[allow(clippy::large_enum_variant)]

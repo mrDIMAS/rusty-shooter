@@ -24,7 +24,6 @@ use rg3d::{
     physics::{
         dynamics::{BodyStatus, RigidBodyBuilder},
         geometry::{ColliderBuilder, InteractionGroups},
-        ncollide::query,
     },
     resource::model::Model,
     scene::{
@@ -826,7 +825,7 @@ impl Bot {
                 definition.scale,
             ));
 
-            let mut capsule_body = RigidBodyBuilder::new(BodyStatus::Dynamic)
+            let capsule_body = RigidBodyBuilder::new(BodyStatus::Dynamic)
                 .translation(position.x, position.y, position.z)
                 .build();
             let body = scene.physics.bodies.insert(capsule_body);

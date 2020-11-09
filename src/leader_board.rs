@@ -1,11 +1,11 @@
 use crate::{character::Team, message::Message, GameEngine, Gui, MatchOptions, UINodeHandle};
-use rg3d::gui::message::MessageDirection;
 use rg3d::{
     core::{
         color::Color,
         visitor::{Visit, VisitResult, Visitor},
     },
     event::{ElementState, Event, VirtualKeyCode, WindowEvent},
+    gui::message::MessageDirection,
     gui::{
         brush::Brush,
         grid::{Column, GridBuilder, Row},

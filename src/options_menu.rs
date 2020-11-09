@@ -1,11 +1,9 @@
-use crate::gui::ScrollBarData;
 use crate::{
     control_scheme::{ControlButton, ControlScheme},
-    gui::{create_check_box, create_scroll_bar, create_scroll_viewer},
+    gui::{create_check_box, create_scroll_bar, create_scroll_viewer, ScrollBarData},
     message::Message,
     GameEngine, GuiMessage, UINodeHandle,
 };
-use rg3d::gui::message::MessageDirection;
 use rg3d::{
     event::{Event, MouseButton, MouseScrollDelta, WindowEvent},
     gui::{
@@ -14,9 +12,9 @@ use rg3d::{
         decorator::DecoratorBuilder,
         grid::{Column, GridBuilder, Row},
         list_view::ListViewBuilder,
-        message::TextMessage,
         message::{
-            ButtonMessage, CheckBoxMessage, ListViewMessage, ScrollBarMessage, UiMessageData,
+            ButtonMessage, CheckBoxMessage, ListViewMessage, MessageDirection, ScrollBarMessage,
+            TextMessage, UiMessageData,
         },
         node::UINode,
         tab_control::{TabControlBuilder, TabDefinition},
@@ -831,26 +829,25 @@ impl OptionsMenu {
                 }
             }
             UiMessageData::CheckBox(msg) => {
-                if let CheckBoxMessage::Check(value) = msg {
-                    let value = value.unwrap_or(false);
-                    let mut control_scheme = self.control_scheme.borrow_mut();
-                    if message.destination() == self.cb_point_shadows {
-                        settings.point_shadows_enabled = value;
-                    } else if message.destination() == self.cb_spot_shadows {
-                        settings.spot_shadows_enabled = value;
-                    } else if message.destination() == self.cb_soft_spot_shadows {
-                        settings.spot_soft_shadows = value;
-                    } else if message.destination() == self.cb_soft_point_shadows {
-                        settings.point_soft_shadows = value;
-                    } else if message.destination() == self.cb_mouse_y_inverse {
-                        control_scheme.mouse_y_inverse = value;
-                    } else if message.destination() == self.cb_smooth_mouse {
-                        control_scheme.smooth_mouse = value;
-                    } else if message.destination() == self.cb_shake_camera {
-                        control_scheme.shake_camera = value;
-                    } else if message.destination() == self.cb_use_light_scatter {
-                        settings.light_scatter_enabled = value;
-                    }
+                let CheckBoxMessage::Check(value) = msg;
+                let value = value.unwrap_or(false);
+                let mut control_scheme = self.control_scheme.borrow_mut();
+                if message.destination() == self.cb_point_shadows {
+                    settings.point_shadows_enabled = value;
+                } else if message.destination() == self.cb_spot_shadows {
+                    settings.spot_shadows_enabled = value;
+                } else if message.destination() == self.cb_soft_spot_shadows {
+                    settings.spot_soft_shadows = value;
+                } else if message.destination() == self.cb_soft_point_shadows {
+                    settings.point_soft_shadows = value;
+                } else if message.destination() == self.cb_mouse_y_inverse {
+                    control_scheme.mouse_y_inverse = value;
+                } else if message.destination() == self.cb_smooth_mouse {
+                    control_scheme.smooth_mouse = value;
+                } else if message.destination() == self.cb_shake_camera {
+                    control_scheme.shake_camera = value;
+                } else if message.destination() == self.cb_use_light_scatter {
+                    settings.light_scatter_enabled = value;
                 }
             }
             UiMessageData::Button(msg) => {

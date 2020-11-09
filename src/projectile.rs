@@ -3,15 +3,14 @@ use crate::{
     effects::EffectKind,
     message::Message,
     weapon::{Weapon, WeaponContainer},
-    CollisionGroups, GameTime,
+    GameTime,
 };
 use rand::Rng;
 use rg3d::{
     core::{
         algebra::{Matrix3, UnitQuaternion, Vector3},
         color::Color,
-        math::ray::Ray,
-        math::Vector3Ext,
+        math::{ray::Ray, Vector3Ext},
         pool::{Handle, Pool, PoolIteratorMut},
         visitor::{Visit, VisitResult, Visitor},
     },

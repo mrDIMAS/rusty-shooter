@@ -1,8 +1,7 @@
-use crate::rg3d::core::math::Vector3Ext;
-use crate::{effects::EffectKind, message::Message, GameTime};
-use rg3d::core::algebra::Vector3;
+use crate::{effects::EffectKind, message::Message, rg3d::core::math::Vector3Ext, GameTime};
 use rg3d::{
     core::{
+        algebra::Vector3,
         pool::{Handle, Pool, PoolIterator, PoolPairIterator},
         visitor::{Visit, VisitResult, Visitor},
     },

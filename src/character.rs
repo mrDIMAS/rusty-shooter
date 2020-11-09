@@ -1,14 +1,16 @@
 use crate::{message::Message, weapon::Weapon};
-use rg3d::core::algebra::Vector3;
-use rg3d::core::math::ray::Ray;
-use rg3d::scene::physics::{Physics, RayCastOptions};
-use rg3d::scene::RigidBodyHandle;
 use rg3d::{
     core::{
+        algebra::Vector3,
+        math::ray::Ray,
         pool::Handle,
         visitor::{Visit, VisitError, VisitResult, Visitor},
     },
-    scene::{node::Node, Scene},
+    scene::{
+        node::Node,
+        physics::{Physics, RayCastOptions},
+        RigidBodyHandle, Scene,
+    },
 };
 use std::sync::mpsc::Sender;
 

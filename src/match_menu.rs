@@ -1,7 +1,7 @@
-use crate::gui::ScrollBarData;
 use crate::{
-    gui::create_scroll_bar, message::Message, DeathMatch, GameEngine, Gui, GuiMessage,
-    MatchOptions, UINodeHandle,
+    gui::{create_scroll_bar, ScrollBarData},
+    message::Message,
+    DeathMatch, GameEngine, Gui, GuiMessage, MatchOptions, UINodeHandle,
 };
 use rg3d::{
     engine::resource_manager::ResourceManager,

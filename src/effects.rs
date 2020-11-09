@@ -1,10 +1,7 @@
 use rand::Rng;
-use rg3d::core::algebra::Vector3;
-use rg3d::scene::particle_system::{
-    BaseEmitter, BaseEmitterBuilder, Emitter, SphereEmitterBuilder,
-};
 use rg3d::{
     core::{
+        algebra::Vector3,
         color::Color,
         color_gradient::{ColorGradient, GradientPoint},
         numeric_range::NumericRange,
@@ -16,8 +13,8 @@ use rg3d::{
         graph::Graph,
         node::Node,
         particle_system::{
-            CustomEmitter, CustomEmitterFactory, Emit, Particle, ParticleSystem,
-            ParticleSystemBuilder,
+            BaseEmitter, BaseEmitterBuilder, CustomEmitter, CustomEmitterFactory, Emit, Emitter,
+            Particle, ParticleSystem, ParticleSystemBuilder, SphereEmitterBuilder,
         },
         transform::TransformBuilder,
     },

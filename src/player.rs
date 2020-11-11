@@ -167,16 +167,13 @@ impl Player {
         scene.graph.link_nodes(camera_handle, camera_pivot_handle);
 
         let capsule_shape = ColliderBuilder::capsule_y(height * 0.5, 0.35)
-            .friction(0.2)
+            .friction(0.0)
             .build();
         let body = RigidBodyBuilder::new(BodyStatus::Dynamic)
             .can_sleep(false)
             .build();
-        let body_handle = scene.physics.bodies.insert(body);
-        scene
-            .physics
-            .colliders
-            .insert(capsule_shape, body_handle, &mut scene.physics.bodies);
+        let body_handle = scene.physics.add_body(body);
+        scene.physics.add_collider(capsule_shape, body_handle);
         let pivot = Node::Base(Default::default());
         let pivot_handle = scene.graph.add_node(pivot);
         scene.physics_binder.bind(pivot_handle, body_handle.into());
@@ -303,6 +300,14 @@ impl Player {
             }
         } else {
             self.weapon_dest_offset = Vector3::default();
+        }
+
+        // Damping to prevent sliding.
+        // TODO: This is needed because Rapier does not have selection of friction
+        // models yet.
+        if has_ground_contact {
+            body.linvel.x *= 0.9;
+            body.linvel.z *= 0.9;
         }
 
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);

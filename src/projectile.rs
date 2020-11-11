@@ -190,14 +190,8 @@ impl Projectile {
                     let body = RigidBodyBuilder::new(BodyStatus::Kinematic)
                         .translation(position.x, position.y, position.z)
                         .build();
-                    let body_handle = scene.physics.bodies.insert(body);
-                    scene.physics.colliders.insert(
-                        collider,
-                        body_handle,
-                        &mut scene.physics.bodies,
-                    );
-
-                    let body_handle = RigidBodyHandle::from(body_handle);
+                    let body_handle = scene.physics.add_body(body);
+                    scene.physics.add_collider(collider, body_handle);
                     scene.physics_binder.bind(model, body_handle);
 
                     (model, body_handle)
@@ -469,11 +463,7 @@ impl Projectile {
 
     fn clean_up(&mut self, scene: &mut Scene) {
         if self.body.is_some() {
-            scene.physics.bodies.remove(
-                self.body.into(),
-                &mut scene.physics.colliders,
-                &mut scene.physics.joints,
-            );
+            scene.physics.remove_body(self.body);
         }
         if self.model.is_some() {
             scene.graph.remove_node(self.model);

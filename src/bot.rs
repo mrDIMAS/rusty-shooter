@@ -33,7 +33,7 @@ use rg3d::{
         node::Node,
         physics::{Physics, RayCastOptions},
         transform::TransformBuilder,
-        RigidBodyHandle, Scene, SceneDrawingContext,
+        Scene, SceneDrawingContext,
     },
     utils::navmesh::Navmesh,
 };
@@ -828,18 +828,17 @@ impl Bot {
             let capsule_body = RigidBodyBuilder::new(BodyStatus::Dynamic)
                 .translation(position.x, position.y, position.z)
                 .build();
-            let body = scene.physics.bodies.insert(capsule_body);
+            let body = scene.physics.add_body(capsule_body);
             scene.physics_binder.bind(pivot, body.into());
 
-            scene.physics.colliders.insert(
+            scene.physics.add_collider(
                 ColliderBuilder::capsule_y(body_height * 0.5, 0.28)
                     .friction(0.2)
                     .build(),
-                body.into(),
-                &mut scene.physics.bodies,
+                body,
             );
 
-            (pivot, RigidBodyHandle::from(body))
+            (pivot, body)
         };
 
         let hand = scene.graph.find_by_name(model, definition.weapon_hand_name);

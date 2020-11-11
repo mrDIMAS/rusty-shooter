@@ -268,10 +268,6 @@ impl Character {
 
     pub fn clean_up(&mut self, scene: &mut Scene) {
         scene.remove_node(self.pivot);
-        scene.physics.bodies.remove(
-            self.body.into(),
-            &mut scene.physics.colliders,
-            &mut scene.physics.joints,
-        );
+        scene.physics.remove_body(self.body);
     }
 }

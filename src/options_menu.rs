@@ -64,6 +64,7 @@ impl OptionsMenu {
         let video_modes: Vec<VideoMode> = engine
             .get_window()
             .primary_monitor()
+            .unwrap()
             .video_modes()
             .filter(|vm| vm.size().width > 800 && vm.size().height > 600 && vm.bit_depth() == 32)
             .collect();

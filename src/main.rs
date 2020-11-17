@@ -342,7 +342,7 @@ impl Game {
             .with_inner_size(inner_size)
             .with_resizable(true);
 
-        let mut engine = GameEngine::new(window_builder, &events_loop).unwrap();
+        let mut engine = GameEngine::new(window_builder, &events_loop, false).unwrap();
         let hrtf_sphere = rg3d::sound::hrtf::HrirSphere::from_file(
             "data/sounds/IRC_1040_C.bin",
             context::SAMPLE_RATE,

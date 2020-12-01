@@ -53,13 +53,13 @@ Keep in mind that it can be different from latest version!
 	- [x] M4
 	- [x] Plasma
 	- [ ] Grenade launcher. 
-	- [ ] Rocket launcher.
+	- [x] Rocket launcher.
 	- [ ] Lightning gun.
 	- [ ] Machine gun.
 - [x] Projectiles. More should be added.
 	- [x] Bullet
 	- [x] Plasma ball
-	- [ ] Rocket
+	- [x] Rocket
 	- [ ] Grenade
 	- [ ] Nail
 - [x] Level - shitty version of legendary q3dm6 level is implemented. Good enough for tests, bad gameplay wise.
@@ -121,7 +121,7 @@ Keep in mind that it can be different from latest version!
 - [x] Death zones - places where actor dies immediately (space, death fog, squashed, telefragged, etc) is added 
 - [ ] Level editor - some simple level editor would be nice, for now I'll continue use ancient 3ds max 2012. Game items are placed on level using dummies which then are substituded with real items, this works but very uncomfortable because it is not WYSIWYG editor.
 - [x] Restyle UI. Main menu also should have some sort of background, not just black void.
-- [ ] Loading screen - currently game just hangs for 8+ seconds until it load a level, this should be done async.
+- [x] Loading screen - level loads asynchronously now.
 - [ ] Environment interaction - its implemented partially - any actor can use jump pads, pick up items. 
 - [ ] More bots - there are only three bot kind available, there are a lot of free models on mixamo.com which can be used to add more bots.
 - [ ] More levels - currently there is only one level which is boring as fuck.

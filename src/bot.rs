@@ -69,6 +69,14 @@ impl BotKind {
             BotKind::Maw => 2,
         }
     }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            BotKind::Mutant => "Mutant",
+            BotKind::Parasite => "Parasite",
+            BotKind::Maw => "Maw",
+        }
+    }
 }
 
 #[derive(Debug)]

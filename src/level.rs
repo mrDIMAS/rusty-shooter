@@ -21,6 +21,7 @@ use rg3d::{
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
+    engine::resource_manager::ResourceManager,
     event::Event,
     physics::{
         geometry::{ContactEvent, InteractionGroups, ProximityEvent},
@@ -30,14 +31,11 @@ use rg3d::{
         self, base::BaseBuilder, camera::CameraBuilder, node::Node, physics::RayCastOptions, Scene,
     },
     sound::context::Context,
-    utils::navmesh::Navmesh,
+    utils::{log::Log, navmesh::Navmesh},
 };
 use std::{
-    cell::RefCell,
-    path::Path,
-    path::PathBuf,
-    rc::Rc,
-    sync::{mpsc::Sender, Arc, Mutex},
+    path::{Path, PathBuf},
+    sync::{mpsc::Sender, Arc, Mutex, RwLock},
 };
 
 pub const RESPAWN_TIME: f32 = 4.0;
@@ -54,7 +52,7 @@ pub struct Level {
     spawn_points: Vec<SpawnPoint>,
     sender: Option<Sender<Message>>,
     pub navmesh: Option<Navmesh>,
-    pub control_scheme: Option<Rc<RefCell<ControlScheme>>>,
+    pub control_scheme: Option<Arc<RwLock<ControlScheme>>>,
     death_zones: Vec<DeathZone>,
     pub options: MatchOptions,
     time: f32,
@@ -72,7 +70,7 @@ impl Default for Level {
             map_root: Default::default(),
             projectiles: ProjectileContainer::new(),
             actors: ActorContainer::new(),
-            scene: Handle::NONE,
+            scene: Default::default(),
             player: Handle::NONE,
             weapons: WeaponContainer::new(),
             jump_pads: JumpPadContainer::new(),
@@ -249,13 +247,269 @@ impl Visit for RespawnEntry {
     }
 }
 
+fn build_navmesh(scene: &mut Scene) -> Option<Navmesh> {
+    let navmesh_handle = scene.graph.find_by_name(scene.graph.get_root(), "Navmesh");
+    if navmesh_handle.is_some() {
+        let navmesh_node = &mut scene.graph[navmesh_handle];
+        navmesh_node.set_visibility(false);
+        Some(Navmesh::from_mesh(navmesh_node.as_mesh()))
+    } else {
+        Log::writeln("Unable to find Navmesh node to build navmesh!".to_owned());
+        None
+    }
+}
+
+#[derive(Default)]
+pub struct AnalysisResult {
+    jump_pads: JumpPadContainer,
+    items: ItemContainer,
+    death_zones: Vec<DeathZone>,
+    spawn_points: Vec<SpawnPoint>,
+}
+
+pub async fn analyze(
+    scene: &mut Scene,
+    resource_manager: ResourceManager,
+    sender: Sender<Message>,
+) -> AnalysisResult {
+    let mut result = AnalysisResult::default();
+
+    let mut items = Vec::new();
+    let mut spawn_points = Vec::new();
+    let mut death_zones = Vec::new();
+    for (handle, node) in scene.graph.pair_iter() {
+        let position = node.global_position();
+        let name = node.name();
+        if name.starts_with("JumpPad") {
+            let begin = scene
+                .graph
+                .find_by_name_from_root(format!("{}_Begin", name).as_str());
+            let end = scene
+                .graph
+                .find_by_name_from_root(format!("{}_End", name).as_str());
+            if begin.is_some() && end.is_some() {
+                let begin = scene.graph[begin].global_position();
+                let end = scene.graph[end].global_position();
+                let d = end - begin;
+                let len = d.norm();
+                let force = d.try_normalize(std::f32::EPSILON);
+                let force = force.unwrap_or(Vector3::y()).scale(len * 3.0);
+                let shape = scene.physics.mesh_to_trimesh(node.as_mesh());
+                scene.physics_binder.bind(handle, shape);
+                result.jump_pads.add(JumpPad::new(shape, force));
+            };
+        } else if name.starts_with("Medkit") {
+            items.push((ItemKind::Medkit, position));
+        } else if name.starts_with("Ammo_Ak47") {
+            items.push((ItemKind::Ak47Ammo, position));
+        } else if name.starts_with("Ammo_M4") {
+            items.push((ItemKind::M4Ammo, position));
+        } else if name.starts_with("Ammo_Plasma") {
+            items.push((ItemKind::Plasma, position));
+        } else if name.starts_with("SpawnPoint") {
+            spawn_points.push(node.global_position())
+        } else if name.starts_with("DeathZone") {
+            if let Node::Mesh(_) = node {
+                death_zones.push(handle);
+            }
+        }
+    }
+
+    for (kind, position) in items {
+        result.items.add(
+            Item::new(
+                kind,
+                position,
+                scene,
+                resource_manager.clone(),
+                sender.clone(),
+            )
+            .await,
+        );
+    }
+    for handle in death_zones {
+        let node = &mut scene.graph[handle];
+        node.set_visibility(false);
+        result.death_zones.push(DeathZone {
+            bounds: node.as_mesh().world_bounding_box(),
+        });
+    }
+    result.spawn_points = spawn_points
+        .into_iter()
+        .map(|p| SpawnPoint { position: p })
+        .collect();
+
+    result
+}
+
+async fn spawn_player(
+    spawn_points: &[SpawnPoint],
+    actors: &mut ActorContainer,
+    weapons: &mut WeaponContainer,
+    sender: Sender<Message>,
+    resource_manager: ResourceManager,
+    control_scheme: Arc<RwLock<ControlScheme>>,
+    scene: &mut Scene,
+) -> Handle<Actor> {
+    let index = find_suitable_spawn_point(spawn_points, actors, scene);
+    let spawn_position = spawn_points.get(index).map_or(Vector3::default(), |pt| {
+        pt.position + Vector3::new(0.0, 1.5, 0.0)
+    });
+    let mut player = Player::new(scene, sender.clone());
+    player.set_control_scheme(control_scheme);
+    let player = actors.add(Actor::Player(player));
+    actors
+        .get_mut(player)
+        .set_position(&mut scene.physics, spawn_position);
+
+    let weapons_to_give = [
+        WeaponKind::M4,
+        WeaponKind::Ak47,
+        WeaponKind::PlasmaRifle,
+        WeaponKind::RocketLauncher,
+    ];
+    for (i, &weapon) in weapons_to_give.iter().enumerate() {
+        give_new_weapon(
+            weapon,
+            player,
+            sender.clone(),
+            resource_manager.clone(),
+            i == weapons_to_give.len() - 1,
+            weapons,
+            actors,
+            scene,
+        )
+        .await;
+    }
+
+    player
+}
+
+async fn give_new_weapon(
+    kind: WeaponKind,
+    actor: Handle<Actor>,
+    sender: Sender<Message>,
+    resource_manager: ResourceManager,
+    visible: bool,
+    weapons: &mut WeaponContainer,
+    actors: &mut ActorContainer,
+    scene: &mut Scene,
+) {
+    if actors.contains(actor) {
+        let mut weapon = Weapon::new(kind, resource_manager, scene, sender.clone()).await;
+        weapon.set_owner(actor);
+        let weapon_model = weapon.get_model();
+        scene.graph[weapon_model].set_visibility(visible);
+        let actor = actors.get_mut(actor);
+        let weapon_handle = weapons.add(weapon);
+        actor.add_weapon(weapon_handle);
+        scene.graph.link_nodes(weapon_model, actor.weapon_pivot());
+
+        sender
+            .send(Message::AddNotification {
+                text: format!("Actor picked up weapon {:?}", kind),
+            })
+            .unwrap();
+    }
+}
+
+fn find_suitable_spawn_point(
+    spawn_points: &[SpawnPoint],
+    actors: &ActorContainer,
+    scene: &Scene,
+) -> usize {
+    // Find spawn point with least amount of enemies nearby.
+    let mut index = rand::thread_rng().gen_range(0, spawn_points.len());
+    let mut max_distance = -std::f32::MAX;
+    for (i, pt) in spawn_points.iter().enumerate() {
+        let mut sum_distance = 0.0;
+        for actor in actors.iter() {
+            let position = actor.position(&scene.physics);
+            sum_distance += pt.position.metric_distance(&position);
+        }
+        if sum_distance > max_distance {
+            max_distance = sum_distance;
+            index = i;
+        }
+    }
+    index
+}
+
+async fn spawn_bot(
+    kind: BotKind,
+    name: Option<String>,
+    spawn_points: &[SpawnPoint],
+    actors: &mut ActorContainer,
+    weapons: &mut WeaponContainer,
+    resource_manager: ResourceManager,
+    sender: Sender<Message>,
+    leader_board: &mut LeaderBoard,
+    scene: &mut Scene,
+) -> Handle<Actor> {
+    let index = find_suitable_spawn_point(spawn_points, actors, scene);
+    let spawn_position = spawn_points
+        .get(index)
+        .map_or(Vector3::default(), |pt| pt.position);
+
+    let bot = add_bot(
+        kind,
+        spawn_position,
+        name,
+        actors,
+        weapons,
+        resource_manager,
+        sender,
+        leader_board,
+        scene,
+    )
+    .await;
+
+    bot
+}
+
+async fn add_bot(
+    kind: BotKind,
+    position: Vector3<f32>,
+    name: Option<String>,
+    actors: &mut ActorContainer,
+    weapons: &mut WeaponContainer,
+    resource_manager: ResourceManager,
+    sender: Sender<Message>,
+    leader_board: &mut LeaderBoard,
+    scene: &mut Scene,
+) -> Handle<Actor> {
+    let bot = Bot::new(
+        kind,
+        resource_manager.clone(),
+        scene,
+        position,
+        sender.clone(),
+    )
+    .await;
+    let name = name.unwrap_or_else(|| format!("Bot {:?} {}", kind, actors.count()));
+    leader_board.get_or_add_actor(&name);
+    let bot = actors.add(Actor::Bot(bot));
+    give_new_weapon(
+        WeaponKind::Ak47,
+        bot,
+        sender.clone(),
+        resource_manager,
+        true,
+        weapons,
+        actors,
+        scene,
+    )
+    .await;
+    bot
+}
+
 impl Level {
     pub async fn new(
-        engine: &mut GameEngine,
-        control_scheme: Rc<RefCell<ControlScheme>>,
+        resource_manager: ResourceManager,
+        control_scheme: Arc<RwLock<ControlScheme>>,
         sender: Sender<Message>,
         options: MatchOptions,
-    ) -> Level {
+    ) -> (Level, Scene) {
         let mut scene = Scene::new();
 
         let (proximity_events_sender, proximity_events_receiver) = crossbeam::channel::unbounded();
@@ -275,8 +529,7 @@ impl Level {
                 .build(),
         ));
 
-        let map_model = engine
-            .resource_manager
+        let map_model = resource_manager
             .request_model(Path::new("data/models/dm6.fbx"))
             .await
             .unwrap();
@@ -294,117 +547,113 @@ impl Level {
             println!("Unable to find Polygon node to build collision shape for level!");
         }
 
-        let mut level = Level {
-            scene: engine.scenes.add(scene),
-            sender: Some(sender),
-            control_scheme: Some(control_scheme),
+        let AnalysisResult {
+            jump_pads,
+            items,
+            death_zones,
+            spawn_points,
+        } = analyze(&mut scene, resource_manager.clone(), sender.clone()).await;
+        let mut actors = ActorContainer::new();
+        let mut weapons = WeaponContainer::new();
+        let mut leader_board = LeaderBoard::default();
+
+        for &kind in &[BotKind::Maw, BotKind::Mutant, BotKind::Parasite] {
+            spawn_bot(
+                kind,
+                Some(kind.description().to_owned()),
+                &spawn_points,
+                &mut actors,
+                &mut weapons,
+                resource_manager.clone(),
+                sender.clone(),
+                &mut leader_board,
+                &mut scene,
+            )
+            .await;
+        }
+
+        let level = Level {
+            player: spawn_player(
+                &spawn_points,
+                &mut actors,
+                &mut weapons,
+                sender.clone(),
+                resource_manager.clone(),
+                control_scheme.clone(),
+                &mut scene,
+            )
+            .await,
             map_root,
             options,
             spectator_camera,
+            actors,
+            weapons,
+            jump_pads,
+            items,
+            death_zones,
+            spawn_points,
+            leader_board,
+            navmesh: build_navmesh(&mut scene),
+            scene: Handle::NONE, // Filled when scene will be moved to engine.
+            sender: Some(sender),
+            control_scheme: Some(control_scheme),
+            time: 0.0,
+            respawn_list: Default::default(),
             contact_events_receiver: Some(contact_events_receiver),
             proximity_events_receiver: Some(proximity_events_receiver),
-            ..Default::default()
+            projectiles: ProjectileContainer::new(),
+            target_spectator_position: Default::default(),
         };
 
-        level.build_navmesh(engine);
-        level.analyze(engine).await;
-        level.spawn_player(engine).await;
-        level
-            .spawn_bot(engine, BotKind::Maw, Some("Maw".to_owned()))
-            .await;
-        level
-            .spawn_bot(engine, BotKind::Mutant, Some("Mutant".to_owned()))
-            .await;
-        level
-            .spawn_bot(engine, BotKind::Parasite, Some("Parasite".to_owned()))
-            .await;
-
-        level
-    }
-
-    pub fn build_navmesh(&mut self, engine: &mut GameEngine) {
-        if self.navmesh.is_none() {
-            let scene = &mut engine.scenes[self.scene];
-            let navmesh_handle = scene.graph.find_by_name(self.map_root, "Navmesh");
-            if navmesh_handle.is_some() {
-                let navmesh_node = &mut scene.graph[navmesh_handle];
-                navmesh_node.set_visibility(false);
-                self.navmesh = Some(Navmesh::from_mesh(navmesh_node.as_mesh()));
-            } else {
-                println!("Unable to find Navmesh node to build navmesh!")
-            }
-        }
-    }
-
-    pub async fn analyze(&mut self, engine: &mut GameEngine) {
-        let mut items = Vec::new();
-        let mut spawn_points = Vec::new();
-        let mut death_zones = Vec::new();
-        let scene = &mut engine.scenes[self.scene];
-        for (handle, node) in scene.graph.pair_iter() {
-            let position = node.global_position();
-            let name = node.name();
-            if name.starts_with("JumpPad") {
-                let begin = scene
-                    .graph
-                    .find_by_name_from_root(format!("{}_Begin", name).as_str());
-                let end = scene
-                    .graph
-                    .find_by_name_from_root(format!("{}_End", name).as_str());
-                if begin.is_some() && end.is_some() {
-                    let begin = scene.graph[begin].global_position();
-                    let end = scene.graph[end].global_position();
-                    let d = end - begin;
-                    let len = d.norm();
-                    let force = d.try_normalize(std::f32::EPSILON);
-                    let force = force.unwrap_or(Vector3::y()).scale(len * 3.0);
-                    let shape = scene.physics.mesh_to_trimesh(node.as_mesh());
-                    scene.physics_binder.bind(handle, shape);
-                    self.jump_pads.add(JumpPad::new(shape, force));
-                };
-            } else if name.starts_with("Medkit") {
-                items.push((ItemKind::Medkit, position));
-            } else if name.starts_with("Ammo_Ak47") {
-                items.push((ItemKind::Ak47Ammo, position));
-            } else if name.starts_with("Ammo_M4") {
-                items.push((ItemKind::M4Ammo, position));
-            } else if name.starts_with("Ammo_Plasma") {
-                items.push((ItemKind::Plasma, position));
-            } else if name.starts_with("SpawnPoint") {
-                spawn_points.push(node.global_position())
-            } else if name.starts_with("DeathZone") {
-                if let Node::Mesh(_) = node {
-                    death_zones.push(handle);
-                }
-            }
-        }
-        for (kind, position) in items {
-            self.items.add(
-                Item::new(
-                    kind,
-                    position,
-                    scene,
-                    engine.resource_manager.clone(),
-                    self.sender.as_ref().unwrap().clone(),
-                )
-                .await,
-            );
-        }
-        for handle in death_zones {
-            let node = &mut scene.graph[handle];
-            node.set_visibility(false);
-            self.death_zones.push(DeathZone {
-                bounds: node.as_mesh().world_bounding_box(),
-            });
-        }
-        self.spawn_points = spawn_points
-            .into_iter()
-            .map(|p| SpawnPoint { position: p })
-            .collect();
+        (level, scene)
     }
 
     pub fn destroy(&mut self, engine: &mut GameEngine) {
         engine.scenes.remove(self.scene);
+    }
+
+    async fn give_new_weapon(
+        &mut self,
+        engine: &mut GameEngine,
+        actor: Handle<Actor>,
+        kind: WeaponKind,
+    ) {
+        give_new_weapon(
+            kind,
+            actor,
+            self.sender.clone().unwrap(),
+            engine.resource_manager.clone(),
+            true,
+            &mut self.weapons,
+            &mut self.actors,
+            &mut engine.scenes[self.scene],
+        )
+        .await;
+    }
+
+    async fn spawn_player(&mut self, engine: &mut GameEngine) -> Handle<Actor> {
+        let scene = &mut engine.scenes[self.scene];
+
+        let player = spawn_player(
+            &self.spawn_points,
+            &mut self.actors,
+            &mut self.weapons,
+            self.sender.clone().unwrap(),
+            engine.resource_manager.clone(),
+            self.control_scheme.clone().unwrap(),
+            scene,
+        )
+        .await;
+
+        if let Node::Camera(spectator_camera) = &mut scene.graph[self.spectator_camera] {
+            spectator_camera.set_enabled(false);
+        }
+
+        player
+    }
+
+    pub fn build_navmesh(&mut self, engine: &mut GameEngine) {
+        self.navmesh = build_navmesh(&mut engine.scenes[self.scene]);
     }
 
     pub fn get_player(&self) -> Handle<Actor> {
@@ -464,38 +713,6 @@ impl Level {
         self.weapons.free(weapon);
     }
 
-    async fn give_new_weapon(
-        &mut self,
-        engine: &mut GameEngine,
-        actor: Handle<Actor>,
-        kind: WeaponKind,
-    ) {
-        if self.actors.contains(actor) {
-            let scene = &mut engine.scenes[self.scene];
-            let mut weapon = Weapon::new(
-                kind,
-                engine.resource_manager.clone(),
-                scene,
-                self.sender.as_ref().unwrap().clone(),
-            )
-            .await;
-            weapon.set_owner(actor);
-            let weapon_model = weapon.get_model();
-            let actor = self.actors.get_mut(actor);
-            let weapon_handle = self.weapons.add(weapon);
-            actor.add_weapon(weapon_handle);
-            scene.graph.link_nodes(weapon_model, actor.weapon_pivot());
-
-            self.sender
-                .as_ref()
-                .unwrap()
-                .send(Message::AddNotification {
-                    text: format!("Actor picked up weapon {:?}", kind),
-                })
-                .unwrap();
-        }
-    }
-
     async fn add_bot(
         &mut self,
         engine: &mut GameEngine,
@@ -503,20 +720,18 @@ impl Level {
         position: Vector3<f32>,
         name: Option<String>,
     ) -> Handle<Actor> {
-        let scene = &mut engine.scenes[self.scene];
-        let bot = Bot::new(
+        add_bot(
             kind,
-            engine.resource_manager.clone(),
-            scene,
             position,
-            self.sender.as_ref().unwrap().clone(),
+            name,
+            &mut self.actors,
+            &mut self.weapons,
+            engine.resource_manager.clone(),
+            self.sender.clone().unwrap(),
+            &mut self.leader_board,
+            &mut engine.scenes[self.scene],
         )
-        .await;
-        let name = name.unwrap_or_else(|| format!("Bot {:?} {}", kind, self.actors.count()));
-        self.leader_board.get_or_add_actor(&name);
-        let bot = self.actors.add(Actor::Bot(bot));
-        self.give_new_weapon(engine, bot, WeaponKind::Ak47).await;
-        bot
+        .await
     }
 
     async fn remove_actor(&mut self, engine: &mut GameEngine, actor: Handle<Actor>) {
@@ -551,39 +766,6 @@ impl Level {
                 self.player = Handle::NONE;
             }
         }
-    }
-
-    async fn spawn_player(&mut self, engine: &mut GameEngine) -> Handle<Actor> {
-        let index = self.find_suitable_spawn_point(engine);
-        let spawn_position = self
-            .spawn_points
-            .get(index)
-            .map_or(Vector3::default(), |pt| {
-                pt.position + Vector3::new(0.0, 1.5, 0.0)
-            });
-        let scene = &mut engine.scenes[self.scene];
-        if let Node::Camera(spectator_camera) = &mut scene.graph[self.spectator_camera] {
-            spectator_camera.set_enabled(false);
-        }
-        let mut player = Player::new(scene, self.sender.as_ref().unwrap().clone());
-        if let Some(control_scheme) = self.control_scheme.as_ref() {
-            player.set_control_scheme(control_scheme.clone());
-        }
-        self.player = self.actors.add(Actor::Player(player));
-        self.actors
-            .get_mut(self.player)
-            .set_position(&mut scene.physics, spawn_position);
-
-        self.give_new_weapon(engine, self.player, WeaponKind::M4)
-            .await;
-        self.give_new_weapon(engine, self.player, WeaponKind::Ak47)
-            .await;
-        self.give_new_weapon(engine, self.player, WeaponKind::PlasmaRifle)
-            .await;
-        self.give_new_weapon(engine, self.player, WeaponKind::RocketLauncher)
-            .await;
-
-        self.player
     }
 
     async fn give_item(&mut self, engine: &mut GameEngine, actor: Handle<Actor>, kind: ItemKind) {
@@ -733,38 +915,24 @@ impl Level {
         self.weapons[weapon_handle].set_visibility(state, &mut engine.scenes[self.scene].graph)
     }
 
-    fn find_suitable_spawn_point(&self, engine: &mut GameEngine) -> usize {
-        // Find spawn point with least amount of enemies nearby.
-        let scene = &mut engine.scenes[self.scene];
-        let mut index = rand::thread_rng().gen_range(0, self.spawn_points.len());
-        let mut max_distance = -std::f32::MAX;
-        for (i, pt) in self.spawn_points.iter().enumerate() {
-            let mut sum_distance = 0.0;
-            for actor in self.actors.iter() {
-                let position = actor.position(&scene.physics);
-                sum_distance += pt.position.metric_distance(&position);
-            }
-            if sum_distance > max_distance {
-                max_distance = sum_distance;
-                index = i;
-            }
-        }
-        index
-    }
-
     async fn spawn_bot(
         &mut self,
         engine: &mut GameEngine,
         kind: BotKind,
         name: Option<String>,
     ) -> Handle<Actor> {
-        let index = self.find_suitable_spawn_point(engine);
-        let spawn_position = self
-            .spawn_points
-            .get(index)
-            .map_or(Vector3::default(), |pt| pt.position);
-
-        let bot = self.add_bot(engine, kind, spawn_position, name).await;
+        let bot = spawn_bot(
+            kind,
+            name,
+            &self.spawn_points,
+            &mut self.actors,
+            &mut self.weapons,
+            engine.resource_manager.clone(),
+            self.sender.clone().unwrap(),
+            &mut self.leader_board,
+            &mut engine.scenes[self.scene],
+        )
+        .await;
 
         self.sender
             .as_ref()

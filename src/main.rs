@@ -28,6 +28,8 @@ use crate::{
     actor::Actor, control_scheme::ControlScheme, hud::Hud, level::Level, menu::Menu,
     message::Message,
 };
+use rg3d::gui::message::ProgressBarMessage;
+use rg3d::gui::{HorizontalAlignment, VerticalAlignment};
 use rg3d::{
     core::{
         color::Color,
@@ -38,12 +40,15 @@ use rg3d::{
     event::{ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     gui::{
-        message::{MessageDirection, TextMessage, UiMessage},
+        grid::{Column, GridBuilder, Row},
+        message::{MessageDirection, TextMessage, UiMessage, WidgetMessage},
         node::{StubNode, UINode},
+        progress_bar::ProgressBarBuilder,
         text::TextBuilder,
         widget::WidgetBuilder,
         UserInterface,
     },
+    scene::Scene,
     sound::{
         context::{self, Context},
         effects::{BaseEffect, Effect, EffectInput},
@@ -54,14 +59,12 @@ use rg3d::{
     utils::translate_event,
 };
 use std::{
-    cell::RefCell,
     fs::File,
     io::Write,
     path::Path,
-    rc::Rc,
     sync::{
         mpsc::{self, Receiver, Sender},
-        Arc, Mutex,
+        Arc, Mutex, RwLock,
     },
     thread,
     time::{self, Duration, Instant},
@@ -86,11 +89,69 @@ pub struct Game {
     debug_string: String,
     last_tick_time: time::Instant,
     running: bool,
-    control_scheme: Rc<RefCell<ControlScheme>>,
+    control_scheme: Arc<RwLock<ControlScheme>>,
     time: GameTime,
     events_receiver: Receiver<Message>,
     events_sender: Sender<Message>,
     sound_manager: SoundManager,
+    load_context: Option<Arc<Mutex<LoadContext>>>,
+    loading_screen: LoadingScreen,
+}
+
+struct LoadingScreen {
+    root: Handle<UiNode>,
+    progress_bar: Handle<UiNode>,
+    text: Handle<UiNode>,
+}
+
+impl LoadingScreen {
+    fn new(ctx: &mut BuildContext, width: f32, height: f32) -> Self {
+        let progress_bar;
+        let text;
+        let root = GridBuilder::new(
+            WidgetBuilder::new()
+                .with_width(width)
+                .with_height(height)
+                .with_visibility(false)
+                .with_child(
+                    GridBuilder::new(
+                        WidgetBuilder::new()
+                            .on_row(1)
+                            .on_column(1)
+                            .with_child({
+                                progress_bar =
+                                    ProgressBarBuilder::new(WidgetBuilder::new().on_row(1))
+                                        .build(ctx);
+                                progress_bar
+                            })
+                            .with_child({
+                                text = TextBuilder::new(WidgetBuilder::new().on_row(0))
+                                    .with_horizontal_text_alignment(HorizontalAlignment::Center)
+                                    .with_vertical_text_alignment(VerticalAlignment::Center)
+                                    .with_text("Loading... Please wait.")
+                                    .build(ctx);
+                                text
+                            }),
+                    )
+                    .add_row(Row::stretch())
+                    .add_row(Row::strict(32.0))
+                    .add_column(Column::stretch())
+                    .build(ctx),
+                ),
+        )
+        .add_column(Column::stretch())
+        .add_column(Column::strict(400.0))
+        .add_column(Column::stretch())
+        .add_row(Row::stretch())
+        .add_row(Row::strict(100.0))
+        .add_row(Row::stretch())
+        .build(ctx);
+        Self {
+            root,
+            progress_bar,
+            text,
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -238,6 +299,12 @@ impl Visit for MatchOptions {
     }
 }
 
+pub struct LoadContext {
+    level: Option<(Level, Scene)>,
+    progress: usize,
+    progress_message: String,
+}
+
 pub struct SoundManager {
     context: Arc<Mutex<Context>>,
     music: Handle<SoundSource>,
@@ -358,7 +425,7 @@ impl Game {
 
         engine.renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
-        let control_scheme = Rc::new(RefCell::new(ControlScheme::default()));
+        let control_scheme = Arc::new(RwLock::new(ControlScheme::default()));
 
         let fixed_timestep = 1.0 / FIXED_FPS;
 
@@ -376,6 +443,11 @@ impl Game {
         );
 
         let mut game = Game {
+            loading_screen: LoadingScreen::new(
+                &mut engine.user_interface.build_ctx(),
+                inner_size.width,
+                inner_size.height,
+            ),
             sound_manager,
             hud: Hud::new(&mut engine),
             running: true,
@@ -389,6 +461,7 @@ impl Game {
             time,
             events_receiver: rx,
             events_sender: tx,
+            load_context: None,
         };
 
         game.create_debug_ui();
@@ -524,13 +597,39 @@ impl Game {
 
     pub fn start_new_game(&mut self, options: MatchOptions) {
         self.destroy_level();
-        self.level = Some(rg3d::futures::executor::block_on(Level::new(
-            &mut self.engine,
-            self.control_scheme.clone(),
-            self.events_sender.clone(),
-            options,
-        )));
-        self.set_menu_visible(false);
+
+        let ctx = Arc::new(Mutex::new(LoadContext {
+            level: None,
+            progress: 0,
+            progress_message: "Loading level. Please wait.".to_string(),
+        }));
+
+        self.load_context = Some(ctx.clone());
+
+        self.engine
+            .user_interface
+            .send_message(WidgetMessage::visibility(
+                self.loading_screen.root,
+                MessageDirection::ToWidget,
+                true,
+            ));
+        self.menu
+            .set_visible(&mut self.engine.user_interface, false);
+
+        let resource_manager = self.engine.resource_manager.clone();
+        let control_scheme = self.control_scheme.clone();
+        let sender = self.events_sender.clone();
+
+        std::thread::spawn(move || {
+            let level = rg3d::futures::executor::block_on(Level::new(
+                resource_manager,
+                control_scheme,
+                sender,
+                options,
+            ));
+
+            ctx.lock().unwrap().level = Some(level);
+        });
     }
 
     pub fn set_menu_visible(&mut self, visible: bool) {
@@ -547,6 +646,32 @@ impl Game {
         let window = self.engine.get_window();
         window.set_cursor_visible(self.is_menu_visible());
         let _ = window.set_cursor_grab(!self.is_menu_visible());
+
+        if let Some(ctx) = self.load_context.clone() {
+            if let Ok(mut ctx) = ctx.try_lock() {
+                if let Some((mut level, scene)) = ctx.level.take() {
+                    level.scene = self.engine.scenes.add(scene);
+                    self.level = Some(level);
+                    self.load_context = None;
+                    self.set_menu_visible(false);
+                    self.engine
+                        .user_interface
+                        .send_message(WidgetMessage::visibility(
+                            self.loading_screen.root,
+                            MessageDirection::ToWidget,
+                            false,
+                        ));
+                } else {
+                    self.engine
+                        .user_interface
+                        .send_message(ProgressBarMessage::progress(
+                            self.loading_screen.progress_bar,
+                            MessageDirection::ToWidget,
+                            self.engine.resource_manager.state().loading_progress() as f32 / 100.0,
+                        ));
+                }
+            }
+        }
 
         self.engine.update(time.delta);
 

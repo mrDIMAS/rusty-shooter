@@ -15,10 +15,8 @@ use rg3d::{
     },
 };
 use std::{
-    cell::RefCell,
     path::Path,
-    rc::Rc,
-    sync::{mpsc::Sender, Arc, Mutex},
+    sync::{mpsc::Sender, Arc, Mutex, RwLock},
 };
 
 pub struct Menu {
@@ -36,7 +34,7 @@ pub struct Menu {
 impl Menu {
     pub fn new(
         engine: &mut GameEngine,
-        control_scheme: Rc<RefCell<ControlScheme>>,
+        control_scheme: Arc<RwLock<ControlScheme>>,
         sender: Sender<Message>,
     ) -> Self {
         let frame_size = engine.renderer.get_frame_size();

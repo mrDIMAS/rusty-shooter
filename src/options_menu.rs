@@ -26,7 +26,7 @@ use rg3d::{
     monitor::VideoMode,
     window::Fullscreen,
 };
-use std::{cell::RefCell, rc::Rc, sync::mpsc::Sender};
+use std::sync::{mpsc::Sender, Arc, RwLock};
 
 pub struct OptionsMenu {
     pub window: UINodeHandle,
@@ -43,7 +43,7 @@ pub struct OptionsMenu {
     sb_spot_shadow_distance: UINodeHandle,
     cb_use_light_scatter: UINodeHandle,
     video_modes: Vec<VideoMode>,
-    control_scheme: Rc<RefCell<ControlScheme>>,
+    control_scheme: Arc<RwLock<ControlScheme>>,
     control_scheme_buttons: Vec<UINodeHandle>,
     active_control_button: Option<usize>,
     sb_mouse_sens: UINodeHandle,
@@ -58,7 +58,7 @@ pub struct OptionsMenu {
 impl OptionsMenu {
     pub fn new(
         engine: &mut GameEngine,
-        control_scheme: Rc<RefCell<ControlScheme>>,
+        control_scheme: Arc<RwLock<ControlScheme>>,
         sender: Sender<Message>,
     ) -> Self {
         let video_modes: Vec<VideoMode> = engine
@@ -485,7 +485,8 @@ impl OptionsMenu {
                 content: {
                     let mut children = Vec::new();
 
-                    for (row, button) in control_scheme.borrow().buttons().iter().enumerate() {
+                    for (row, button) in control_scheme.read().unwrap().buttons().iter().enumerate()
+                    {
                         // Offset by total amount of rows that goes before
                         let row = row + 4;
 
@@ -532,7 +533,7 @@ impl OptionsMenu {
                                     ScrollBarData {
                                         min: 0.05,
                                         max: 2.0,
-                                        value: control_scheme.borrow().mouse_sens,
+                                        value: control_scheme.read().unwrap().mouse_sens,
                                         step: 0.05,
                                         row: 0,
                                         column: 1,
@@ -560,7 +561,7 @@ impl OptionsMenu {
                                     resource_manager.clone(),
                                     1,
                                     1,
-                                    control_scheme.borrow().mouse_y_inverse,
+                                    control_scheme.read().unwrap().mouse_y_inverse,
                                 );
                                 cb_mouse_y_inverse
                             })
@@ -581,7 +582,7 @@ impl OptionsMenu {
                                     resource_manager.clone(),
                                     2,
                                     1,
-                                    control_scheme.borrow().smooth_mouse,
+                                    control_scheme.read().unwrap().smooth_mouse,
                                 );
                                 cb_smooth_mouse
                             })
@@ -602,14 +603,14 @@ impl OptionsMenu {
                                     resource_manager.clone(),
                                     3,
                                     1,
-                                    control_scheme.borrow().shake_camera,
+                                    control_scheme.read().unwrap().shake_camera,
                                 );
                                 cb_shake_camera
                             })
                             .with_child({
                                 btn_reset_control_scheme = ButtonBuilder::new(
                                     WidgetBuilder::new()
-                                        .on_row(4 + control_scheme.borrow().buttons().len())
+                                        .on_row(4 + control_scheme.read().unwrap().buttons().len())
                                         .with_margin(margin),
                                 )
                                 .with_text("Reset")
@@ -625,7 +626,7 @@ impl OptionsMenu {
                     .add_row(common_row)
                     .add_row(common_row)
                     .add_rows(
-                        (0..control_scheme.borrow().buttons().len())
+                        (0..control_scheme.read().unwrap().buttons().len())
                             .map(|_| common_row)
                             .collect(),
                     )
@@ -672,7 +673,7 @@ impl OptionsMenu {
 
     pub fn sync_to_model(&mut self, engine: &mut GameEngine) {
         let ui = &mut engine.user_interface;
-        let control_scheme = self.control_scheme.borrow();
+        let control_scheme = self.control_scheme.read().unwrap();
         let settings = engine.renderer.get_quality_settings();
 
         let sync_check_box = |handle: UINodeHandle, value: bool| {
@@ -720,7 +721,7 @@ impl OptionsMenu {
         for (btn, def) in self
             .control_scheme_buttons
             .iter()
-            .zip(self.control_scheme.borrow().buttons().iter())
+            .zip(self.control_scheme.read().unwrap().buttons().iter())
         {
             if let UINode::Button(button) = ui.node(*btn) {
                 ui.send_message(TextMessage::text(
@@ -779,8 +780,8 @@ impl OptionsMenu {
                         ));
                     }
 
-                    self.control_scheme.borrow_mut().buttons_mut()[active_control_button].button =
-                        control_button;
+                    self.control_scheme.write().unwrap().buttons_mut()[active_control_button]
+                        .button = control_button;
 
                     self.active_control_button = None;
                 }
@@ -809,7 +810,7 @@ impl OptionsMenu {
                     } else if message.destination() == self.sb_spot_shadow_distance {
                         settings.spot_shadows_distance = *new_value;
                     } else if message.destination() == self.sb_mouse_sens {
-                        self.control_scheme.borrow_mut().mouse_sens = *new_value;
+                        self.control_scheme.write().unwrap().mouse_sens = *new_value;
                     } else if message.destination() == self.sb_music_volume {
                         self.sender
                             .send(Message::SetMusicVolume { volume: *new_value })
@@ -832,7 +833,7 @@ impl OptionsMenu {
             UiMessageData::CheckBox(msg) => {
                 let CheckBoxMessage::Check(value) = msg;
                 let value = value.unwrap_or(false);
-                let mut control_scheme = self.control_scheme.borrow_mut();
+                let mut control_scheme = self.control_scheme.write().unwrap();
                 if message.destination() == self.cb_point_shadows {
                     settings.point_shadows_enabled = value;
                 } else if message.destination() == self.cb_spot_shadows {
@@ -854,7 +855,7 @@ impl OptionsMenu {
             UiMessageData::Button(msg) => {
                 if let ButtonMessage::Click = msg {
                     if message.destination() == self.btn_reset_control_scheme {
-                        self.control_scheme.borrow_mut().reset();
+                        self.control_scheme.write().unwrap().reset();
                         self.sync_to_model(engine);
                     } else if message.destination() == self.btn_reset_audio_settings {
                         engine.sound_context.lock().unwrap().set_master_gain(1.0);

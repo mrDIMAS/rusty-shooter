@@ -105,7 +105,6 @@ impl Visit for Actor {
 // to array element and iterate over array using immutable borrow.
 pub struct TargetDescriptor {
     pub handle: Handle<Actor>,
-    pub ptr: *const Actor,
     pub health: f32,
     pub position: Vector3<f32>,
 }
@@ -159,7 +158,6 @@ impl ActorContainer {
         for (handle, actor) in self.pool.pair_iter() {
             self.target_descriptors.push(TargetDescriptor {
                 handle,
-                ptr: actor,
                 health: actor.health,
                 position: actor.position(&context.scene.physics),
             });

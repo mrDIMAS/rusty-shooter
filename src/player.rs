@@ -21,10 +21,8 @@ use rg3d::{
     sound::context::Context,
 };
 use std::{
-    cell::RefCell,
     ops::{Deref, DerefMut},
-    rc::Rc,
-    sync::{mpsc::Sender, Arc, Mutex},
+    sync::{mpsc::Sender, Arc, Mutex, RwLock},
 };
 
 pub struct Controller {
@@ -79,7 +77,7 @@ pub struct Player {
     crouch_speed: f32,
     stand_up_speed: f32,
     listener_basis: Matrix3<f32>,
-    control_scheme: Option<Rc<RefCell<ControlScheme>>>,
+    control_scheme: Option<Arc<RwLock<ControlScheme>>>,
 }
 
 impl Deref for Player {
@@ -246,7 +244,7 @@ impl Player {
         self.camera
     }
 
-    pub fn set_control_scheme(&mut self, control_scheme: Rc<RefCell<ControlScheme>>) {
+    pub fn set_control_scheme(&mut self, control_scheme: Arc<RwLock<ControlScheme>>) {
         self.control_scheme = Some(control_scheme);
     }
 
@@ -328,7 +326,14 @@ impl Player {
         self.feet_position = body.position.translation.vector;
         self.feet_position.y -= self.stand_body_height;
 
-        if self.control_scheme.as_ref().unwrap().borrow().shake_camera {
+        if self
+            .control_scheme
+            .as_ref()
+            .unwrap()
+            .read()
+            .unwrap()
+            .shake_camera
+        {
             self.camera_offset.follow(&self.camera_dest_offset, 0.1);
         } else {
             self.camera_offset = Vector3::default();
@@ -348,7 +353,14 @@ impl Player {
             -camera_node.look_vector(),
         ]);
 
-        if self.control_scheme.clone().unwrap().borrow().smooth_mouse {
+        if self
+            .control_scheme
+            .clone()
+            .unwrap()
+            .read()
+            .unwrap()
+            .smooth_mouse
+        {
             self.yaw += (self.dest_yaw - self.yaw) * 0.2;
             self.pitch += (self.dest_pitch - self.pitch) * 0.2;
         } else {
@@ -384,7 +396,7 @@ impl Player {
             Some(x) => x,
             None => return false,
         };
-        let control_scheme = control_scheme.borrow();
+        let control_scheme = control_scheme.read().unwrap();
 
         let mut control_button = None;
         let mut control_button_state = ElementState::Released;

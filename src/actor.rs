@@ -179,7 +179,7 @@ impl ActorContainer {
                         .get(actor.get_body().into())
                         .unwrap();
                     let distance = (context.scene.graph[item.get_pivot()].global_position()
-                        - body.position.translation.vector)
+                        - body.position().translation.vector)
                         .norm();
                     if distance < 1.25 && !item.is_picked_up() {
                         actor
@@ -225,7 +225,7 @@ impl ActorContainer {
                     if capsule_collider == a && coll_b == jump_pad.rigid_body().into()
                         || capsule_collider == b && coll_a == jump_pad.rigid_body().into()
                     {
-                        body.linvel = jump_pad.get_force();
+                        body.set_linvel(jump_pad.get_force(), true);
                     }
                 }
             }

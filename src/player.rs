@@ -281,10 +281,16 @@ impl Player {
             .bodies
             .get_mut(self.character.body.into())
             .unwrap();
-        body.angvel = Default::default();
+        body.set_angvel(Default::default(), true);
         if let Some(normalized_velocity) = velocity.try_normalize(std::f32::EPSILON) {
-            body.linvel.x = normalized_velocity.x * self.move_speed * speed_mult;
-            body.linvel.z = normalized_velocity.z * self.move_speed * speed_mult;
+            body.set_linvel(
+                Vector3::new(
+                    normalized_velocity.x * self.move_speed * speed_mult,
+                    body.linvel().y,
+                    normalized_velocity.z * self.move_speed * speed_mult,
+                ),
+                true,
+            );
 
             self.weapon_dest_offset.x = 0.01 * (self.weapon_shake_factor * 0.5).cos();
             self.weapon_dest_offset.y = 0.005 * self.weapon_shake_factor.sin();
@@ -304,8 +310,10 @@ impl Player {
         // TODO: This is needed because Rapier does not have selection of friction
         // models yet.
         if has_ground_contact {
-            body.linvel.x *= 0.9;
-            body.linvel.z *= 0.9;
+            let mut vel = *body.linvel();
+            vel.x *= 0.9;
+            vel.z *= 0.9;
+            body.set_linvel(vel, true);
         }
 
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
@@ -316,14 +324,16 @@ impl Player {
 
         if self.controller.jump {
             if has_ground_contact {
-                body.linvel.y = 4.2;
+                let mut vel = *body.linvel();
+                vel.y = 4.2;
+                body.set_linvel(vel, true);
             }
             self.controller.jump = false;
         }
 
         //self.handle_crouch(body);
 
-        self.feet_position = body.position.translation.vector;
+        self.feet_position = body.position().translation.vector;
         self.feet_position.y -= self.stand_body_height;
 
         if self
@@ -368,8 +378,10 @@ impl Player {
             self.pitch = self.dest_pitch;
         }
 
-        body.position.rotation =
+        let mut position = *body.position();
+        position.rotation =
             UnitQuaternion::from_axis_angle(&Vector3::y_axis(), self.yaw.to_radians());
+        body.set_position(position, true);
 
         context.scene.graph[self.camera_pivot]
             .local_transform_mut()
@@ -516,7 +528,7 @@ impl Player {
                 .bodies
                 .get(self.character.body.into())
                 .unwrap()
-                .linvel;
+                .linvel();
 
             if self.controller.shoot {
                 self.character
@@ -525,7 +537,7 @@ impl Player {
                     .unwrap()
                     .send(Message::ShootWeapon {
                         weapon: *current_weapon_handle,
-                        initial_velocity: velocity,
+                        initial_velocity: *velocity,
                         direction: None,
                     })
                     .unwrap();

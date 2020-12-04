@@ -9,7 +9,7 @@ license = "MIT"
 opt-level = 3
 
 [dependencies]
-rg3d = { path = "../rg3d", version = "0.15.0" }
+rg3d = { path = "../rg3d", version = "0.16.0" }
 rand = "0.7.0"
 crossbeam = "0.8.0"
 

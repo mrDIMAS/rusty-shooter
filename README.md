@@ -166,10 +166,10 @@ Keep in mind that it can be different from latest version!
 	- [ ] Capture the flag
 		- [ ] Flag limit
 - [ ] Hit marks on surfaces - there is no "visual proof" that projectile has hit surface
-- [ ] `Deathmatch` game mode - easiest game mode to implement.
-	- [ ] Count kills per actor
-	- [ ] Game ends when an actor hits frag or time limit	
-	- [ ] If timelimit hit, but there are more than one actor with same score - game continues.
+- [x] `Deathmatch` game mode - easiest game mode to implement.
+	- [x] Count kills per actor
+	- [x] Game ends when an actor hits frag or time limit	
+	- [x] If timelimit hit, but there are more than one actor with same score - game continues.
 - [ ] `Capture the flag` game mode - similar to Q3 game mode is nice to have.
 	- [ ] Count flags per team
 	- [ ] Game ends when team hits flag limit or time limit

@@ -146,13 +146,10 @@ impl Character {
     }
 
     pub fn set_position(&mut self, physics: &mut Physics, position: Vector3<f32>) {
-        physics
-            .bodies
-            .get_mut(self.get_body().into())
-            .unwrap()
-            .position
-            .translation
-            .vector = position;
+        let body = physics.bodies.get_mut(self.get_body().into()).unwrap();
+        let mut body_position = *body.position();
+        body_position.translation.vector = position;
+        body.set_position(body_position, true);
     }
 
     pub fn position(&self, physics: &Physics) -> Vector3<f32> {
@@ -160,7 +157,7 @@ impl Character {
             .bodies
             .get(self.get_body().into())
             .unwrap()
-            .position
+            .position()
             .translation
             .vector
     }

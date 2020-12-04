@@ -275,7 +275,7 @@ impl Projectile {
                 .bodies
                 .get(self.body.into())
                 .unwrap()
-                .position
+                .position()
                 .translation
                 .vector
         } else {
@@ -339,7 +339,7 @@ impl Projectile {
                 let position = Isometry3 {
                     rotation: Default::default(),
                     translation: Translation3 {
-                        vector: body.position.translation.vector + total_velocity,
+                        vector: body.position().translation.vector + total_velocity,
                     },
                 };
                 body.set_next_kinematic_position(position);

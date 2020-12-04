@@ -1040,12 +1040,10 @@ impl Bot {
             .set_target(look_dir.x.atan2(look_dir.z))
             .update(time.delta);
 
-        physics
-            .bodies
-            .get_mut(self.body.into())
-            .unwrap()
-            .position
-            .rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), angle);
+        let body = physics.bodies.get_mut(self.body.into()).unwrap();
+        let mut position = *body.position();
+        position.rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), angle);
+        body.set_position(position, true);
     }
 
     fn rebuild_path(&mut self, position: Vector3<f32>, navmesh: &mut Navmesh, time: GameTime) {
@@ -1089,16 +1087,16 @@ impl Bot {
             let (in_close_combat, look_dir) = match self.target.as_ref() {
                 None => (
                     false,
-                    self.point_of_interest - body.position.translation.vector,
+                    self.point_of_interest - body.position().translation.vector,
                 ),
                 Some(target) => {
-                    let d = target.position - body.position.translation.vector;
+                    let d = target.position - body.position().translation.vector;
                     let close_combat_threshold = 2.0;
                     (d.norm() <= close_combat_threshold, d)
                 }
             };
 
-            let position = body.position.translation.vector;
+            let position = body.position().translation.vector;
 
             if let Some(path_point) = self.path.get(self.current_path_point) {
                 self.move_target = *path_point;
@@ -1113,7 +1111,7 @@ impl Bot {
 
             let need_jump = look_dir.y >= 0.3 && has_ground_contact && in_close_combat;
             if need_jump {
-                body.linvel.y = 0.08;
+                body.set_linvel(Vector3::new(body.linvel().x, 0.08, body.linvel().z), true);
             }
             let was_damaged = self.character.health < self.last_health;
             if was_damaged {
@@ -1134,20 +1132,18 @@ impl Bot {
                     if let Some(move_dir) =
                         (self.move_target - position).try_normalize(std::f32::EPSILON)
                     {
-                        let vel = move_dir.scale(self.definition.walk_speed);
-                        body.linvel.x = vel.x;
-                        body.linvel.z = vel.z;
+                        let mut vel = move_dir.scale(self.definition.walk_speed);
+                        vel.y = body.linvel().y;
+                        body.set_linvel(vel, true);
                         self.last_move_dir = move_dir;
                     }
                 } else {
                     // A bit of air control. This helps jump of ledges when there is jump pad below bot.
-                    let vel = self.last_move_dir.scale(self.definition.walk_speed);
-                    body.linvel.x = vel.x;
-                    body.linvel.z = vel.z;
+                    let mut vel = self.last_move_dir.scale(self.definition.walk_speed);
+                    vel.y = body.linvel().y;
+                    body.set_linvel(vel, true);
                 }
             }
-
-            std::mem::drop(body);
 
             if let Some(look_dir) = look_dir.try_normalize(std::f32::EPSILON) {
                 self.aim_vertically(look_dir, &mut context.scene.graph, context.time);

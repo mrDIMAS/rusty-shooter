@@ -301,8 +301,6 @@ impl Visit for MatchOptions {
 
 pub struct LoadContext {
     level: Option<(Level, Scene)>,
-    progress: usize,
-    progress_message: String,
 }
 
 pub struct SoundManager {
@@ -598,11 +596,7 @@ impl Game {
     pub fn start_new_game(&mut self, options: MatchOptions) {
         self.destroy_level();
 
-        let ctx = Arc::new(Mutex::new(LoadContext {
-            level: None,
-            progress: 0,
-            progress_message: "Loading level. Please wait.".to_string(),
-        }));
+        let ctx = Arc::new(Mutex::new(LoadContext { level: None }));
 
         self.load_context = Some(ctx.clone());
 

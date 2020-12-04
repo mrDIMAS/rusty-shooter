@@ -2,15 +2,10 @@ use crate::{message::Message, weapon::Weapon};
 use rg3d::{
     core::{
         algebra::Vector3,
-        math::ray::Ray,
         pool::Handle,
         visitor::{Visit, VisitError, VisitResult, Visitor},
     },
-    scene::{
-        node::Node,
-        physics::{Physics, RayCastOptions},
-        RigidBodyHandle, Scene,
-    },
+    scene::{node::Node, physics::Physics, RigidBodyHandle, Scene},
 };
 use std::sync::mpsc::Sender;
 
@@ -100,30 +95,15 @@ impl Character {
         self.body
     }
 
-    /// TODO: This has to be done using contact info, but rapier does not
-    ///  let to access it yet.
     pub fn has_ground_contact(&self, physics: &Physics) -> bool {
-        let position = self.position(physics);
-        let ray = Ray::from_two_points(&position, &(position - Vector3::new(0.0, 1.0, 0.0)))
-            .unwrap_or_default();
-        let mut query_buffer = Vec::new();
-        physics.cast_ray(
-            RayCastOptions {
-                ray,
-                max_len: ray.dir.norm(),
-                groups: Default::default(),
-                sort_results: true,
-            },
-            &mut query_buffer,
-        );
-        for intersection in query_buffer {
-            let body = physics
-                .colliders
-                .get(intersection.collider.into())
-                .unwrap()
-                .parent();
-            if body != self.body.into() && intersection.normal.y >= 0.7 {
-                return true;
+        let body = physics.bodies.get(self.body.into()).unwrap();
+        if let Some(iterator) = physics.narrow_phase.contacts_with(body.colliders()[0]) {
+            for (_, _, contact) in iterator {
+                for manifold in contact.manifolds.iter() {
+                    if manifold.local_n1.y > 0.7 {
+                        return true;
+                    }
+                }
             }
         }
         false

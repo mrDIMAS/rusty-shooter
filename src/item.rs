@@ -178,20 +178,18 @@ impl Item {
             .unwrap()
             .instantiate_geometry(scene);
 
-        let pivot = scene.graph.add_node(Node::Base(
-            BaseBuilder::new()
-                .with_local_transform(
-                    TransformBuilder::new()
-                        .with_local_position(position)
-                        .with_local_scale(Vector3::new(
-                            definition.scale,
-                            definition.scale,
-                            definition.scale,
-                        ))
-                        .build(),
-                )
-                .build(),
-        ));
+        let pivot = BaseBuilder::new()
+            .with_local_transform(
+                TransformBuilder::new()
+                    .with_local_position(position)
+                    .with_local_scale(Vector3::new(
+                        definition.scale,
+                        definition.scale,
+                        definition.scale,
+                    ))
+                    .build(),
+            )
+            .build(&mut scene.graph);
 
         scene.graph.link_nodes(model, pivot);
 

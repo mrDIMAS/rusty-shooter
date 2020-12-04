@@ -5,6 +5,7 @@ use crate::{
     message::Message,
 };
 use rand::Rng;
+use rg3d::scene::transform::TransformBuilder;
 use rg3d::{
     core::{
         algebra::{Matrix3, UnitQuaternion, Vector3},
@@ -152,45 +153,57 @@ impl Visit for Player {
 
 impl Player {
     pub fn new(scene: &mut Scene, sender: Sender<Message>) -> Player {
-        let camera_handle = scene
-            .graph
-            .add_node(Node::Camera(CameraBuilder::new(BaseBuilder::new()).build()));
-
         let height = Self::default().stand_body_height;
-        let mut camera_pivot = Node::Base(Default::default());
-        camera_pivot
-            .local_transform_mut()
-            .set_position(Vector3::new(0.0, height - 0.20, 0.0));
-        let camera_pivot_handle = scene.graph.add_node(camera_pivot);
-        scene.graph.link_nodes(camera_handle, camera_pivot_handle);
 
-        let capsule_shape = ColliderBuilder::capsule_y(height * 0.5, 0.35)
-            .friction(0.0)
-            .build();
-        let body = RigidBodyBuilder::new(BodyStatus::Dynamic)
-            .can_sleep(false)
-            .build();
-        let body_handle = scene.physics.add_body(body);
-        scene.physics.add_collider(capsule_shape, body_handle);
-        let pivot = Node::Base(Default::default());
-        let pivot_handle = scene.graph.add_node(pivot);
+        let body_handle = scene.physics.add_body(
+            RigidBodyBuilder::new(BodyStatus::Dynamic)
+                .can_sleep(false)
+                .build(),
+        );
+        scene.physics.add_collider(
+            ColliderBuilder::capsule_y(height * 0.5, 0.35)
+                .friction(0.0)
+                .build(),
+            body_handle,
+        );
+
+        let camera_handle;
+        let camera_pivot_handle;
+        let weapon_base_pivot_handle;
+        let weapon_pivot_handle;
+        let pivot_handle = BaseBuilder::new()
+            .with_children(&[{
+                camera_pivot_handle = BaseBuilder::new()
+                    .with_children(&[{
+                        camera_handle = CameraBuilder::new(BaseBuilder::new().with_children(&[{
+                            weapon_base_pivot_handle = BaseBuilder::new()
+                                .with_children(&[{
+                                    weapon_pivot_handle =
+                                        BaseBuilder::new().build(&mut scene.graph);
+                                    weapon_pivot_handle
+                                }])
+                                .with_local_transform(
+                                    TransformBuilder::new()
+                                        .with_local_position(Vector3::new(-0.065, -0.052, 0.02))
+                                        .build(),
+                                )
+                                .build(&mut scene.graph);
+                            weapon_base_pivot_handle
+                        }]))
+                        .build(&mut scene.graph);
+                        camera_handle
+                    }])
+                    .with_local_transform(
+                        TransformBuilder::new()
+                            .with_local_position(Vector3::new(0.0, height - 0.20, 0.0))
+                            .build(),
+                    )
+                    .build(&mut scene.graph);
+                camera_pivot_handle
+            }])
+            .build(&mut scene.graph);
+
         scene.physics_binder.bind(pivot_handle, body_handle.into());
-        scene.graph.link_nodes(camera_pivot_handle, pivot_handle);
-
-        let mut weapon_base_pivot = Node::Base(Default::default());
-        weapon_base_pivot
-            .local_transform_mut()
-            .set_position(Vector3::new(-0.065, -0.052, 0.02));
-        let weapon_base_pivot_handle = scene.graph.add_node(weapon_base_pivot);
-        scene
-            .graph
-            .link_nodes(weapon_base_pivot_handle, camera_handle);
-
-        let weapon_pivot = Node::Base(Default::default());
-        let weapon_pivot_handle = scene.graph.add_node(weapon_pivot);
-        scene
-            .graph
-            .link_nodes(weapon_pivot_handle, weapon_base_pivot_handle);
 
         Player {
             character: Character {
@@ -275,7 +288,7 @@ impl Player {
             1.0
         };
 
-        let mut body = context
+        let body = context
             .scene
             .physics
             .bodies

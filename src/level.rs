@@ -523,11 +523,9 @@ impl Level {
         // Spectator camera is used when there is no player on level.
         // This includes situation when player is dead - all dead actors are removed
         // from level.
-        let spectator_camera = scene.graph.add_node(Node::Camera(
-            CameraBuilder::new(BaseBuilder::new())
-                .enabled(false)
-                .build(),
-        ));
+        let spectator_camera = CameraBuilder::new(BaseBuilder::new())
+            .enabled(false)
+            .build(&mut scene.graph);
 
         let map_model = resource_manager
             .request_model(Path::new("data/models/dm6.fbx"))
@@ -1251,12 +1249,14 @@ impl Level {
             &Message::DamageActor { actor, who, amount } => {
                 self.damage_actor(engine, actor, who, amount, time);
             }
-            &Message::CreateEffect { kind, position } => effects::create(
-                kind,
-                &mut engine.scenes[self.scene].graph,
-                engine.resource_manager.clone(),
-                position,
-            ),
+            &Message::CreateEffect { kind, position } => {
+                effects::create(
+                    kind,
+                    &mut engine.scenes[self.scene].graph,
+                    engine.resource_manager.clone(),
+                    position,
+                );
+            }
             Message::SpawnPlayer => {
                 self.spawn_player(engine).await;
             }

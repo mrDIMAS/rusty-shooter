@@ -212,7 +212,7 @@ impl ActorContainer {
         if let &ContactEvent::Started(a, b) = contact_event {
             for actor in self.pool.iter_mut() {
                 for jump_pad in context.jump_pads.iter() {
-                    let mut body = context
+                    let body = context
                         .scene
                         .physics
                         .bodies

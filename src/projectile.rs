@@ -166,25 +166,17 @@ impl Projectile {
                     let size = rand::thread_rng().gen_range(0.09, 0.12);
 
                     let color = Color::opaque(0, 162, 232);
-                    let model = scene.graph.add_node(Node::Sprite(
-                        SpriteBuilder::new(BaseBuilder::new())
-                            .with_size(size)
-                            .with_color(color)
-                            .with_texture(
-                                resource_manager.request_texture("data/particles/light_01.png"),
-                            )
-                            .build(),
-                    ));
-
-                    let light = scene.graph.add_node(
-                        PointLightBuilder::new(
+                    let model = SpriteBuilder::new(
+                        BaseBuilder::new().with_children(&[PointLightBuilder::new(
                             BaseLightBuilder::new(BaseBuilder::new()).with_color(color),
                         )
                         .with_radius(1.5)
-                        .build_node(),
-                    );
-
-                    scene.graph.link_nodes(light, model);
+                        .build(&mut scene.graph)]),
+                    )
+                    .with_size(size)
+                    .with_color(color)
+                    .with_texture(resource_manager.request_texture("data/particles/light_01.png"))
+                    .build(&mut scene.graph);
 
                     let collider = ColliderBuilder::ball(size).sensor(true).build();
                     let body = RigidBodyBuilder::new(BodyStatus::Kinematic)
@@ -197,20 +189,16 @@ impl Projectile {
                     (model, body_handle)
                 }
                 ProjectileKind::Bullet => {
-                    let model = scene.graph.add_node(Node::Sprite(
-                        SpriteBuilder::new(
-                            BaseBuilder::new().with_local_transform(
-                                TransformBuilder::new()
-                                    .with_local_position(position)
-                                    .build(),
-                            ),
-                        )
-                        .with_size(0.05)
-                        .with_texture(
-                            resource_manager.request_texture("data/particles/light_01.png"),
-                        )
-                        .build(),
-                    ));
+                    let model = SpriteBuilder::new(
+                        BaseBuilder::new().with_local_transform(
+                            TransformBuilder::new()
+                                .with_local_position(position)
+                                .build(),
+                        ),
+                    )
+                    .with_size(0.05)
+                    .with_texture(resource_manager.request_texture("data/particles/light_01.png"))
+                    .build(&mut scene.graph);
 
                     (model, Default::default())
                 }
@@ -224,14 +212,12 @@ impl Projectile {
                         .local_transform_mut()
                         .set_rotation(UnitQuaternion::from_matrix(&basis))
                         .set_position(position);
-                    let light = scene.graph.add_node(
-                        PointLightBuilder::new(
-                            BaseLightBuilder::new(BaseBuilder::new())
-                                .with_color(Color::opaque(255, 127, 0)),
-                        )
-                        .with_radius(1.5)
-                        .build_node(),
-                    );
+                    let light = PointLightBuilder::new(
+                        BaseLightBuilder::new(BaseBuilder::new())
+                            .with_color(Color::opaque(255, 127, 0)),
+                    )
+                    .with_radius(1.5)
+                    .build(&mut scene.graph);
                     scene.graph.link_nodes(light, model);
                     (model, Default::default())
                 }
@@ -335,7 +321,7 @@ impl Projectile {
             // Special case for projectiles with rigid body.
             if self.body.is_some() {
                 // Move rigid body explicitly.
-                let mut body = scene.physics.bodies.get_mut(self.body.into()).unwrap();
+                let body = scene.physics.bodies.get_mut(self.body.into()).unwrap();
                 let position = Isometry3 {
                     rotation: Default::default(),
                     translation: Translation3 {

@@ -8,6 +8,7 @@ use crate::{
     GameTime,
 };
 use rand::Rng;
+use rg3d::utils::log::Log;
 use rg3d::{
     animation::{
         machine::{self, Machine, PoseNode, State},
@@ -817,59 +818,57 @@ impl Bot {
             .unwrap()
             .instantiate_geometry(scene);
 
-        let spine = scene.graph.find_by_name(model, definition.spine);
-        if spine.is_none() {
-            print!("WARNING: Spine bone not found, bot won't aim vertically!");
-        }
-
-        let (pivot, body) = {
-            let pivot = scene.graph.add_node(Node::Base(Default::default()));
-            scene.graph.link_nodes(model, pivot);
-            let transform = scene.graph[model].local_transform_mut();
-            transform.set_position(Vector3::new(0.0, -body_height * 0.5, 0.0));
-            transform.set_scale(Vector3::new(
+        scene.graph[model]
+            .local_transform_mut()
+            .set_position(Vector3::new(0.0, -body_height * 0.5, 0.0))
+            .set_scale(Vector3::new(
                 definition.scale,
                 definition.scale,
                 definition.scale,
             ));
 
-            let capsule_body = RigidBodyBuilder::new(BodyStatus::Dynamic)
+        let spine = scene.graph.find_by_name(model, definition.spine);
+        if spine.is_none() {
+            Log::writeln("WARNING: Spine bone not found, bot won't aim vertically!".to_owned());
+        }
+
+        let pivot = BaseBuilder::new()
+            .with_children(&[model])
+            .build(&mut scene.graph);
+
+        let body = scene.physics.add_body(
+            RigidBodyBuilder::new(BodyStatus::Dynamic)
                 .translation(position.x, position.y, position.z)
-                .build();
-            let body = scene.physics.add_body(capsule_body);
-            scene.physics_binder.bind(pivot, body.into());
+                .build(),
+        );
+        scene.physics.add_collider(
+            ColliderBuilder::capsule_y(body_height * 0.5, 0.28)
+                .friction(0.2)
+                .build(),
+            body,
+        );
 
-            scene.physics.add_collider(
-                ColliderBuilder::capsule_y(body_height * 0.5, 0.28)
-                    .friction(0.2)
-                    .build(),
-                body,
-            );
-
-            (pivot, body)
-        };
+        scene.physics_binder.bind(pivot, body.into());
 
         let hand = scene.graph.find_by_name(model, definition.weapon_hand_name);
         let wpn_scale = definition.weapon_scale * (1.0 / definition.scale);
-        let weapon_pivot = Node::Base(
-            BaseBuilder::new()
-                .with_local_transform(
-                    TransformBuilder::new()
-                        .with_local_scale(Vector3::new(wpn_scale, wpn_scale, wpn_scale))
-                        .with_local_rotation(
-                            UnitQuaternion::from_axis_angle(
-                                &Vector3::x_axis(),
-                                std::f32::consts::FRAC_PI_2,
-                            ) * UnitQuaternion::from_axis_angle(
-                                &Vector3::y_axis(),
-                                -std::f32::consts::FRAC_PI_2,
-                            ),
-                        )
-                        .build(),
-                )
-                .build(),
-        );
-        let weapon_pivot = scene.graph.add_node(weapon_pivot);
+        let weapon_pivot = BaseBuilder::new()
+            .with_local_transform(
+                TransformBuilder::new()
+                    .with_local_scale(Vector3::new(wpn_scale, wpn_scale, wpn_scale))
+                    .with_local_rotation(
+                        UnitQuaternion::from_axis_angle(
+                            &Vector3::x_axis(),
+                            std::f32::consts::FRAC_PI_2,
+                        ) * UnitQuaternion::from_axis_angle(
+                            &Vector3::y_axis(),
+                            -std::f32::consts::FRAC_PI_2,
+                        ),
+                    )
+                    .build(),
+            )
+            .build(&mut scene.graph);
+
         scene.graph.link_nodes(weapon_pivot, hand);
 
         let locomotion_machine =
@@ -1078,7 +1077,7 @@ impl Bot {
             self.select_point_of_interest(context.items, context.scene, &context.time);
 
             let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
-            let mut body = context
+            let body = context
                 .scene
                 .physics
                 .bodies

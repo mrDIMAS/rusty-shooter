@@ -180,16 +180,14 @@ impl Weapon {
             .unwrap()
             .instantiate_geometry(scene);
 
-        let laser_dot = scene.graph.add_node(
-            PointLightBuilder::new(
-                BaseLightBuilder::new(BaseBuilder::new())
-                    .with_color(Color::opaque(255, 0, 0))
-                    .with_scatter_enabled(false)
-                    .cast_shadows(false),
-            )
-            .with_radius(0.5)
-            .build_node(),
-        );
+        let laser_dot = PointLightBuilder::new(
+            BaseLightBuilder::new(BaseBuilder::new())
+                .with_color(Color::opaque(255, 0, 0))
+                .with_scatter_enabled(false)
+                .cast_shadows(false),
+        )
+        .with_radius(0.5)
+        .build(&mut scene.graph);
 
         let shot_point = scene.graph.find_by_name(model, "Weapon:ShotPoint");
 

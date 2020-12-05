@@ -1,6 +1,7 @@
 use crate::{
     actor::Actor, actor::ActorContainer, message::Message, projectile::ProjectileKind, GameTime,
 };
+use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{
     core::{
         algebra::{Matrix3, Vector3},
@@ -192,7 +193,7 @@ impl Weapon {
         let shot_point = scene.graph.find_by_name(model, "Weapon:ShotPoint");
 
         if shot_point.is_none() {
-            println!("Shot point not found!");
+            Log::writeln(MessageKind::Warning, "Shot point not found!".to_owned());
         }
 
         Weapon {

@@ -30,6 +30,7 @@ use crate::{
 };
 use rg3d::gui::message::ProgressBarMessage;
 use rg3d::gui::{HorizontalAlignment, VerticalAlignment};
+use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{
     core::{
         color::Color,
@@ -546,7 +547,10 @@ impl Game {
     }
 
     pub fn load_game(&mut self) -> VisitResult {
-        println!("Attempting load a save...");
+        Log::writeln(
+            MessageKind::Information,
+            "Attempting load a save...".to_owned(),
+        );
 
         let mut visitor = Visitor::load_binary(Path::new("save.bin"))?;
 
@@ -554,15 +558,24 @@ impl Game {
         self.destroy_level();
 
         // Load engine state first
-        println!("Trying to load engine state...");
+        Log::writeln(
+            MessageKind::Information,
+            "Trying to load engine state...".to_owned(),
+        );
         self.engine.visit("GameEngine", &mut visitor)?;
 
-        println!("GameEngine state successfully loaded!");
+        Log::writeln(
+            MessageKind::Information,
+            "GameEngine state successfully loaded!".to_owned(),
+        );
 
         // Then load game state.
         self.level.visit("Level", &mut visitor)?;
 
-        println!("Game state successfully loaded!");
+        Log::writeln(
+            MessageKind::Information,
+            "Game state successfully loaded!".to_owned(),
+        );
 
         self.sound_manager.visit("SoundManager", &mut visitor)?;
         self.sound_manager.context = self.engine.sound_context.clone();
@@ -589,7 +602,10 @@ impl Game {
     fn destroy_level(&mut self) {
         if let Some(ref mut level) = self.level.take() {
             level.destroy(&mut self.engine);
-            println!("Current level destroyed!");
+            Log::writeln(
+                MessageKind::Information,
+                "Current level destroyed!".to_owned(),
+            );
         }
     }
 
@@ -702,12 +718,20 @@ impl Game {
                     self.start_new_game(*options);
                 }
                 Message::SaveGame => match self.save_game() {
-                    Ok(_) => println!("successfully saved"),
-                    Err(e) => println!("failed to make a save, reason: {}", e),
+                    Ok(_) => {
+                        Log::writeln(MessageKind::Information, "Successfully saved".to_owned())
+                    }
+                    Err(e) => Log::writeln(
+                        MessageKind::Error,
+                        format!("Failed to make a save, reason: {}", e),
+                    ),
                 },
                 Message::LoadGame => {
                     if let Err(e) = self.load_game() {
-                        println!("Failed to load saved game. Reason: {:?}", e);
+                        Log::writeln(
+                            MessageKind::Error,
+                            format!("Failed to load saved game. Reason: {:?}", e),
+                        );
                     }
                 }
                 Message::QuitGame => {

@@ -4,6 +4,7 @@ use crate::{
     message::Message,
     GameEngine, GuiMessage, UINodeHandle,
 };
+use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{
     event::{Event, MouseButton, MouseScrollDelta, WindowEvent},
     gui::{
@@ -882,7 +883,10 @@ impl OptionsMenu {
 
         if settings != old_settings {
             if let Err(err) = engine.renderer.set_quality_settings(&settings) {
-                println!("Failed to set renderer quality settings! Reason: {:?}", err);
+                Log::writeln(
+                    MessageKind::Error,
+                    format!("Failed to set renderer quality settings! Reason: {:?}", err),
+                );
             }
         }
     }

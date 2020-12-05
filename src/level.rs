@@ -13,6 +13,7 @@ use crate::{
     GameEngine, GameTime, MatchOptions,
 };
 use rand::Rng;
+use rg3d::utils::log::MessageKind;
 use rg3d::{
     core::{
         algebra::{Matrix3, Vector3},
@@ -254,7 +255,10 @@ fn build_navmesh(scene: &mut Scene) -> Option<Navmesh> {
         navmesh_node.set_visibility(false);
         Some(Navmesh::from_mesh(navmesh_node.as_mesh()))
     } else {
-        Log::writeln("Unable to find Navmesh node to build navmesh!".to_owned());
+        Log::writeln(
+            MessageKind::Warning,
+            "Unable to find Navmesh node to build navmesh!".to_owned(),
+        );
         None
     }
 }
@@ -542,7 +546,10 @@ impl Level {
                 .mesh_to_trimesh(scene.graph[polygon_handle].as_mesh());
             scene.physics_binder.bind(polygon_handle, collider);
         } else {
-            println!("Unable to find Polygon node to build collision shape for level!");
+            Log::writeln(
+                MessageKind::Warning,
+                "Unable to find Polygon node to build collision shape for level!".to_owned(),
+            );
         }
 
         let AnalysisResult {

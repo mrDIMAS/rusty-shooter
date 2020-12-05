@@ -8,7 +8,7 @@ use crate::{
     GameTime,
 };
 use rand::Rng;
-use rg3d::utils::log::Log;
+use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{
     animation::{
         machine::{self, Machine, PoseNode, State},
@@ -829,7 +829,10 @@ impl Bot {
 
         let spine = scene.graph.find_by_name(model, definition.spine);
         if spine.is_none() {
-            Log::writeln("WARNING: Spine bone not found, bot won't aim vertically!".to_owned());
+            Log::writeln(
+                MessageKind::Warning,
+                "Spine bone not found, bot won't aim vertically!".to_owned(),
+            );
         }
 
         let pivot = BaseBuilder::new()

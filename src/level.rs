@@ -298,7 +298,7 @@ pub async fn analyze(
                 let len = d.norm();
                 let force = d.try_normalize(std::f32::EPSILON);
                 let force = force.unwrap_or(Vector3::y()).scale(len * 3.0);
-                let shape = scene.physics.mesh_to_trimesh(node.as_mesh());
+                let shape = scene.physics.mesh_to_trimesh(handle, &scene.graph);
                 scene.physics_binder.bind(handle, shape);
                 result.jump_pads.add(JumpPad::new(shape, force));
             };
@@ -538,12 +538,11 @@ impl Level {
 
         // Instantiate map
         let map_root = map_model.instantiate_geometry(&mut scene);
+
         // Create collision geometry
         let polygon_handle = scene.graph.find_by_name(map_root, "Polygon");
         if polygon_handle.is_some() {
-            let collider = scene
-                .physics
-                .mesh_to_trimesh(scene.graph[polygon_handle].as_mesh());
+            let collider = scene.physics.mesh_to_trimesh(polygon_handle, &scene.graph);
             scene.physics_binder.bind(polygon_handle, collider);
         } else {
             Log::writeln(
@@ -1308,9 +1307,13 @@ impl Level {
     }
 
     pub fn debug_draw(&self, engine: &mut GameEngine) {
-        let drawing_context = &mut engine.scenes[self.scene].drawing_context;
+        let scene = &mut engine.scenes[self.scene];
+
+        let drawing_context = &mut scene.drawing_context;
 
         drawing_context.clear_lines();
+
+        scene.physics.draw(drawing_context);
 
         if let Some(navmesh) = self.navmesh.as_ref() {
             for pt in navmesh.vertices() {

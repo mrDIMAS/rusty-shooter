@@ -846,7 +846,7 @@ impl Bot {
         );
         scene.physics.add_collider(
             ColliderBuilder::capsule_y(body_height * 0.5, 0.28)
-                .friction(0.2)
+                .friction(0.0)
                 .build(),
             body,
         );

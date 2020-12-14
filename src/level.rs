@@ -1264,7 +1264,7 @@ impl Level {
                 );
             }
             Message::SpawnPlayer => {
-                self.spawn_player(engine).await;
+                self.player = self.spawn_player(engine).await;
             }
             &Message::SpawnItem {
                 kind,

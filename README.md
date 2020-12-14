@@ -1,6 +1,6 @@
 # What is this?
 
-3d shooter written in Rust and based on [rg3d engine](https://github.com/mrDIMAS/rg3d)
+Single player 3d shooter written in Rust and based on [rg3d engine](https://github.com/mrDIMAS/rg3d)
 
 ## How to build
 

@@ -1,7 +1,7 @@
 /target
 /resources
 **/*.rs.bk
-.*
+.idea
 *.lock
 save.bin
 save.txt

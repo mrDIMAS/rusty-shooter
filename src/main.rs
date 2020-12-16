@@ -2,7 +2,6 @@
 #![deny(unused_must_use)]
 
 extern crate crossbeam;
-extern crate rand;
 extern crate rg3d;
 
 mod actor;
@@ -419,8 +418,6 @@ impl Game {
                 rg3d::sound::renderer::hrtf::HrtfRenderer::new(hrtf_sphere),
             ),
         );
-
-        effects::register_custom_emitter_factory();
 
         engine.renderer.set_ambient_color(Color::opaque(60, 60, 60));
 

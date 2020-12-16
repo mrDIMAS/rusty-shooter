@@ -12,9 +12,8 @@ use crate::{
     weapon::{Weapon, WeaponContainer, WeaponKind},
     GameEngine, GameTime, MatchOptions,
 };
-use rand::Rng;
-use rg3d::utils::log::MessageKind;
 use rg3d::{
+    core::rand::Rng,
     core::{
         algebra::{Matrix3, Vector3},
         color::Color,
@@ -28,10 +27,12 @@ use rg3d::{
         geometry::{ContactEvent, InteractionGroups, ProximityEvent},
         pipeline::ChannelEventCollector,
     },
+    rand,
     scene::{
         self, base::BaseBuilder, camera::CameraBuilder, node::Node, physics::RayCastOptions, Scene,
     },
     sound::context::Context,
+    utils::log::MessageKind,
     utils::{log::Log, navmesh::Navmesh},
 };
 use std::{

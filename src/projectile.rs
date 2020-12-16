@@ -5,8 +5,8 @@ use crate::{
     weapon::{Weapon, WeaponContainer},
     GameTime,
 };
-use rand::Rng;
 use rg3d::{
+    core::rand::Rng,
     core::{
         algebra::{Matrix3, UnitQuaternion, Vector3},
         color::Color,
@@ -20,6 +20,7 @@ use rg3d::{
         geometry::{ColliderBuilder, InteractionGroups, Proximity, ProximityEvent},
         na::{Isometry3, Translation3},
     },
+    rand,
     scene::{
         base::BaseBuilder,
         graph::Graph,

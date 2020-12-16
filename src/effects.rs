@@ -1,12 +1,10 @@
-use rand::Rng;
-use rg3d::core::pool::Handle;
 use rg3d::{
     core::{
         algebra::Vector3,
         color::Color,
         color_gradient::{ColorGradient, GradientPoint},
         numeric_range::NumericRange,
-        visitor::{Visit, VisitResult, Visitor},
+        pool::Handle,
     },
     engine::resource_manager::ResourceManager,
     scene::{
@@ -14,16 +12,12 @@ use rg3d::{
         graph::Graph,
         node::Node,
         particle_system::{
-            BaseEmitter, BaseEmitterBuilder, CustomEmitter, CustomEmitterFactory, Emit, Emitter,
-            Particle, ParticleSystem, ParticleSystemBuilder, SphereEmitterBuilder,
+            BaseEmitterBuilder, CylinderEmitterBuilder, ParticleSystemBuilder, SphereEmitterBuilder,
         },
         transform::TransformBuilder,
     },
 };
-use std::{
-    ops::{Deref, DerefMut},
-    path::Path,
-};
+use std::path::Path;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum EffectKind {
@@ -44,80 +38,6 @@ pub fn create(
         EffectKind::ItemAppear => create_item_appear(graph, resource_manager, pos),
         EffectKind::Smoke => create_smoke(graph, resource_manager, pos),
         EffectKind::Steam => create_steam(graph, resource_manager, pos),
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct CylinderEmitter {
-    base: BaseEmitter,
-    height: f32,
-    radius: f32,
-}
-
-impl CylinderEmitter {
-    pub fn new() -> Self {
-        Self {
-            base: Default::default(),
-            height: 1.0,
-            radius: 0.5,
-        }
-    }
-}
-
-impl CustomEmitter for CylinderEmitter {
-    fn box_clone(&self) -> Box<dyn CustomEmitter> {
-        Box::new(self.clone())
-    }
-
-    fn get_kind(&self) -> i32 {
-        0
-    }
-}
-
-impl Deref for CylinderEmitter {
-    type Target = BaseEmitter;
-
-    fn deref(&self) -> &Self::Target {
-        &self.base
-    }
-}
-
-impl DerefMut for CylinderEmitter {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.base
-    }
-}
-
-impl Visit for CylinderEmitter {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.radius.visit("Radius", visitor)?;
-        self.height.visit("Height", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
-impl Emit for CylinderEmitter {
-    fn emit(&self, _particle_system: &ParticleSystem, particle: &mut Particle) {
-        // Disk point picking extended in 3D - http://mathworld.wolfram.com/DiskPointPicking.html
-        let scale: f32 = rand::thread_rng().gen_range(0.0, 1.0);
-        let theta = rand::thread_rng().gen_range(0.0, 2.0 * std::f32::consts::PI);
-        let z = rand::thread_rng().gen_range(0.0, self.height);
-        let radius = scale.sqrt() * self.radius;
-        let x = radius * theta.cos();
-        let y = radius * theta.sin();
-        particle.position = Vector3::new(x, y, z);
-    }
-}
-
-pub fn register_custom_emitter_factory() {
-    if let Ok(mut factory) = CustomEmitterFactory::get() {
-        factory.set_callback(Box::new(|kind| match kind {
-            0 => Ok(Box::new(CylinderEmitter::new())),
-            _ => Err(String::from("invalid custom emitter kind")),
-        }))
     }
 }
 
@@ -145,11 +65,10 @@ fn create_steam(
         gradient.add_point(GradientPoint::new(1.00, Color::from_rgba(255, 255, 255, 0)));
         gradient
     })
-    .with_emitters(vec![Emitter::Custom(Box::new(CylinderEmitter {
-        base: BaseEmitterBuilder::new().build(),
-        height: 0.2,
-        radius: 0.2,
-    }))])
+    .with_emitters(vec![CylinderEmitterBuilder::new(BaseEmitterBuilder::new())
+        .with_height(0.2)
+        .with_radius(0.2)
+        .build()])
     .with_texture(resource_manager.request_texture(Path::new("data/particles/smoke_04.tga")))
     .build(graph)
 }

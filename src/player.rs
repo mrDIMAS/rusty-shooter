@@ -4,9 +4,8 @@ use crate::{
     level::UpdateContext,
     message::Message,
 };
-use rand::Rng;
-use rg3d::scene::transform::TransformBuilder;
 use rg3d::{
+    core::rand::Rng,
     core::{
         algebra::{Matrix3, UnitQuaternion, Vector3},
         math::Vector3Ext,
@@ -18,6 +17,8 @@ use rg3d::{
         dynamics::{BodyStatus, RigidBodyBuilder},
         geometry::ColliderBuilder,
     },
+    rand,
+    scene::transform::TransformBuilder,
     scene::{base::BaseBuilder, camera::CameraBuilder, node::Node, Scene},
     sound::context::Context,
 };

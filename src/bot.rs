@@ -7,13 +7,12 @@ use crate::{
     weapon::WeaponContainer,
     GameTime,
 };
-use rand::Rng;
-use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{
     animation::{
         machine::{self, Machine, PoseNode, State},
         Animation, AnimationSignal,
     },
+    core::rand::Rng,
     core::{
         algebra::{Matrix4, Point3, UnitQuaternion, Vector3},
         color::Color,
@@ -26,6 +25,7 @@ use rg3d::{
         dynamics::{BodyStatus, RigidBodyBuilder},
         geometry::{ColliderBuilder, InteractionGroups},
     },
+    rand,
     resource::model::Model,
     scene::{
         self,
@@ -36,6 +36,7 @@ use rg3d::{
         transform::TransformBuilder,
         Scene, SceneDrawingContext,
     },
+    utils::log::{Log, MessageKind},
     utils::navmesh::Navmesh,
 };
 use std::{

@@ -328,6 +328,8 @@ impl SoundManager {
         let mut base_effect = BaseEffect::default();
         base_effect.set_gain(0.7);
         let mut reverb = rg3d::sound::effects::reverb::Reverb::new(base_effect);
+        reverb.set_dry(0.5);
+        reverb.set_wet(0.5);
         reverb.set_decay_time(Duration::from_secs_f32(3.0));
         let reverb = context
             .lock()

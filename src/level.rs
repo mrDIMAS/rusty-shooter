@@ -424,7 +424,7 @@ fn find_suitable_spawn_point(
     scene: &Scene,
 ) -> usize {
     // Find spawn point with least amount of enemies nearby.
-    let mut index = rand::thread_rng().gen_range(0, spawn_points.len());
+    let mut index = rand::thread_rng().gen_range(0..spawn_points.len());
     let mut max_distance = -std::f32::MAX;
     for (i, pt) in spawn_points.iter().enumerate() {
         let mut sum_distance = 0.0;

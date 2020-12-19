@@ -164,7 +164,7 @@ impl Projectile {
         let (model, body) = {
             match &kind {
                 ProjectileKind::Plasma => {
-                    let size = rand::thread_rng().gen_range(0.09, 0.12);
+                    let size = rand::thread_rng().gen_range(0.09..0.12);
 
                     let color = Color::opaque(0, 162, 232);
                     let model = SpriteBuilder::new(

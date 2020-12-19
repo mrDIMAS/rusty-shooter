@@ -1223,7 +1223,7 @@ impl Bot {
                         ];
                         sender
                             .send(Message::PlaySound {
-                                path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())]
+                                path: footsteps[rand::thread_rng().gen_range(0..footsteps.len())]
                                     .into(),
                                 position,
                                 gain: 1.0,

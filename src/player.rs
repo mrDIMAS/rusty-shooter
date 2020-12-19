@@ -570,7 +570,7 @@ impl Player {
                 .as_ref()
                 .unwrap()
                 .send(Message::PlaySound {
-                    path: footsteps[rand::thread_rng().gen_range(0, footsteps.len())].into(),
+                    path: footsteps[rand::thread_rng().gen_range(0..footsteps.len())].into(),
                     position: self.character.position(&context.scene.physics),
                     gain: 1.0,
                     rolloff_factor: 2.0,

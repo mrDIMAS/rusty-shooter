@@ -504,7 +504,7 @@ impl Player {
                     self.controller.move_right = true;
                 } else if control_button == control_scheme.crouch.button {
                     self.controller.crouch = !self.controller.crouch;
-                } else if control_button = control_scheme.ads.button {
+                } else if control_button == control_scheme.ads.button {
                     self.controller.ads = !self.controller.ads;
                 } else if control_button == control_scheme.run.button {
                     self.controller.run = true;
@@ -523,8 +523,6 @@ impl Player {
                     self.controller.move_left = false;
                 } else if control_button == control_scheme.move_right.button {
                     self.controller.move_right = false;
-                } else if control_button == control_scheme.crouch.button {
-                    self.controller.crouch = false;
                 } else if control_button == control_scheme.run.button {
                     self.controller.run = false;
                 }

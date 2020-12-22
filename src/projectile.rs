@@ -214,7 +214,7 @@ impl Projectile {
                 }
                 ProjectileKind::Rocket => {
                     let resource = resource_manager
-                        .request_model(assets::models::projecticles::ROCKET)
+                        .request_model(assets::models::projectiles::ROCKET)
                         .await
                         .unwrap();
                     let model = resource.instantiate_geometry(scene);

@@ -862,14 +862,9 @@ impl OptionsMenu {
                 } else if message.destination() == self.cb_use_hrtf {
                     let mut sound_context = engine.sound_context.lock().unwrap();
                     if value {
-                        sound_context.set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(
-                            rg3d::sound::hrtf::HrtfRenderer::new(
-                                rg3d::sound::hrtf::HrtfSphere::new("data/sounds/IRC_1040_C.bin")
-                                    .unwrap(),
-                            ),
-                        ));
+                        SoundSettings::hrtf_on(&mut sound_context);
                     } else {
-                        sound_context.set_renderer(rg3d::sound::renderer::Renderer::Default);
+                        SoundSettings::hrtf_off(&mut sound_context);
                     }
                 }
             }

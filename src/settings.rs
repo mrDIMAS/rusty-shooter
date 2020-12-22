@@ -1,5 +1,5 @@
 use crate::assets;
-use rg3d::{sound::context::Context, utils::log::Log};
+use rg3d::{sound::context, sound::context::Context, utils::log::Log};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,9 +30,10 @@ impl SoundSettings {
         let hrtf_sphere = rg3d::sound::hrtf::HrirSphere::from_file(
             assets::sounds::HRTF_HRIR,
             context::SAMPLE_RATE,
-        );
+        )
+        .unwrap();
         sound_context.set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(
-            rg3d::sound::hrtf::HrtfRenderer::new(hrtf_sphere),
+            rg3d::sound::renderer::hrtf::HrtfRenderer::new(hrtf_sphere),
         ));
     }
 

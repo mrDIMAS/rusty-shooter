@@ -12,6 +12,11 @@ use crate::{
     weapon::{Weapon, WeaponContainer, WeaponKind},
     GameEngine, GameTime, MatchOptions,
 };
+use rg3d::sound::context;
+use rg3d::sound::effects::{BaseEffect, Effect, EffectInput};
+use rg3d::sound::source::generic::GenericSourceBuilder;
+use rg3d::sound::source::spatial::SpatialSourceBuilder;
+use rg3d::sound::source::Status;
 use rg3d::{
     core::rand::Rng,
     core::{
@@ -35,12 +40,93 @@ use rg3d::{
     utils::log::MessageKind,
     utils::{log::Log, navmesh::Navmesh},
 };
+use std::time::Duration;
 use std::{
     path::{Path, PathBuf},
-    sync::{mpsc::Sender, Arc, Mutex, RwLock},
+    sync::{mpsc::Sender, Arc, RwLock},
 };
 
 pub const RESPAWN_TIME: f32 = 4.0;
+
+#[derive(Default)]
+pub struct SoundManager {
+    context: Context,
+    reverb: Handle<Effect>,
+}
+
+impl SoundManager {
+    pub fn new(context: Context) -> Self {
+        let mut base_effect = BaseEffect::default();
+        base_effect.set_gain(0.7);
+        let mut reverb = rg3d::sound::effects::reverb::Reverb::new(base_effect);
+        reverb.set_dry(0.5);
+        reverb.set_wet(0.5);
+        reverb.set_decay_time(Duration::from_secs_f32(3.0));
+        let reverb = context
+            .state()
+            .add_effect(rg3d::sound::effects::Effect::Reverb(reverb));
+
+        let hrtf_sphere = rg3d::sound::hrtf::HrirSphere::from_file(
+            "data/sounds/IRC_1040_C.bin",
+            context::SAMPLE_RATE,
+        )
+        .unwrap();
+        context
+            .state()
+            .set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(
+                rg3d::sound::renderer::hrtf::HrtfRenderer::new(hrtf_sphere),
+            ));
+
+        Self { context, reverb }
+    }
+
+    pub async fn handle_message(&mut self, resource_manager: ResourceManager, message: &Message) {
+        let mut state = self.context.state();
+
+        match message {
+            Message::PlaySound {
+                path,
+                position,
+                gain,
+                rolloff_factor,
+                radius,
+            } => {
+                let shot_buffer = resource_manager
+                    .request_sound_buffer(path, false)
+                    .await
+                    .unwrap();
+                let shot_sound = SpatialSourceBuilder::new(
+                    GenericSourceBuilder::new(shot_buffer.into())
+                        .with_status(Status::Playing)
+                        .with_play_once(true)
+                        .with_gain(*gain)
+                        .build()
+                        .unwrap(),
+                )
+                .with_position(*position)
+                .with_radius(*radius)
+                .with_rolloff_factor(*rolloff_factor)
+                .build_source();
+                let source = state.add_source(shot_sound);
+                state
+                    .effect_mut(self.reverb)
+                    .add_input(EffectInput::direct(source));
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Visit for SoundManager {
+    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
+        visitor.enter_region(name)?;
+
+        self.context.visit("Context", visitor)?;
+        self.reverb.visit("Reverb", visitor)?;
+
+        visitor.leave_region()
+    }
+}
 
 pub struct Level {
     map_root: Handle<Node>,
@@ -62,6 +148,7 @@ pub struct Level {
     respawn_list: Vec<RespawnEntry>,
     spectator_camera: Handle<Node>,
     target_spectator_position: Vector3<f32>,
+    sound_manager: SoundManager,
     proximity_events_receiver: Option<crossbeam::channel::Receiver<ProximityEvent>>,
     contact_events_receiver: Option<crossbeam::channel::Receiver<ContactEvent>>,
 }
@@ -88,6 +175,7 @@ impl Default for Level {
             respawn_list: Default::default(),
             spectator_camera: Default::default(),
             target_spectator_position: Default::default(),
+            sound_manager: Default::default(),
             proximity_events_receiver: None,
             contact_events_receiver: None,
         }
@@ -114,6 +202,7 @@ impl Visit for Level {
         self.spectator_camera.visit("SpectatorCamera", visitor)?;
         self.target_spectator_position
             .visit("TargetSpectatorPosition", visitor)?;
+        self.sound_manager.visit("SoundManager", visitor)?;
 
         visitor.leave_region()
     }
@@ -144,7 +233,6 @@ impl Default for DeathZone {
 pub struct UpdateContext<'a> {
     pub time: GameTime,
     pub scene: &'a mut Scene,
-    pub sound_context: Arc<Mutex<Context>>,
     pub items: &'a ItemContainer,
     pub jump_pads: &'a JumpPadContainer,
     pub navmesh: Option<&'a mut Navmesh>,
@@ -517,6 +605,8 @@ impl Level {
     ) -> (Level, Scene) {
         let mut scene = Scene::new();
 
+        let sound_manager = SoundManager::new(scene.sound_context.clone());
+
         let (proximity_events_sender, proximity_events_receiver) = crossbeam::channel::unbounded();
         let (contact_events_sender, contact_events_receiver) = crossbeam::channel::unbounded();
 
@@ -608,6 +698,7 @@ impl Level {
             proximity_events_receiver: Some(proximity_events_receiver),
             projectiles: ProjectileContainer::new(),
             target_spectator_position: Default::default(),
+            sound_manager,
         };
 
         (level, scene)
@@ -1125,7 +1216,6 @@ impl Level {
         let mut ctx = UpdateContext {
             time,
             scene,
-            sound_context: engine.sound_context.clone(),
             items: &self.items,
             jump_pads: &self.jump_pads,
             navmesh: self.navmesh.as_mut(),
@@ -1204,6 +1294,10 @@ impl Level {
         message: &Message,
         time: GameTime,
     ) {
+        self.sound_manager
+            .handle_message(engine.resource_manager.clone(), &message)
+            .await;
+
         match message {
             &Message::GiveNewWeapon { actor, kind } => {
                 self.give_new_weapon(engine, actor, kind).await;

@@ -36,7 +36,7 @@ use rg3d::{
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
-    engine::{resource_manager::ResourceManager, Engine},
+    engine::Engine,
     event::{ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     gui::{
@@ -50,11 +50,8 @@ use rg3d::{
     },
     scene::Scene,
     sound::{
-        context::{self, Context},
-        effects::{BaseEffect, Effect, EffectInput},
-        source::{
-            generic::GenericSourceBuilder, spatial::SpatialSourceBuilder, SoundSource, Status,
-        },
+        context::Context,
+        source::{generic::GenericSourceBuilder, SoundSource, Status},
     },
     utils::translate_event,
 };
@@ -93,9 +90,10 @@ pub struct Game {
     time: GameTime,
     events_receiver: Receiver<Message>,
     events_sender: Sender<Message>,
-    sound_manager: SoundManager,
     load_context: Option<Arc<Mutex<LoadContext>>>,
     loading_screen: LoadingScreen,
+    menu_sound_context: Context,
+    music: Handle<SoundSource>,
 }
 
 struct LoadingScreen {
@@ -303,97 +301,6 @@ pub struct LoadContext {
     level: Option<(Level, Scene)>,
 }
 
-pub struct SoundManager {
-    context: Arc<Mutex<Context>>,
-    music: Handle<SoundSource>,
-    reverb: Handle<Effect>,
-}
-
-impl SoundManager {
-    pub fn new(context: Arc<Mutex<Context>>, resource_manager: ResourceManager) -> Self {
-        let buffer = rg3d::futures::executor::block_on(
-            resource_manager
-                .request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true),
-        )
-        .unwrap();
-        let music = context.lock().unwrap().add_source(
-            GenericSourceBuilder::new(buffer.into())
-                .with_looping(true)
-                .with_status(Status::Playing)
-                .with_gain(0.25)
-                .build_source()
-                .unwrap(),
-        );
-
-        let mut base_effect = BaseEffect::default();
-        base_effect.set_gain(0.7);
-        let mut reverb = rg3d::sound::effects::reverb::Reverb::new(base_effect);
-        reverb.set_dry(0.5);
-        reverb.set_wet(0.5);
-        reverb.set_decay_time(Duration::from_secs_f32(3.0));
-        let reverb = context
-            .lock()
-            .unwrap()
-            .add_effect(rg3d::sound::effects::Effect::Reverb(reverb));
-
-        Self {
-            context,
-            music,
-            reverb,
-        }
-    }
-
-    pub async fn handle_message(&mut self, resource_manager: ResourceManager, message: &Message) {
-        let mut context = self.context.lock().unwrap();
-
-        match message {
-            Message::PlaySound {
-                path,
-                position,
-                gain,
-                rolloff_factor,
-                radius,
-            } => {
-                let shot_buffer = resource_manager
-                    .request_sound_buffer(path, false)
-                    .await
-                    .unwrap();
-                let shot_sound = SpatialSourceBuilder::new(
-                    GenericSourceBuilder::new(shot_buffer.into())
-                        .with_status(Status::Playing)
-                        .with_play_once(true)
-                        .with_gain(*gain)
-                        .build()
-                        .unwrap(),
-                )
-                .with_position(*position)
-                .with_radius(*radius)
-                .with_rolloff_factor(*rolloff_factor)
-                .build_source();
-                let source = context.add_source(shot_sound);
-                context
-                    .effect_mut(self.reverb)
-                    .add_input(EffectInput::direct(source));
-            }
-            Message::SetMusicVolume { volume } => {
-                context.source_mut(self.music).set_gain(*volume);
-            }
-            _ => {}
-        }
-    }
-}
-
-impl Visit for SoundManager {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.reverb.visit("Reverb", visitor)?;
-        self.music.visit("Music", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
 impl Game {
     pub fn run() {
         let events_loop = EventLoop::<()>::new();
@@ -410,16 +317,6 @@ impl Game {
             .with_resizable(true);
 
         let mut engine = GameEngine::new(window_builder, &events_loop, false).unwrap();
-        let hrtf_sphere = rg3d::sound::hrtf::HrirSphere::from_file(
-            "data/sounds/IRC_1040_C.bin",
-            context::SAMPLE_RATE,
-        )
-        .unwrap();
-        engine.sound_context.lock().unwrap().set_renderer(
-            rg3d::sound::renderer::Renderer::HrtfRenderer(
-                rg3d::sound::renderer::hrtf::HrtfRenderer::new(hrtf_sphere),
-            ),
-        );
 
         engine.renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
@@ -435,10 +332,28 @@ impl Game {
 
         let (tx, rx) = mpsc::channel();
 
-        let sound_manager = SoundManager::new(
-            engine.sound_context.clone(),
-            engine.resource_manager.clone(),
+        let menu_sound_context = Context::new();
+
+        let buffer = rg3d::futures::executor::block_on(
+            engine
+                .resource_manager
+                .request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true),
+        )
+        .unwrap();
+        let music = menu_sound_context.state().add_source(
+            GenericSourceBuilder::new(buffer.into())
+                .with_looping(true)
+                .with_status(Status::Playing)
+                .with_gain(0.25)
+                .build_source()
+                .unwrap(),
         );
+
+        engine
+            .sound_engine
+            .lock()
+            .unwrap()
+            .add_context(menu_sound_context.clone());
 
         let mut game = Game {
             loading_screen: LoadingScreen::new(
@@ -446,7 +361,8 @@ impl Game {
                 inner_size.width,
                 inner_size.height,
             ),
-            sound_manager,
+            menu_sound_context,
+            music,
             hud: Hud::new(&mut engine),
             running: true,
             menu: Menu::new(&mut engine, control_scheme.clone(), tx.clone()),
@@ -532,10 +448,10 @@ impl Game {
 
         // Visit engine state first.
         self.engine.visit("GameEngine", &mut visitor)?;
-
         self.level.visit("Level", &mut visitor)?;
-
-        self.sound_manager.visit("SoundManager", &mut visitor)?;
+        self.menu_sound_context
+            .visit("MenuSoundContext", &mut visitor)?;
+        self.music.visit("Music", &mut visitor)?;
 
         // Debug output
         if let Ok(mut file) = File::create(Path::new("save.txt")) {
@@ -559,25 +475,18 @@ impl Game {
         // Load engine state first
         Log::writeln(
             MessageKind::Information,
-            "Trying to load engine state...".to_owned(),
+            "Trying to load a save file...".to_owned(),
         );
         self.engine.visit("GameEngine", &mut visitor)?;
-
-        Log::writeln(
-            MessageKind::Information,
-            "GameEngine state successfully loaded!".to_owned(),
-        );
-
-        // Then load game state.
         self.level.visit("Level", &mut visitor)?;
+        self.menu_sound_context
+            .visit("MenuSoundContext", &mut visitor)?;
+        self.music.visit("Music", &mut visitor)?;
 
         Log::writeln(
             MessageKind::Information,
             "Game state successfully loaded!".to_owned(),
         );
-
-        self.sound_manager.visit("SoundManager", &mut visitor)?;
-        self.sound_manager.context = self.engine.sound_context.clone();
 
         // Hide menu only of we successfully loaded a save.
         self.set_menu_visible(false);
@@ -743,13 +652,14 @@ impl Game {
                         .leader_board()
                         .set_visible(true, &mut self.engine.user_interface);
                 }
+                Message::SetMusicVolume { volume } => {
+                    self.menu_sound_context
+                        .state()
+                        .source_mut(self.music)
+                        .set_gain(*volume);
+                }
                 _ => (),
             }
-
-            rg3d::futures::executor::block_on(
-                self.sound_manager
-                    .handle_message(self.engine.resource_manager.clone(), &message),
-            );
 
             if let Some(ref mut level) = self.level {
                 rg3d::futures::executor::block_on(level.handle_message(
@@ -780,7 +690,6 @@ impl Game {
                Triangles: {}\n\
                Draw calls: {}\n\
                Up time: {:.2} s\n\
-               Sound render time: {:?}\n\
                UI Time: {:?}",
             statistics.pure_frame_time * 1000.0,
             statistics.capped_frame_time * 1000.0,
@@ -788,11 +697,6 @@ impl Game {
             statistics.geometry.triangles_rendered,
             statistics.geometry.draw_calls,
             elapsed,
-            self.engine
-                .sound_context
-                .lock()
-                .unwrap()
-                .full_render_duration(),
             self.engine.ui_time
         )
         .unwrap();

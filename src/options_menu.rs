@@ -692,13 +692,13 @@ impl OptionsMenu {
         sync_check_box(self.cb_mouse_y_inverse, control_scheme.mouse_y_inverse);
         sync_check_box(self.cb_smooth_mouse, control_scheme.smooth_mouse);
         sync_check_box(self.cb_shake_camera, control_scheme.shake_camera);
-        let is_hrtf = if let rg3d::sound::renderer::Renderer::HrtfRenderer(_) =
-            engine.sound_context.lock().unwrap().renderer()
-        {
-            true
-        } else {
-            false
-        };
+        let is_hrtf = true; /*if let rg3d::sound::renderer::Renderer::HrtfRenderer(_) =
+                                engine.sound_context.lock().unwrap().renderer()
+                            {
+                                true
+                            } else {
+                                false
+                            };*/
         sync_check_box(self.cb_use_hrtf, is_hrtf);
 
         let sync_scroll_bar = |handle: UINodeHandle, value: f32| {
@@ -716,7 +716,7 @@ impl OptionsMenu {
         sync_scroll_bar(self.sb_mouse_sens, control_scheme.mouse_sens);
         sync_scroll_bar(
             self.sb_sound_volume,
-            engine.sound_context.lock().unwrap().master_gain(),
+            engine.sound_engine.lock().unwrap().master_gain(),
         );
 
         for (btn, def) in self
@@ -802,7 +802,7 @@ impl OptionsMenu {
                 if let ScrollBarMessage::Value(new_value) = prop {
                     if message.destination() == self.sb_sound_volume {
                         engine
-                            .sound_context
+                            .sound_engine
                             .lock()
                             .unwrap()
                             .set_master_gain(*new_value)
@@ -859,7 +859,7 @@ impl OptionsMenu {
                         self.control_scheme.write().unwrap().reset();
                         self.sync_to_model(engine);
                     } else if message.destination() == self.btn_reset_audio_settings {
-                        engine.sound_context.lock().unwrap().set_master_gain(1.0);
+                        engine.sound_engine.lock().unwrap().set_master_gain(1.0);
                         self.sync_to_model(engine);
                     }
 

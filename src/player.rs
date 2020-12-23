@@ -24,7 +24,7 @@ use rg3d::{
 };
 use std::{
     ops::{Deref, DerefMut},
-    sync::{mpsc::Sender, Arc, Mutex, RwLock},
+    sync::{mpsc::Sender, Arc, RwLock},
 };
 
 pub struct Controller {
@@ -405,8 +405,8 @@ impl Player {
             ));
     }
 
-    fn update_listener(&mut self, sound_context: Arc<Mutex<Context>>) {
-        let mut sound_context = sound_context.lock().unwrap();
+    fn update_listener(&mut self, sound_context: Context) {
+        let mut sound_context = sound_context.state();
         let listener = sound_context.listener_mut();
         listener.set_basis(self.listener_basis);
         listener.set_position(self.head_position);
@@ -581,7 +581,7 @@ impl Player {
             self.path_len = 0.0;
         }
 
-        self.update_listener(context.sound_context.clone());
+        self.update_listener(context.scene.sound_context.clone());
     }
 
     pub fn clean_up(&mut self, scene: &mut Scene) {

@@ -448,7 +448,7 @@ impl Player {
                 }
 
                 DeviceEvent::Button { button, state } => {
-                    control_button = Some(ControlButton::Mouse(*button as u8));
+                    control_button = Some(ControlButton::Mouse(*button as u16));
                     control_button_state = *state;
                 }
 

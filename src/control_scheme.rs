@@ -2,7 +2,7 @@ use rg3d::event::VirtualKeyCode;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ControlButton {
-    Mouse(u8),
+    Mouse(u16),
     Key(VirtualKeyCode),
     WheelUp,
     WheelDown,

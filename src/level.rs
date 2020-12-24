@@ -203,6 +203,7 @@ impl Visit for Level {
         self.target_spectator_position
             .visit("TargetSpectatorPosition", visitor)?;
         self.sound_manager.visit("SoundManager", visitor)?;
+        self.items.visit("Items", visitor)?;
 
         visitor.leave_region()
     }
@@ -1387,6 +1388,9 @@ impl Level {
         }
         for projectile in self.projectiles.iter_mut() {
             projectile.sender = Some(sender.clone());
+        }
+        for item in self.items.iter_mut() {
+            item.sender = Some(sender.clone());
         }
 
         let (proximity_events_sender, proximity_events_receiver) = crossbeam::channel::unbounded();

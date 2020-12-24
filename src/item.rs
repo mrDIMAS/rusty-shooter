@@ -1,4 +1,5 @@
 use crate::{effects::EffectKind, message::Message, rg3d::core::math::Vector3Ext, GameTime};
+use rg3d::sound::pool::PoolIteratorMut;
 use rg3d::{
     core::{
         algebra::Vector3,
@@ -65,7 +66,7 @@ pub struct Item {
     reactivation_timer: f32,
     active: bool,
     definition: &'static ItemDefinition,
-    sender: Option<Sender<Message>>,
+    pub sender: Option<Sender<Message>>,
     lifetime: Option<f32>,
 }
 
@@ -338,6 +339,10 @@ impl ItemContainer {
 
     pub fn iter(&self) -> PoolIterator<Item> {
         self.pool.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> PoolIteratorMut<Item> {
+        self.pool.iter_mut()
     }
 
     pub fn update(&mut self, scene: &mut Scene, time: GameTime) {

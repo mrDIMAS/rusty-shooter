@@ -741,7 +741,7 @@ impl Bot {
                     left_leg_name: "Mutant:LeftUpLeg",
                     right_leg_name: "Mutant:RightUpLeg",
                     spine: "Mutant:Spine",
-                    walk_speed: 6.0,
+                    walk_speed: 4.0,
                     scale: 0.0085,
                     weapon_scale: 2.6,
                     health: 100.0,
@@ -766,7 +766,7 @@ impl Bot {
                     left_leg_name: "LeftUpLeg",
                     right_leg_name: "RightUpLeg",
                     spine: "Spine",
-                    walk_speed: 6.0,
+                    walk_speed: 4.0,
                     scale: 0.0085,
                     weapon_scale: 2.5,
                     health: 100.0,
@@ -791,7 +791,7 @@ impl Bot {
                     left_leg_name: "LeftUpLeg",
                     right_leg_name: "RightUpLeg",
                     spine: "Spine",
-                    walk_speed: 6.0,
+                    walk_speed: 4.0,
                     scale: 0.0085,
                     weapon_scale: 2.5,
                     health: 100.0,
@@ -1016,7 +1016,7 @@ impl Bot {
         let look_at = head_pos + graph[self.model].look_vector();
         let view_matrix = Matrix4::look_at_rh(&Point3::from(head_pos), &Point3::from(look_at), &up);
         let projection_matrix =
-            Matrix4::new_perspective(16.0 / 9.0, 60.0f32.to_radians(), 0.1, 7.0);
+            Matrix4::new_perspective(16.0 / 9.0, 90.0f32.to_radians(), 0.1, 20.0);
         let view_projection_matrix = projection_matrix * view_matrix;
         self.frustum = Frustum::from(view_projection_matrix).unwrap();
     }
@@ -1103,7 +1103,7 @@ impl Bot {
 
             if let Some(path_point) = self.path.get(self.current_path_point) {
                 self.move_target = *path_point;
-                if self.move_target.metric_distance(&position) <= 2.0
+                if self.move_target.metric_distance(&position) <= 1.0
                     && self.current_path_point < self.path.len() - 1
                 {
                     self.current_path_point += 1;

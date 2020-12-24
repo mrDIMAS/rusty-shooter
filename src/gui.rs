@@ -3,15 +3,9 @@
 //! is not much.
 
 use crate::{BuildContext, UINodeHandle};
-use rg3d::{
-    core::color::Color,
-    engine::resource_manager::ResourceManager,
-    gui::{
-        brush::Brush, check_box::CheckBoxBuilder, image::ImageBuilder,
-        scroll_bar::ScrollBarBuilder, scroll_viewer::ScrollViewerBuilder, widget::WidgetBuilder,
-        HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
-    },
-    utils,
+use rg3d::gui::{
+    check_box::CheckBoxBuilder, scroll_bar::ScrollBarBuilder, scroll_viewer::ScrollViewerBuilder,
+    widget::WidgetBuilder, HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
 };
 
 pub struct ScrollBarData {
@@ -26,11 +20,7 @@ pub struct ScrollBarData {
     pub orientation: Orientation,
 }
 
-pub fn create_scroll_bar(
-    ctx: &mut BuildContext,
-    resource_manager: ResourceManager,
-    data: ScrollBarData,
-) -> UINodeHandle {
+pub fn create_scroll_bar(ctx: &mut BuildContext, data: ScrollBarData) -> UINodeHandle {
     let mut wb = WidgetBuilder::new();
     match data.orientation {
         Orientation::Vertical => wb = wb.with_width(30.0),
@@ -48,21 +38,11 @@ pub fn create_scroll_bar(
     .with_step(data.step)
     .with_value(data.value)
     .with_value_precision(1)
-    .with_indicator(
-        ImageBuilder::new(
-            WidgetBuilder::new().with_background(Brush::Solid(Color::opaque(110, 110, 110))),
-        )
-        .with_texture(utils::into_gui_texture(
-            resource_manager.request_texture("data/ui/circle.png"),
-        ))
-        .build(ctx),
-    )
     .build(ctx)
 }
 
 pub fn create_check_box(
     ctx: &mut BuildContext,
-    resource_manager: ResourceManager,
     row: usize,
     column: usize,
     checked: bool,
@@ -78,24 +58,13 @@ pub fn create_check_box(
             .with_horizontal_alignment(HorizontalAlignment::Left),
     )
     .checked(Some(checked))
-    .with_check_mark(
-        ImageBuilder::new(WidgetBuilder::new())
-            .with_texture(utils::into_gui_texture(
-                resource_manager.request_texture("data/ui/check_mark.png"),
-            ))
-            .build(ctx),
-    )
     .build(ctx)
 }
 
-pub fn create_scroll_viewer(
-    ctx: &mut BuildContext,
-    resource_manager: ResourceManager,
-) -> UINodeHandle {
+pub fn create_scroll_viewer(ctx: &mut BuildContext) -> UINodeHandle {
     ScrollViewerBuilder::new(WidgetBuilder::new())
         .with_horizontal_scroll_bar(create_scroll_bar(
             ctx,
-            resource_manager.clone(),
             ScrollBarData {
                 min: 0.0,
                 max: 0.0,
@@ -110,7 +79,6 @@ pub fn create_scroll_viewer(
         ))
         .with_vertical_scroll_bar(create_scroll_bar(
             ctx,
-            resource_manager.clone(),
             ScrollBarData {
                 min: 0.0,
                 max: 0.0,

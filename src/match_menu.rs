@@ -3,22 +3,19 @@ use crate::{
     message::Message,
     DeathMatch, GameEngine, Gui, GuiMessage, MatchOptions, UINodeHandle,
 };
-use rg3d::{
-    engine::resource_manager::ResourceManager,
-    gui::{
-        border::BorderBuilder,
-        button::ButtonBuilder,
-        decorator::DecoratorBuilder,
-        dropdown_list::DropdownListBuilder,
-        grid::{Column, GridBuilder, Row},
-        message::{ButtonMessage, UiMessageData},
-        node::UINode,
-        text::TextBuilder,
-        text_box::TextBoxBuilder,
-        widget::WidgetBuilder,
-        window::{WindowBuilder, WindowTitle},
-        HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
-    },
+use rg3d::gui::{
+    border::BorderBuilder,
+    button::ButtonBuilder,
+    decorator::DecoratorBuilder,
+    dropdown_list::DropdownListBuilder,
+    grid::{Column, GridBuilder, Row},
+    message::{ButtonMessage, UiMessageData},
+    node::UINode,
+    text::TextBuilder,
+    text_box::TextBoxBuilder,
+    widget::WidgetBuilder,
+    window::{WindowBuilder, WindowTitle},
+    HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
 };
 use std::sync::mpsc::Sender;
 
@@ -31,7 +28,7 @@ pub struct MatchMenu {
 }
 
 impl MatchMenu {
-    pub fn new(ui: &mut Gui, resource_manager: ResourceManager, sender: Sender<Message>) -> Self {
+    pub fn new(ui: &mut Gui, sender: Sender<Message>) -> Self {
         let common_row = Row::strict(36.0);
 
         let ctx = &mut ui.build_ctx();
@@ -86,7 +83,6 @@ impl MatchMenu {
                         .with_child({
                             sb_time_limit = create_scroll_bar(
                                 ctx,
-                                resource_manager.clone(),
                                 ScrollBarData {
                                     min: 5.0,
                                     max: 60.0,
@@ -109,7 +105,6 @@ impl MatchMenu {
                         .with_child({
                             sb_frag_limit = create_scroll_bar(
                                 ctx,
-                                resource_manager.clone(),
                                 ScrollBarData {
                                     min: 10.0,
                                     max: 200.0,

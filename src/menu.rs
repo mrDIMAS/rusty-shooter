@@ -157,11 +157,7 @@ impl Menu {
             btn_load_game,
             btn_quit_game,
             options_menu: OptionsMenu::new(engine, control_scheme, sender.clone()),
-            match_menu: MatchMenu::new(
-                &mut engine.user_interface,
-                engine.resource_manager.clone(),
-                sender,
-            ),
+            match_menu: MatchMenu::new(&mut engine.user_interface, sender),
         }
     }
 

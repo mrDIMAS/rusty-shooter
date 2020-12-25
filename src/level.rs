@@ -1419,7 +1419,7 @@ impl Level {
                 for neighbour in pt.neighbours() {
                     drawing_context.add_line(scene::Line {
                         begin: pt.position(),
-                        end: navmesh.vertices()[*neighbour].position(),
+                        end: navmesh.vertices()[*neighbour as usize].position(),
                         color: Default::default(),
                     });
                 }

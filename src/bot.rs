@@ -1236,7 +1236,9 @@ impl Bot {
             }
 
             if context.time.elapsed - self.last_path_rebuild_time >= 1.0 {
-                if let Some(navmesh) = context.navmesh.as_mut() {
+                if context.navmesh.is_some() {
+                    let navmesh = &mut context.scene.navmeshes[context.navmesh];
+
                     self.rebuild_path(position, navmesh, context.time);
                 }
             }

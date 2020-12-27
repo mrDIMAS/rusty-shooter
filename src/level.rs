@@ -139,7 +139,7 @@ pub struct Level {
     items: ItemContainer,
     spawn_points: Vec<SpawnPoint>,
     sender: Option<Sender<Message>>,
-    pub navmesh: Option<Navmesh>,
+    pub navmesh: Handle<Navmesh>,
     pub control_scheme: Option<Arc<RwLock<ControlScheme>>>,
     death_zones: Vec<DeathZone>,
     pub options: MatchOptions,
@@ -204,6 +204,7 @@ impl Visit for Level {
             .visit("TargetSpectatorPosition", visitor)?;
         self.sound_manager.visit("SoundManager", visitor)?;
         self.items.visit("Items", visitor)?;
+        self.navmesh.visit("Navmesh", visitor)?;
 
         visitor.leave_region()
     }
@@ -236,7 +237,7 @@ pub struct UpdateContext<'a> {
     pub scene: &'a mut Scene,
     pub items: &'a ItemContainer,
     pub jump_pads: &'a JumpPadContainer,
-    pub navmesh: Option<&'a mut Navmesh>,
+    pub navmesh: Handle<Navmesh>,
     pub weapons: &'a WeaponContainer,
 }
 
@@ -338,18 +339,21 @@ impl Visit for RespawnEntry {
     }
 }
 
-fn build_navmesh(scene: &mut Scene) -> Option<Navmesh> {
+fn build_navmesh(scene: &mut Scene) -> Handle<Navmesh> {
     let navmesh_handle = scene.graph.find_by_name(scene.graph.get_root(), "Navmesh");
     if navmesh_handle.is_some() {
         let navmesh_node = &mut scene.graph[navmesh_handle];
         navmesh_node.set_visibility(false);
-        Some(Navmesh::from_mesh(navmesh_node.as_mesh()))
+
+        scene
+            .navmeshes
+            .add(Navmesh::from_mesh(navmesh_node.as_mesh()))
     } else {
         Log::writeln(
             MessageKind::Warning,
             "Unable to find Navmesh node to build navmesh!".to_owned(),
         );
-        None
+        Handle::NONE
     }
 }
 
@@ -747,10 +751,6 @@ impl Level {
         }
 
         player
-    }
-
-    pub fn build_navmesh(&mut self, engine: &mut GameEngine) {
-        self.navmesh = build_navmesh(&mut engine.scenes[self.scene]);
     }
 
     pub fn get_player(&self) -> Handle<Actor> {
@@ -1219,7 +1219,7 @@ impl Level {
             scene,
             items: &self.items,
             jump_pads: &self.jump_pads,
-            navmesh: self.navmesh.as_mut(),
+            navmesh: self.navmesh,
             weapons: &self.weapons,
         };
         self.actors.update(&mut ctx);
@@ -1414,7 +1414,9 @@ impl Level {
 
         scene.physics.draw(drawing_context);
 
-        if let Some(navmesh) = self.navmesh.as_ref() {
+        if self.navmesh.is_some() {
+            let navmesh = &scene.navmeshes[self.navmesh];
+
             for pt in navmesh.vertices() {
                 for neighbour in pt.neighbours() {
                     drawing_context.add_line(scene::Line {

@@ -688,8 +688,8 @@ impl Game {
                FPS: {}\n\
                Triangles: {}\n\
                Draw calls: {}\n\
-               Up time: {:.2} s\n\
-               UI Time: {:?}",
+               Uptime: {:.2} s\n\
+               UI time: {:?}",
             statistics.pure_frame_time * 1000.0,
             statistics.capped_frame_time * 1000.0,
             statistics.frames_per_second,

@@ -93,7 +93,7 @@ impl Default for ControlScheme {
             },
             mouse_sens: 0.3,
             mouse_y_inverse: false,
-            smooth_mouse: true,
+            smooth_mouse: false,
             shake_camera: true,
         }
     }

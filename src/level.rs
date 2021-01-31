@@ -29,7 +29,7 @@ use rg3d::{
     engine::resource_manager::ResourceManager,
     event::Event,
     physics::{
-        geometry::{ContactEvent, InteractionGroups, ProximityEvent},
+        geometry::{ContactEvent, InteractionGroups, IntersectionEvent},
         pipeline::ChannelEventCollector,
     },
     rand,
@@ -149,7 +149,7 @@ pub struct Level {
     spectator_camera: Handle<Node>,
     target_spectator_position: Vector3<f32>,
     sound_manager: SoundManager,
-    proximity_events_receiver: Option<crossbeam::channel::Receiver<ProximityEvent>>,
+    proximity_events_receiver: Option<crossbeam::channel::Receiver<IntersectionEvent>>,
     contact_events_receiver: Option<crossbeam::channel::Receiver<ContactEvent>>,
 }
 

@@ -17,7 +17,7 @@ use rg3d::{
     engine::resource_manager::ResourceManager,
     physics::{
         dynamics::{BodyStatus, RigidBodyBuilder},
-        geometry::{ColliderBuilder, InteractionGroups, Proximity, ProximityEvent},
+        geometry::{ColliderBuilder, InteractionGroups, IntersectionEvent},
         na::{Isometry3, Translation3},
     },
     rand,
@@ -393,14 +393,12 @@ impl Projectile {
     /// environment and actors. We have to handle proximity events separately.
     pub fn handle_proximity(
         &mut self,
-        proximity_event: &ProximityEvent,
+        proximity_event: &IntersectionEvent,
         scene: &mut Scene,
         actors: &ActorContainer,
         weapons: &WeaponContainer,
     ) {
-        if proximity_event.new_status == Proximity::Intersecting
-            || proximity_event.new_status == Proximity::WithinMargin
-        {
+        if proximity_event.intersecting {
             let mut owner_contact = false;
 
             let body_a = scene

@@ -273,42 +273,41 @@ impl Projectile {
 
         // Do ray based intersection tests for every kind of projectiles. This will help to handle
         // fast moving projectiles.
-        if let Some(ray) = Ray::from_two_points(&self.last_position, &position) {
-            let mut query_buffer = Vec::default();
-            scene.physics.cast_ray(
-                RayCastOptions {
-                    ray,
-                    max_len: ray.dir.norm(),
-                    groups: InteractionGroups::all(),
-                    sort_results: true,
-                },
-                &mut query_buffer,
-            );
+        let ray = Ray::from_two_points(self.last_position, position);
+        let mut query_buffer = Vec::default();
+        scene.physics.cast_ray(
+            RayCastOptions {
+                ray,
+                max_len: ray.dir.norm(),
+                groups: InteractionGroups::all(),
+                sort_results: true,
+            },
+            &mut query_buffer,
+        );
 
-            // List of hits sorted by distance from ray origin.
-            'hit_loop: for hit in query_buffer.iter() {
-                let collider = scene.physics.colliders.get(hit.collider.into()).unwrap();
-                let body = collider.parent();
+        // List of hits sorted by distance from ray origin.
+        'hit_loop: for hit in query_buffer.iter() {
+            let collider = scene.physics.colliders.get(hit.collider.into()).unwrap();
+            let body = collider.parent();
 
-                if collider.shape().as_trimesh().is_some() {
-                    self.kill();
-                    effect_position = Some(hit.position.coords);
-                    break 'hit_loop;
-                } else {
-                    for (actor_handle, actor) in actors.pair_iter() {
-                        if actor.get_body() == body.into() && self.owner.is_some() {
-                            let weapon = &weapons[self.owner];
-                            // Ignore intersections with owners of weapon.
-                            if weapon.owner() != actor_handle {
-                                self.hits.insert(Hit {
-                                    actor: actor_handle,
-                                    who: weapon.owner(),
-                                });
+            if collider.shape().as_trimesh().is_some() {
+                self.kill();
+                effect_position = Some(hit.position.coords);
+                break 'hit_loop;
+            } else {
+                for (actor_handle, actor) in actors.pair_iter() {
+                    if actor.get_body() == body.into() && self.owner.is_some() {
+                        let weapon = &weapons[self.owner];
+                        // Ignore intersections with owners of weapon.
+                        if weapon.owner() != actor_handle {
+                            self.hits.insert(Hit {
+                                actor: actor_handle,
+                                who: weapon.owner(),
+                            });
 
-                                self.kill();
-                                effect_position = Some(hit.position.coords);
-                                break 'hit_loop;
-                            }
+                            self.kill();
+                            effect_position = Some(hit.position.coords);
+                            break 'hit_loop;
                         }
                     }
                 }

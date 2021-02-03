@@ -780,20 +780,17 @@ impl Level {
 
     fn pick(&self, engine: &mut GameEngine, from: Vector3<f32>, to: Vector3<f32>) -> Vector3<f32> {
         let scene = &mut engine.scenes[self.scene];
-        if let Some(ray) = Ray::from_two_points(&from, &to) {
-            let options = RayCastOptions {
-                ray,
-                max_len: std::f32::MAX,
-                groups: InteractionGroups::all(),
-                sort_results: true,
-            };
-            let mut query_buffer = Vec::default();
-            scene.physics.cast_ray(options, &mut query_buffer);
-            if let Some(pt) = query_buffer.first() {
-                pt.position.coords
-            } else {
-                from
-            }
+        let ray = Ray::from_two_points(from, to);
+        let options = RayCastOptions {
+            ray,
+            max_len: std::f32::MAX,
+            groups: InteractionGroups::all(),
+            sort_results: true,
+        };
+        let mut query_buffer = Vec::default();
+        scene.physics.cast_ray(options, &mut query_buffer);
+        if let Some(pt) = query_buffer.first() {
+            pt.position.coords
         } else {
             from
         }
@@ -1255,11 +1252,8 @@ impl Level {
                     }
                     // Use ray casting to get target position for spectator camera, it is used to
                     // create "dropping head" effect.
-                    let ray = Ray::from_two_points(
-                        &position,
-                        &(position - Vector3::new(0.0, 1000.0, 0.0)),
-                    )
-                    .unwrap();
+                    let ray =
+                        Ray::from_two_points(position, position - Vector3::new(0.0, 1000.0, 0.0));
                     let options = RayCastOptions {
                         ray,
                         max_len: std::f32::MAX,

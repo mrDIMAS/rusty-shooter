@@ -262,34 +262,33 @@ impl Weapon {
         let model = &graph[self.model];
         let begin = model.global_position();
         let end = begin + model.look_vector().scale(100.0);
-        if let Some(ray) = Ray::from_two_points(&begin, &end) {
-            let mut query_buffer = Vec::default();
-            physics.cast_ray(
-                RayCastOptions {
-                    ray,
-                    max_len: std::f32::MAX,
-                    groups: InteractionGroups::all(),
-                    sort_results: true,
-                },
-                &mut query_buffer,
-            );
-            'hit_loop: for hit in query_buffer.iter() {
-                // Filter hit with owner capsule
-                let body = physics.colliders.get(hit.collider.into()).unwrap().parent();
-                for (handle, actor) in actors.pair_iter() {
-                    if self.owner == handle && actor.body == body.into() {
-                        continue 'hit_loop;
-                    }
+        let ray = Ray::from_two_points(begin, end);
+        let mut query_buffer = Vec::default();
+        physics.cast_ray(
+            RayCastOptions {
+                ray,
+                max_len: std::f32::MAX,
+                groups: InteractionGroups::all(),
+                sort_results: true,
+            },
+            &mut query_buffer,
+        );
+        'hit_loop: for hit in query_buffer.iter() {
+            // Filter hit with owner capsule
+            let body = physics.colliders.get(hit.collider.into()).unwrap().parent();
+            for (handle, actor) in actors.pair_iter() {
+                if self.owner == handle && actor.body == body.into() {
+                    continue 'hit_loop;
                 }
-
-                let offset = hit
-                    .normal
-                    .try_normalize(std::f32::EPSILON)
-                    .unwrap_or_default()
-                    .scale(0.2);
-                laser_dot_position = hit.position.coords + offset;
-                break 'hit_loop;
             }
+
+            let offset = hit
+                .normal
+                .try_normalize(std::f32::EPSILON)
+                .unwrap_or_default()
+                .scale(0.2);
+            laser_dot_position = hit.position.coords + offset;
+            break 'hit_loop;
         }
 
         graph[self.laser_dot]

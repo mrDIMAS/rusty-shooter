@@ -32,7 +32,6 @@ use rg3d::gui::{HorizontalAlignment, VerticalAlignment};
 use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{
     core::{
-        color::Color,
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
@@ -317,8 +316,6 @@ impl Game {
             .with_resizable(true);
 
         let mut engine = GameEngine::new(window_builder, &events_loop, false).unwrap();
-
-        engine.renderer.set_ambient_color(Color::opaque(60, 60, 60));
 
         let control_scheme = Arc::new(RwLock::new(ControlScheme::default()));
 

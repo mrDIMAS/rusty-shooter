@@ -610,6 +610,8 @@ impl Level {
     ) -> (Level, Scene) {
         let mut scene = Scene::new();
 
+        scene.ambient_lighting_color = Color::opaque(60, 60, 60);
+
         let sound_manager = SoundManager::new(scene.sound_context.clone());
 
         let (proximity_events_sender, proximity_events_receiver) = crossbeam::channel::unbounded();
@@ -638,8 +640,7 @@ impl Level {
         // Create collision geometry
         let polygon_handle = scene.graph.find_by_name(map_root, "Polygon");
         if polygon_handle.is_some() {
-            let collider = scene.physics.mesh_to_trimesh(polygon_handle, &scene.graph);
-            scene.physics_binder.bind(polygon_handle, collider);
+            scene.physics.mesh_to_trimesh(polygon_handle, &scene.graph);
         } else {
             Log::writeln(
                 MessageKind::Warning,

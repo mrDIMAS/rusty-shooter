@@ -172,12 +172,7 @@ impl ActorContainer {
             }
             if !is_dead {
                 for (item_handle, item) in context.items.pair_iter() {
-                    let body = context
-                        .scene
-                        .physics
-                        .bodies
-                        .get(actor.get_body().into())
-                        .unwrap();
+                    let body = context.scene.physics.body(&actor.get_body()).unwrap();
                     let distance = (context.scene.graph[item.get_pivot()].global_position()
                         - body.position().translation.vector)
                         .norm();
@@ -212,18 +207,26 @@ impl ActorContainer {
         if let &ContactEvent::Started(a, b) = contact_event {
             for actor in self.pool.iter_mut() {
                 for jump_pad in context.jump_pads.iter() {
-                    let body = context
+                    let coll_a = context
                         .scene
                         .physics
-                        .bodies
-                        .get_mut(actor.get_body().into())
+                        .body_handle_map()
+                        .key_of(&context.scene.physics.collider_rapier(a).unwrap().parent())
+                        .cloned()
                         .unwrap();
-                    let capsule_collider = body.colliders()[0];
-                    let coll_a = context.scene.physics.colliders.get(a).unwrap().parent();
-                    let coll_b = context.scene.physics.colliders.get(b).unwrap().parent();
+                    let coll_b = context
+                        .scene
+                        .physics
+                        .body_handle_map()
+                        .key_of(&context.scene.physics.collider_rapier(b).unwrap().parent())
+                        .cloned()
+                        .unwrap();
 
-                    if capsule_collider == a && coll_b == jump_pad.rigid_body().into()
-                        || capsule_collider == b && coll_a == jump_pad.rigid_body().into()
+                    let body = context.scene.physics.body_mut(&actor.get_body()).unwrap();
+                    let capsule_collider = body.colliders()[0];
+
+                    if capsule_collider == a && coll_b == jump_pad.rigid_body()
+                        || capsule_collider == b && coll_a == jump_pad.rigid_body()
                     {
                         body.set_linvel(jump_pad.get_force(), true);
                     }

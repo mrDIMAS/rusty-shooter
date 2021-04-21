@@ -847,7 +847,7 @@ impl Bot {
             ColliderBuilder::capsule_y(body_height * 0.5, 0.28)
                 .friction(0.0)
                 .build(),
-            body,
+            &body,
         );
 
         scene.physics_binder.bind(pivot, body.into());
@@ -936,15 +936,20 @@ impl Bot {
                 );
 
                 'hit_loop: for hit in query_buffer.iter() {
-                    let collider = scene.physics.colliders.get(hit.collider.into()).unwrap();
-                    let body = collider.parent();
+                    let collider = scene.physics.collider(&hit.collider).unwrap();
+                    let body = scene
+                        .physics
+                        .body_handle_map()
+                        .key_of(&collider.parent())
+                        .cloned()
+                        .unwrap();
 
                     if collider.shape().as_trimesh().is_some() {
                         // Target is behind something.
                         continue 'target_loop;
                     } else {
                         // Prevent setting self as target.
-                        if self.character.body == body.into() {
+                        if self.character.body == body {
                             continue 'hit_loop;
                         }
                     }
@@ -1041,7 +1046,7 @@ impl Bot {
             .set_target(look_dir.x.atan2(look_dir.z))
             .update(time.delta);
 
-        let body = physics.bodies.get_mut(self.body.into()).unwrap();
+        let body = physics.body_mut(&self.body).unwrap();
         let mut position = *body.position();
         position.rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), angle);
         body.set_position(position, true);
@@ -1082,8 +1087,7 @@ impl Bot {
             let body = context
                 .scene
                 .physics
-                .bodies
-                .get_mut(self.character.body.into())
+                .body_mut(&self.character.body)
                 .unwrap();
             let (in_close_combat, look_dir) = match self.target.as_ref() {
                 None => (

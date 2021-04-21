@@ -165,7 +165,7 @@ impl Player {
             ColliderBuilder::capsule_y(height * 0.5, 0.35)
                 .friction(0.0)
                 .build(),
-            body_handle,
+            &body_handle,
         );
 
         let camera_handle;
@@ -292,8 +292,7 @@ impl Player {
         let body = context
             .scene
             .physics
-            .bodies
-            .get_mut(self.character.body.into())
+            .body_mut(&self.character.body)
             .unwrap();
         body.set_angvel(Default::default(), true);
         if let Some(normalized_velocity) = velocity.try_normalize(std::f32::EPSILON) {
@@ -539,8 +538,7 @@ impl Player {
             let velocity = context
                 .scene
                 .physics
-                .bodies
-                .get(self.character.body.into())
+                .body(&self.character.body)
                 .unwrap()
                 .linvel();
 

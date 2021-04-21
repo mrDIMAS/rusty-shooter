@@ -275,9 +275,9 @@ impl Weapon {
         );
         'hit_loop: for hit in query_buffer.iter() {
             // Filter hit with owner capsule
-            let body = physics.colliders.get(hit.collider.into()).unwrap().parent();
+            let body = physics.collider_parent(&hit.collider).cloned().unwrap();
             for (handle, actor) in actors.pair_iter() {
-                if self.owner == handle && actor.body == body.into() {
+                if self.owner == handle && actor.body == body {
                     continue 'hit_loop;
                 }
             }

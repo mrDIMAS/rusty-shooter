@@ -62,8 +62,7 @@ use std::{
         mpsc::{self, Receiver, Sender},
         Arc, Mutex, RwLock,
     },
-    thread,
-    time::{self, Duration, Instant},
+    time::{self, Instant},
 };
 
 const FIXED_FPS: f32 = 60.0;

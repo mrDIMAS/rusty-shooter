@@ -67,7 +67,7 @@ pub struct Projectile {
     /// rockets, plasma balls could have rigid body to detect collisions with
     /// environment. Some projectiles do not have rigid body - they're ray-based -
     /// interaction with environment handled with ray cast.
-    body: RigidBodyHandle,
+    body: Option<RigidBodyHandle>,
     dir: Vector3<f32>,
     lifetime: f32,
     rotation_angle: f32,
@@ -184,10 +184,10 @@ impl Projectile {
                         .translation(position.x, position.y, position.z)
                         .build();
                     let body_handle = scene.physics.add_body(body);
-                    scene.physics.add_collider(collider, body_handle);
+                    scene.physics.add_collider(collider, &body_handle);
                     scene.physics_binder.bind(model, body_handle);
 
-                    (model, body_handle)
+                    (model, Some(body_handle))
                 }
                 ProjectileKind::Bullet => {
                     let model = SpriteBuilder::new(
@@ -201,7 +201,7 @@ impl Projectile {
                     .with_texture(resource_manager.request_texture("data/particles/light_01.png"))
                     .build(&mut scene.graph);
 
-                    (model, Default::default())
+                    (model, None)
                 }
                 ProjectileKind::Rocket => {
                     let resource = resource_manager
@@ -220,7 +220,7 @@ impl Projectile {
                     .with_radius(1.5)
                     .build(&mut scene.graph);
                     scene.graph.link_nodes(light, model);
-                    (model, Default::default())
+                    (model, None)
                 }
             }
         };
@@ -256,11 +256,10 @@ impl Projectile {
         time: GameTime,
     ) {
         // Fetch current position of projectile.
-        let position = if self.body.is_some() {
+        let position = if let Some(body) = self.body.as_ref() {
             scene
                 .physics
-                .bodies
-                .get(self.body.into())
+                .body(body)
                 .unwrap()
                 .position()
                 .translation
@@ -287,8 +286,13 @@ impl Projectile {
 
         // List of hits sorted by distance from ray origin.
         'hit_loop: for hit in query_buffer.iter() {
-            let collider = scene.physics.colliders.get(hit.collider.into()).unwrap();
-            let body = collider.parent();
+            let collider = scene.physics.collider(&hit.collider).unwrap();
+            let body = scene
+                .physics
+                .body_handle_map()
+                .key_of(&collider.parent())
+                .cloned()
+                .unwrap();
 
             if collider.shape().as_trimesh().is_some() {
                 self.kill();
@@ -296,7 +300,7 @@ impl Projectile {
                 break 'hit_loop;
             } else {
                 for (actor_handle, actor) in actors.pair_iter() {
-                    if actor.get_body() == body.into() && self.owner.is_some() {
+                    if actor.get_body() == body && self.owner.is_some() {
                         let weapon = &weapons[self.owner];
                         // Ignore intersections with owners of weapon.
                         if weapon.owner() != actor_handle {
@@ -319,9 +323,9 @@ impl Projectile {
             let total_velocity = self.dir.scale(self.definition.speed);
 
             // Special case for projectiles with rigid body.
-            if self.body.is_some() {
+            if let Some(body) = self.body.as_ref() {
                 // Move rigid body explicitly.
-                let body = scene.physics.bodies.get_mut(self.body.into()).unwrap();
+                let body = scene.physics.body_mut(body).unwrap();
                 let position = Isometry3 {
                     rotation: Default::default(),
                     translation: Translation3 {
@@ -402,35 +406,47 @@ impl Projectile {
 
             let body_a = scene
                 .physics
-                .colliders
-                .get(proximity_event.collider1)
-                .unwrap()
-                .parent();
+                .body_handle_map()
+                .key_of(
+                    &scene
+                        .physics
+                        .collider_rapier(proximity_event.collider1)
+                        .unwrap()
+                        .parent(),
+                )
+                .cloned()
+                .unwrap();
             let body_b = scene
                 .physics
-                .colliders
-                .get(proximity_event.collider2)
-                .unwrap()
-                .parent();
+                .body_handle_map()
+                .key_of(
+                    &scene
+                        .physics
+                        .collider_rapier(proximity_event.collider2)
+                        .unwrap()
+                        .parent(),
+                )
+                .cloned()
+                .unwrap();
 
             // Check if we got contact with any actor and damage it then.
             for (actor_handle, actor) in actors.pair_iter() {
-                if (body_a == actor.get_body().into() && body_b == self.body.into()
-                    || body_b == actor.get_body().into() && body_a == self.body.into())
-                    && self.owner.is_some()
-                {
-                    dbg!();
-
-                    // Prevent self-damage.
-                    let weapon = &weapons[self.owner];
-                    if weapon.owner() != actor_handle {
-                        self.hits.insert(Hit {
-                            actor: actor_handle,
-                            who: weapon.owner(),
-                        });
-                    } else {
-                        // Make sure that projectile won't die on contact with owner.
-                        owner_contact = true;
+                if let Some(self_body) = self.body {
+                    if (body_a == actor.get_body() && body_b == self_body
+                        || body_b == actor.get_body() && body_a == self_body)
+                        && self.owner.is_some()
+                    {
+                        // Prevent self-damage.
+                        let weapon = &weapons[self.owner];
+                        if weapon.owner() != actor_handle {
+                            self.hits.insert(Hit {
+                                actor: actor_handle,
+                                who: weapon.owner(),
+                            });
+                        } else {
+                            // Make sure that projectile won't die on contact with owner.
+                            owner_contact = true;
+                        }
                     }
                 }
             }
@@ -446,8 +462,8 @@ impl Projectile {
     }
 
     fn clean_up(&mut self, scene: &mut Scene) {
-        if self.body.is_some() {
-            scene.physics.remove_body(self.body);
+        if let Some(body) = self.body.as_ref() {
+            scene.physics.remove_body(body);
         }
         if self.model.is_some() {
             scene.graph.remove_node(self.model);

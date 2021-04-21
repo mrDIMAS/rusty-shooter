@@ -96,7 +96,7 @@ impl Character {
     }
 
     pub fn has_ground_contact(&self, physics: &Physics) -> bool {
-        let body = physics.bodies.get(self.body.into()).unwrap();
+        let body = physics.body(&self.body).unwrap();
         if let Some(iterator) = physics.narrow_phase.contacts_with(body.colliders()[0]) {
             for (_, _, contact) in iterator {
                 for manifold in contact.manifolds.iter() {
@@ -126,7 +126,7 @@ impl Character {
     }
 
     pub fn set_position(&mut self, physics: &mut Physics, position: Vector3<f32>) {
-        let body = physics.bodies.get_mut(self.get_body().into()).unwrap();
+        let body = physics.body_mut(&self.get_body()).unwrap();
         let mut body_position = *body.position();
         body_position.translation.vector = position;
         body.set_position(body_position, true);
@@ -134,8 +134,7 @@ impl Character {
 
     pub fn position(&self, physics: &Physics) -> Vector3<f32> {
         physics
-            .bodies
-            .get(self.get_body().into())
+            .body(&self.get_body())
             .unwrap()
             .position()
             .translation
@@ -245,6 +244,6 @@ impl Character {
 
     pub fn clean_up(&mut self, scene: &mut Scene) {
         scene.remove_node(self.pivot);
-        scene.physics.remove_body(self.body);
+        scene.physics.remove_body(&self.body);
     }
 }

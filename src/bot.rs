@@ -272,7 +272,7 @@ impl LocomotionMachine {
         scene: &mut Scene,
         spine: Handle<Node>,
     ) -> Self {
-        let (idle_animation, walk_animation, jump_animation, falling_animation) = rg3d::futures::join!(
+        let (idle_animation, walk_animation, jump_animation, falling_animation) = rg3d::core::futures::join!(
             resource_manager.request_model(definition.idle_animation),
             resource_manager.request_model(definition.walk_animation),
             resource_manager.request_model(definition.jump_animation),
@@ -434,7 +434,7 @@ impl DyingMachine {
         scene: &mut Scene,
         spine: Handle<Node>,
     ) -> Self {
-        let (dying_animation, dead_animation) = rg3d::futures::join!(
+        let (dying_animation, dead_animation) = rg3d::core::futures::join!(
             resource_manager.request_model(definition.dying_animation),
             resource_manager.request_model(definition.dead_animation)
         );
@@ -548,7 +548,7 @@ impl CombatMachine {
         scene: &mut Scene,
         spine: Handle<Node>,
     ) -> Self {
-        let (aim_animation, whip_animation, hit_reaction_animation) = rg3d::futures::join!(
+        let (aim_animation, whip_animation, hit_reaction_animation) = rg3d::core::futures::join!(
             resource_manager.request_model(definition.aim_animation),
             resource_manager.request_model(definition.whip_animation),
             resource_manager.request_model(definition.hit_reaction_animation)

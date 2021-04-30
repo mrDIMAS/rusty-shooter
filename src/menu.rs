@@ -39,11 +39,11 @@ impl Menu {
     ) -> Self {
         let frame_size = engine.renderer.get_frame_size();
 
-        let font: Font = Font::from_file(
+        let font: Font = rg3d::core::futures::executor::block_on(Font::from_file(
             Path::new("data/ui/SquaresBold.ttf"),
             31.0,
             Font::default_char_set(),
-        )
+        ))
         .unwrap();
         let font = SharedFont(Arc::new(Mutex::new(font)));
 

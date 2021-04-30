@@ -330,7 +330,7 @@ impl Game {
 
         let menu_sound_context = Context::new();
 
-        let buffer = rg3d::futures::executor::block_on(
+        let buffer = rg3d::core::futures::executor::block_on(
             engine
                 .resource_manager
                 .request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true),
@@ -465,7 +465,8 @@ impl Game {
             "Attempting load a save...".to_owned(),
         );
 
-        let mut visitor = Visitor::load_binary(Path::new("save.bin"))?;
+        let mut visitor =
+            rg3d::core::futures::executor::block_on(Visitor::load_binary(Path::new("save.bin")))?;
 
         // Clean up.
         self.destroy_level();
@@ -536,7 +537,7 @@ impl Game {
         let sender = self.events_sender.clone();
 
         std::thread::spawn(move || {
-            let level = rg3d::futures::executor::block_on(Level::new(
+            let level = rg3d::core::futures::executor::block_on(Level::new(
                 resource_manager,
                 control_scheme,
                 sender,
@@ -659,7 +660,7 @@ impl Game {
             }
 
             if let Some(ref mut level) = self.level {
-                rg3d::futures::executor::block_on(level.handle_message(
+                rg3d::core::futures::executor::block_on(level.handle_message(
                     &mut self.engine,
                     &message,
                     time,

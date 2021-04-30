@@ -50,11 +50,11 @@ impl Hud {
         let ctx = &mut engine.user_interface.build_ctx();
         let resource_manager = engine.resource_manager.clone();
 
-        let font = Font::from_file(
+        let font = rg3d::core::futures::executor::block_on(Font::from_file(
             Path::new("data/ui/SquaresBold.ttf"),
             35.0,
             Font::default_char_set(),
-        )
+        ))
         .unwrap();
         let font = SharedFont(Arc::new(Mutex::new(font)));
 

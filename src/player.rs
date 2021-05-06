@@ -4,6 +4,7 @@ use crate::{
     level::UpdateContext,
     message::Message,
 };
+use rg3d::sound::context::SoundContext;
 use rg3d::{
     core::rand::Rng,
     core::{
@@ -20,7 +21,6 @@ use rg3d::{
     rand,
     scene::transform::TransformBuilder,
     scene::{base::BaseBuilder, camera::CameraBuilder, node::Node, Scene},
-    sound::context::Context,
 };
 use std::{
     ops::{Deref, DerefMut},
@@ -404,7 +404,7 @@ impl Player {
             ));
     }
 
-    fn update_listener(&mut self, sound_context: Context) {
+    fn update_listener(&mut self, sound_context: SoundContext) {
         let mut sound_context = sound_context.state();
         let listener = sound_context.listener_mut();
         listener.set_basis(self.listener_basis);

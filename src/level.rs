@@ -13,6 +13,7 @@ use crate::{
     GameEngine, GameTime, MatchOptions,
 };
 use rg3d::sound::context;
+use rg3d::sound::context::SoundContext;
 use rg3d::sound::effects::{BaseEffect, Effect, EffectInput};
 use rg3d::sound::source::generic::GenericSourceBuilder;
 use rg3d::sound::source::spatial::SpatialSourceBuilder;
@@ -36,7 +37,6 @@ use rg3d::{
     scene::{
         self, base::BaseBuilder, camera::CameraBuilder, node::Node, physics::RayCastOptions, Scene,
     },
-    sound::context::Context,
     utils::log::MessageKind,
     utils::{log::Log, navmesh::Navmesh},
 };
@@ -50,12 +50,12 @@ pub const RESPAWN_TIME: f32 = 4.0;
 
 #[derive(Default)]
 pub struct SoundManager {
-    context: Context,
+    context: SoundContext,
     reverb: Handle<Effect>,
 }
 
 impl SoundManager {
-    pub fn new(context: Context) -> Self {
+    pub fn new(context: SoundContext) -> Self {
         let mut base_effect = BaseEffect::default();
         base_effect.set_gain(0.7);
         let mut reverb = rg3d::sound::effects::reverb::Reverb::new(base_effect);

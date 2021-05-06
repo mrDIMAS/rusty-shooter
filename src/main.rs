@@ -29,6 +29,7 @@ use crate::{
 };
 use rg3d::gui::message::ProgressBarMessage;
 use rg3d::gui::{HorizontalAlignment, VerticalAlignment};
+use rg3d::sound::context::SoundContext;
 use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{
     core::{
@@ -48,10 +49,7 @@ use rg3d::{
         UserInterface,
     },
     scene::Scene,
-    sound::{
-        context::Context,
-        source::{generic::GenericSourceBuilder, SoundSource, Status},
-    },
+    sound::source::{generic::GenericSourceBuilder, SoundSource, Status},
     utils::translate_event,
 };
 use std::{
@@ -90,7 +88,7 @@ pub struct Game {
     events_sender: Sender<Message>,
     load_context: Option<Arc<Mutex<LoadContext>>>,
     loading_screen: LoadingScreen,
-    menu_sound_context: Context,
+    menu_sound_context: SoundContext,
     music: Handle<SoundSource>,
 }
 
@@ -328,7 +326,7 @@ impl Game {
 
         let (tx, rx) = mpsc::channel();
 
-        let menu_sound_context = Context::new();
+        let menu_sound_context = SoundContext::new();
 
         let buffer = rg3d::core::futures::executor::block_on(
             engine

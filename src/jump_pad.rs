@@ -4,7 +4,7 @@ use rg3d::{
         pool::{Handle, Pool, PoolIterator},
         visitor::{Visit, VisitResult, Visitor},
     },
-    scene::RigidBodyHandle,
+    engine::RigidBodyHandle,
 };
 
 pub struct JumpPad {

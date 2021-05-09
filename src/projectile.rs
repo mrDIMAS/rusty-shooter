@@ -15,6 +15,7 @@ use rg3d::{
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
+    engine::RigidBodyHandle,
     physics::{
         dynamics::{BodyStatus, RigidBodyBuilder},
         geometry::{ColliderBuilder, InteractionGroups, IntersectionEvent},
@@ -29,7 +30,7 @@ use rg3d::{
         physics::RayCastOptions,
         sprite::SpriteBuilder,
         transform::TransformBuilder,
-        RigidBodyHandle, Scene,
+        Scene,
     },
 };
 use std::{collections::HashSet, path::PathBuf, sync::mpsc::Sender};

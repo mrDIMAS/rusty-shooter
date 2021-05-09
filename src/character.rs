@@ -5,7 +5,8 @@ use rg3d::{
         pool::Handle,
         visitor::{Visit, VisitError, VisitResult, Visitor},
     },
-    scene::{node::Node, physics::Physics, RigidBodyHandle, Scene},
+    engine::RigidBodyHandle,
+    scene::{node::Node, physics::Physics, Scene},
 };
 use std::sync::mpsc::Sender;
 

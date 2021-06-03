@@ -840,7 +840,7 @@ impl Bot {
 
         let body = scene.physics.add_body(
             RigidBodyBuilder::new(BodyStatus::Dynamic)
-                .translation(position.x, position.y, position.z)
+                .translation(position)
                 .build(),
         );
         scene.physics.add_collider(
@@ -940,7 +940,7 @@ impl Bot {
                     let body = scene
                         .physics
                         .body_handle_map()
-                        .key_of(&collider.parent())
+                        .key_of(&collider.parent().unwrap())
                         .cloned()
                         .unwrap();
 

@@ -211,14 +211,30 @@ impl ActorContainer {
                         .scene
                         .physics
                         .body_handle_map()
-                        .key_of(&context.scene.physics.collider_rapier(a).unwrap().parent())
+                        .key_of(
+                            &context
+                                .scene
+                                .physics
+                                .collider_rapier(a)
+                                .unwrap()
+                                .parent()
+                                .unwrap(),
+                        )
                         .cloned()
                         .unwrap();
                     let coll_b = context
                         .scene
                         .physics
                         .body_handle_map()
-                        .key_of(&context.scene.physics.collider_rapier(b).unwrap().parent())
+                        .key_of(
+                            &context
+                                .scene
+                                .physics
+                                .collider_rapier(b)
+                                .unwrap()
+                                .parent()
+                                .unwrap(),
+                        )
                         .cloned()
                         .unwrap();
 

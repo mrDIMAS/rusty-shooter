@@ -181,8 +181,8 @@ impl Projectile {
                     .build(&mut scene.graph);
 
                     let collider = ColliderBuilder::ball(size).sensor(true).build();
-                    let body = RigidBodyBuilder::new(BodyStatus::Kinematic)
-                        .translation(position.x, position.y, position.z)
+                    let body = RigidBodyBuilder::new(BodyStatus::KinematicPositionBased)
+                        .translation(position)
                         .build();
                     let body_handle = scene.physics.add_body(body);
                     scene.physics.add_collider(collider, &body_handle);
@@ -291,7 +291,7 @@ impl Projectile {
             let body = scene
                 .physics
                 .body_handle_map()
-                .key_of(&collider.parent())
+                .key_of(&collider.parent().unwrap())
                 .cloned()
                 .unwrap();
 
@@ -413,7 +413,8 @@ impl Projectile {
                         .physics
                         .collider_rapier(proximity_event.collider1)
                         .unwrap()
-                        .parent(),
+                        .parent()
+                        .unwrap(),
                 )
                 .cloned()
                 .unwrap();
@@ -425,7 +426,8 @@ impl Projectile {
                         .physics
                         .collider_rapier(proximity_event.collider2)
                         .unwrap()
-                        .parent(),
+                        .parent()
+                        .unwrap(),
                 )
                 .cloned()
                 .unwrap();

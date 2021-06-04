@@ -936,10 +936,11 @@ impl Bot {
                 );
 
                 'hit_loop: for hit in query_buffer.iter() {
-                    let collider = scene.physics.collider(&hit.collider).unwrap();
+                    let collider = scene.physics.colliders.get(&hit.collider).unwrap();
                     let body = scene
                         .physics
-                        .body_handle_map()
+                        .bodies
+                        .handle_map()
                         .key_of(&collider.parent().unwrap())
                         .cloned()
                         .unwrap();
@@ -1046,7 +1047,7 @@ impl Bot {
             .set_target(look_dir.x.atan2(look_dir.z))
             .update(time.delta);
 
-        let body = physics.body_mut(&self.body).unwrap();
+        let body = physics.bodies.get_mut(&self.body).unwrap();
         let mut position = *body.position();
         position.rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), angle);
         body.set_position(position, true);
@@ -1087,7 +1088,8 @@ impl Bot {
             let body = context
                 .scene
                 .physics
-                .body_mut(&self.character.body)
+                .bodies
+                .get_mut(&self.character.body)
                 .unwrap();
             let (in_close_combat, look_dir) = match self.target.as_ref() {
                 None => (

@@ -172,7 +172,7 @@ impl ActorContainer {
             }
             if !is_dead {
                 for (item_handle, item) in context.items.pair_iter() {
-                    let body = context.scene.physics.body(&actor.get_body()).unwrap();
+                    let body = context.scene.physics.bodies.get(&actor.get_body()).unwrap();
                     let distance = (context.scene.graph[item.get_pivot()].global_position()
                         - body.position().translation.vector)
                         .norm();
@@ -210,12 +210,14 @@ impl ActorContainer {
                     let coll_a = context
                         .scene
                         .physics
-                        .body_handle_map()
+                        .bodies
+                        .handle_map()
                         .key_of(
                             &context
                                 .scene
                                 .physics
-                                .collider_rapier(a)
+                                .colliders
+                                .native_ref(a)
                                 .unwrap()
                                 .parent()
                                 .unwrap(),
@@ -225,12 +227,14 @@ impl ActorContainer {
                     let coll_b = context
                         .scene
                         .physics
-                        .body_handle_map()
+                        .bodies
+                        .handle_map()
                         .key_of(
                             &context
                                 .scene
                                 .physics
-                                .collider_rapier(b)
+                                .colliders
+                                .native_ref(b)
                                 .unwrap()
                                 .parent()
                                 .unwrap(),
@@ -238,7 +242,12 @@ impl ActorContainer {
                         .cloned()
                         .unwrap();
 
-                    let body = context.scene.physics.body_mut(&actor.get_body()).unwrap();
+                    let body = context
+                        .scene
+                        .physics
+                        .bodies
+                        .get_mut(&actor.get_body())
+                        .unwrap();
                     let capsule_collider = body.colliders()[0];
 
                     if capsule_collider == a && coll_b == jump_pad.rigid_body()

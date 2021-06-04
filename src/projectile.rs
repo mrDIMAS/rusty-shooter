@@ -260,7 +260,8 @@ impl Projectile {
         let position = if let Some(body) = self.body.as_ref() {
             scene
                 .physics
-                .body(body)
+                .bodies
+                .get(body)
                 .unwrap()
                 .position()
                 .translation
@@ -287,10 +288,11 @@ impl Projectile {
 
         // List of hits sorted by distance from ray origin.
         'hit_loop: for hit in query_buffer.iter() {
-            let collider = scene.physics.collider(&hit.collider).unwrap();
+            let collider = scene.physics.colliders.get(&hit.collider).unwrap();
             let body = scene
                 .physics
-                .body_handle_map()
+                .bodies
+                .handle_map()
                 .key_of(&collider.parent().unwrap())
                 .cloned()
                 .unwrap();
@@ -326,7 +328,7 @@ impl Projectile {
             // Special case for projectiles with rigid body.
             if let Some(body) = self.body.as_ref() {
                 // Move rigid body explicitly.
-                let body = scene.physics.body_mut(body).unwrap();
+                let body = scene.physics.bodies.get_mut(body).unwrap();
                 let position = Isometry3 {
                     rotation: Default::default(),
                     translation: Translation3 {
@@ -407,11 +409,13 @@ impl Projectile {
 
             let body_a = scene
                 .physics
-                .body_handle_map()
+                .bodies
+                .handle_map()
                 .key_of(
                     &scene
                         .physics
-                        .collider_rapier(proximity_event.collider1)
+                        .colliders
+                        .native_ref(proximity_event.collider1)
                         .unwrap()
                         .parent()
                         .unwrap(),
@@ -420,11 +424,13 @@ impl Projectile {
                 .unwrap();
             let body_b = scene
                 .physics
-                .body_handle_map()
+                .bodies
+                .handle_map()
                 .key_of(
                     &scene
                         .physics
-                        .collider_rapier(proximity_event.collider2)
+                        .colliders
+                        .native_ref(proximity_event.collider2)
                         .unwrap()
                         .parent()
                         .unwrap(),

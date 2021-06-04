@@ -292,7 +292,8 @@ impl Player {
         let body = context
             .scene
             .physics
-            .body_mut(&self.character.body)
+            .bodies
+            .get_mut(&self.character.body)
             .unwrap();
         body.set_angvel(Default::default(), true);
         if let Some(normalized_velocity) = velocity.try_normalize(std::f32::EPSILON) {
@@ -538,7 +539,8 @@ impl Player {
             let velocity = context
                 .scene
                 .physics
-                .body(&self.character.body)
+                .bodies
+                .get(&self.character.body)
                 .unwrap()
                 .linvel();
 

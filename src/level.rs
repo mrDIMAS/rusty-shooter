@@ -96,7 +96,8 @@ impl SoundManager {
                     .await
                     .unwrap();
                 let shot_sound = SpatialSourceBuilder::new(
-                    GenericSourceBuilder::new(shot_buffer.into())
+                    GenericSourceBuilder::new()
+                        .with_buffer(shot_buffer.into())
                         .with_status(Status::Playing)
                         .with_play_once(true)
                         .with_gain(*gain)

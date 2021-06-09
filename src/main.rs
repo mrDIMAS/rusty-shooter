@@ -335,7 +335,8 @@ impl Game {
         )
         .unwrap();
         let music = menu_sound_context.state().add_source(
-            GenericSourceBuilder::new(buffer.into())
+            GenericSourceBuilder::new()
+                .with_buffer(buffer.into())
                 .with_looping(true)
                 .with_status(Status::Playing)
                 .with_gain(0.25)

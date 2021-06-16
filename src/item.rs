@@ -1,4 +1,5 @@
 use crate::{effects::EffectKind, message::Message, rg3d::core::math::Vector3Ext, GameTime};
+use rg3d::engine::resource_manager::MaterialSearchOptions;
 use rg3d::sound::pool::PoolIteratorMut;
 use rg3d::{
     core::{
@@ -9,6 +10,7 @@ use rg3d::{
     engine::resource_manager::ResourceManager,
     scene::{base::BaseBuilder, graph::Graph, node::Node, transform::TransformBuilder, Scene},
 };
+use std::path::PathBuf;
 use std::{path::Path, sync::mpsc::Sender};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -174,7 +176,10 @@ impl Item {
         let definition = Self::get_definition(kind);
 
         let model = resource_manager
-            .request_model(Path::new(definition.model))
+            .request_model(
+                Path::new(definition.model),
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures")),
+            )
             .await
             .unwrap()
             .instantiate_geometry(scene);

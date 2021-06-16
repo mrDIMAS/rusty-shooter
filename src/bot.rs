@@ -7,6 +7,7 @@ use crate::{
     weapon::WeaponContainer,
     GameTime,
 };
+use rg3d::engine::resource_manager::MaterialSearchOptions;
 use rg3d::{
     animation::{
         machine::{self, Machine, PoseNode, State},
@@ -39,6 +40,7 @@ use rg3d::{
     utils::log::{Log, MessageKind},
     utils::navmesh::Navmesh,
 };
+use std::path::PathBuf;
 use std::{
     ops::{Deref, DerefMut},
     path::Path,
@@ -273,10 +275,22 @@ impl LocomotionMachine {
         spine: Handle<Node>,
     ) -> Self {
         let (idle_animation, walk_animation, jump_animation, falling_animation) = rg3d::core::futures::join!(
-            resource_manager.request_model(definition.idle_animation),
-            resource_manager.request_model(definition.walk_animation),
-            resource_manager.request_model(definition.jump_animation),
-            resource_manager.request_model(definition.falling_animation)
+            resource_manager.request_model(
+                definition.idle_animation,
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
+            ),
+            resource_manager.request_model(
+                definition.walk_animation,
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
+            ),
+            resource_manager.request_model(
+                definition.jump_animation,
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
+            ),
+            resource_manager.request_model(
+                definition.falling_animation,
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
+            )
         );
 
         let idle_animation = prepare_animation(scene, idle_animation.unwrap(), model, spine);
@@ -435,8 +449,14 @@ impl DyingMachine {
         spine: Handle<Node>,
     ) -> Self {
         let (dying_animation, dead_animation) = rg3d::core::futures::join!(
-            resource_manager.request_model(definition.dying_animation),
-            resource_manager.request_model(definition.dead_animation)
+            resource_manager.request_model(
+                definition.dying_animation,
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
+            ),
+            resource_manager.request_model(
+                definition.dead_animation,
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
+            )
         );
 
         let dying_animation = prepare_animation(scene, dying_animation.unwrap(), model, spine);
@@ -549,9 +569,18 @@ impl CombatMachine {
         spine: Handle<Node>,
     ) -> Self {
         let (aim_animation, whip_animation, hit_reaction_animation) = rg3d::core::futures::join!(
-            resource_manager.request_model(definition.aim_animation),
-            resource_manager.request_model(definition.whip_animation),
-            resource_manager.request_model(definition.hit_reaction_animation)
+            resource_manager.request_model(
+                definition.aim_animation,
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
+            ),
+            resource_manager.request_model(
+                definition.whip_animation,
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
+            ),
+            resource_manager.request_model(
+                definition.hit_reaction_animation,
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
+            )
         );
 
         let aim_animation = prepare_animation(scene, aim_animation.unwrap(), model, spine);
@@ -812,7 +841,10 @@ impl Bot {
         let body_height = 1.25;
 
         let model = resource_manager
-            .request_model(Path::new(definition.model))
+            .request_model(
+                Path::new(definition.model),
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures")),
+            )
             .await
             .unwrap()
             .instantiate_geometry(scene);

@@ -12,6 +12,7 @@ use crate::{
     weapon::{Weapon, WeaponContainer, WeaponKind},
     GameEngine, GameTime, MatchOptions,
 };
+use rg3d::engine::resource_manager::MaterialSearchOptions;
 use rg3d::sound::context;
 use rg3d::sound::context::SoundContext;
 use rg3d::sound::effects::{BaseEffect, Effect, EffectInput};
@@ -631,7 +632,10 @@ impl Level {
             .build(&mut scene.graph);
 
         let map_model = resource_manager
-            .request_model(Path::new("data/models/dm6.fbx"))
+            .request_model(
+                Path::new("data/models/dm6.fbx"),
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures")),
+            )
             .await
             .unwrap();
 

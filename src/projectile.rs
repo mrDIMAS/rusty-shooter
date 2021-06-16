@@ -5,6 +5,7 @@ use crate::{
     weapon::{Weapon, WeaponContainer},
     GameTime,
 };
+use rg3d::engine::resource_manager::MaterialSearchOptions;
 use rg3d::{
     core::rand::Rng,
     core::{
@@ -206,7 +207,12 @@ impl Projectile {
                 }
                 ProjectileKind::Rocket => {
                     let resource = resource_manager
-                        .request_model("data/models/rocket.FBX")
+                        .request_model(
+                            "data/models/rocket.FBX",
+                            MaterialSearchOptions::MaterialsDirectory(PathBuf::from(
+                                "data/textures",
+                            )),
+                        )
                         .await
                         .unwrap();
                     let model = resource.instantiate_geometry(scene);

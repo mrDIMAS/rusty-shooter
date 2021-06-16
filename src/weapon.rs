@@ -1,6 +1,7 @@
 use crate::{
     actor::Actor, actor::ActorContainer, message::Message, projectile::ProjectileKind, GameTime,
 };
+use rg3d::engine::resource_manager::MaterialSearchOptions;
 use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{
     core::{
@@ -176,7 +177,10 @@ impl Weapon {
         let definition = Self::get_definition(kind);
 
         let model = resource_manager
-            .request_model(Path::new(definition.model))
+            .request_model(
+                Path::new(definition.model),
+                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures")),
+            )
             .await
             .unwrap()
             .instantiate_geometry(scene);

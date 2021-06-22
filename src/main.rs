@@ -405,7 +405,7 @@ impl Game {
                     }
 
                     // Render at max speed
-                    game.engine.render(fixed_timestep).unwrap();
+                    game.engine.render().unwrap();
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => {

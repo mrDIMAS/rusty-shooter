@@ -27,8 +27,10 @@ use crate::{
     actor::Actor, control_scheme::ControlScheme, hud::Hud, level::Level, menu::Menu,
     message::Message,
 };
+use rg3d::engine::resource_manager::TextureImportOptions;
 use rg3d::gui::message::ProgressBarMessage;
 use rg3d::gui::{HorizontalAlignment, VerticalAlignment};
+use rg3d::resource::texture::CompressionOptions;
 use rg3d::sound::context::SoundContext;
 use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{

@@ -12,7 +12,8 @@ use rg3d::{
         graph::Graph,
         node::Node,
         particle_system::{
-            BaseEmitterBuilder, CylinderEmitterBuilder, ParticleSystemBuilder, SphereEmitterBuilder,
+            emitter::base::BaseEmitterBuilder, emitter::cylinder::CylinderEmitterBuilder,
+            emitter::sphere::SphereEmitterBuilder, ParticleSystemBuilder,
         },
         transform::TransformBuilder,
     },

@@ -70,7 +70,7 @@ fn create_steam(
         .with_height(0.2)
         .with_radius(0.2)
         .build()])
-    .with_texture(resource_manager.request_texture(Path::new("data/particles/smoke_04.tga")))
+    .with_texture(resource_manager.request_texture("data/particles/smoke_04.tga", None))
     .build(graph)
 }
 
@@ -106,7 +106,7 @@ fn create_bullet_impact(
     )
     .with_radius(0.01)
     .build()])
-    .with_texture(resource_manager.request_texture(Path::new("data/particles/circle_05.png")))
+    .with_texture(resource_manager.request_texture("data/particles/circle_05.png", None))
     .build(graph)
 }
 
@@ -145,7 +145,7 @@ fn create_smoke(
     )
     .with_radius(0.01)
     .build()])
-    .with_texture(resource_manager.request_texture(Path::new("data/particles/smoke_04.tga")))
+    .with_texture(resource_manager.request_texture("data/particles/smoke_04.tga", None))
     .build(graph)
 }
 
@@ -181,6 +181,6 @@ fn create_item_appear(
     )
     .with_radius(0.01)
     .build()])
-    .with_texture(resource_manager.request_texture(Path::new("data/particles/star_09.png")))
+    .with_texture(resource_manager.request_texture("data/particles/star_09.png", None))
     .build(graph)
 }

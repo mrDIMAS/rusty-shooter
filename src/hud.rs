@@ -83,7 +83,7 @@ impl Hud {
                             .on_column(1),
                     )
                     .with_texture(utils::into_gui_texture(
-                        resource_manager.request_texture(Path::new("data/ui/crosshair.tga")),
+                        resource_manager.request_texture("data/ui/crosshair.tga", None),
                     ))
                     .build(ctx),
                 )
@@ -207,7 +207,7 @@ impl Hud {
                                 )
                                 .with_texture(utils::into_gui_texture(
                                     resource_manager
-                                        .request_texture(Path::new("data/ui/health_icon.png")),
+                                        .request_texture("data/ui/health_icon.png", None),
                                 ))
                                 .build(ctx),
                             )
@@ -247,8 +247,7 @@ impl Hud {
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
                                 .with_texture(utils::into_gui_texture(
-                                    resource_manager
-                                        .request_texture(Path::new("data/ui/ammo_icon.png")),
+                                    resource_manager.request_texture("data/ui/ammo_icon.png", None),
                                 ))
                                 .build(ctx),
                             )
@@ -289,7 +288,7 @@ impl Hud {
                                 )
                                 .with_texture(utils::into_gui_texture(
                                     resource_manager
-                                        .request_texture(Path::new("data/ui/shield_icon.png")),
+                                        .request_texture("data/ui/shield_icon.png", None),
                                 ))
                                 .build(ctx),
                             )

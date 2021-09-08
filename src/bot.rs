@@ -31,11 +31,12 @@ use rg3d::{
     scene::{
         self,
         base::BaseBuilder,
+        debug::SceneDrawingContext,
         graph::Graph,
         node::Node,
         physics::{Physics, RayCastOptions},
         transform::TransformBuilder,
-        Scene, SceneDrawingContext,
+        Scene,
     },
     utils::log::{Log, MessageKind},
     utils::navmesh::Navmesh,
@@ -1036,7 +1037,7 @@ impl Bot {
         for pts in self.path.windows(2) {
             let a = pts[0];
             let b = pts[1];
-            context.add_line(scene::Line {
+            context.add_line(scene::debug::Line {
                 begin: a,
                 end: b,
                 color: Color::from_rgba(255, 0, 0, 255),

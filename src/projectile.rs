@@ -5,22 +5,24 @@ use crate::{
     weapon::{Weapon, WeaponContainer},
     GameTime,
 };
+use rg3d::core::algebra::Point3;
 use rg3d::engine::resource_manager::MaterialSearchOptions;
 use rg3d::{
     core::rand::Rng,
     core::{
-        algebra::{Matrix3, UnitQuaternion, Vector3},
+        algebra::{Isometry3, Matrix3, Translation3, UnitQuaternion, Vector3},
         color::Color,
         math::{ray::Ray, Vector3Ext},
         pool::{Handle, Pool, PoolIteratorMut},
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    engine::RigidBodyHandle,
-    physics::{
-        dynamics::{BodyStatus, RigidBodyBuilder},
-        geometry::{ColliderBuilder, InteractionGroups, IntersectionEvent},
-        na::{Isometry3, Translation3},
+    physics3d::{
+        rapier::{
+            dynamics::{BodyStatus, RigidBodyBuilder},
+            geometry::{ColliderBuilder, InteractionGroups, IntersectionEvent},
+        },
+        RayCastOptions, RigidBodyHandle,
     },
     rand,
     scene::{
@@ -28,7 +30,6 @@ use rg3d::{
         graph::Graph,
         light::{point::PointLightBuilder, BaseLightBuilder},
         node::Node,
-        physics::RayCastOptions,
         sprite::SpriteBuilder,
         transform::TransformBuilder,
         Scene,
@@ -288,7 +289,8 @@ impl Projectile {
         let mut query_buffer = Vec::default();
         scene.physics.cast_ray(
             RayCastOptions {
-                ray,
+                ray_origin: Point3::from(ray.origin),
+                ray_direction: ray.origin,
                 max_len: ray.dir.norm(),
                 groups: InteractionGroups::all(),
                 sort_results: true,

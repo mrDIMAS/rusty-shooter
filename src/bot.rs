@@ -22,21 +22,16 @@ use rg3d::{
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    physics::{
-        dynamics::{BodyStatus, RigidBodyBuilder},
-        geometry::{ColliderBuilder, InteractionGroups},
+    physics3d::{
+        rapier::dynamics::{BodyStatus, RigidBodyBuilder},
+        rapier::geometry::{ColliderBuilder, InteractionGroups},
+        RayCastOptions,
     },
     rand,
     resource::model::Model,
     scene::{
-        self,
-        base::BaseBuilder,
-        debug::SceneDrawingContext,
-        graph::Graph,
-        node::Node,
-        physics::{Physics, RayCastOptions},
-        transform::TransformBuilder,
-        Scene,
+        self, base::BaseBuilder, debug::SceneDrawingContext, graph::Graph, node::Node,
+        physics::Physics, transform::TransformBuilder, Scene,
     },
     utils::log::{Log, MessageKind},
     utils::navmesh::Navmesh,
@@ -960,7 +955,8 @@ impl Bot {
                 let ray = Ray::from_two_points(desc.position, position);
                 scene.physics.cast_ray(
                     RayCastOptions {
-                        ray,
+                        ray_origin: Point3::from(ray.origin),
+                        ray_direction: ray.dir,
                         groups: InteractionGroups::all(),
                         max_len: ray.dir.norm(),
                         sort_results: true,

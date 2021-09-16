@@ -14,7 +14,7 @@ use rg3d::{
         visitor::{Visit, VisitResult, Visitor},
     },
     event::{DeviceEvent, ElementState, Event, MouseScrollDelta, WindowEvent},
-    physics::{
+    physics3d::rapier::{
         dynamics::{BodyStatus, RigidBodyBuilder},
         geometry::ColliderBuilder,
     },

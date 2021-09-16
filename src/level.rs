@@ -12,39 +12,42 @@ use crate::{
     weapon::{Weapon, WeaponContainer, WeaponKind},
     GameEngine, GameTime, MatchOptions,
 };
-use rg3d::engine::resource_manager::MaterialSearchOptions;
-use rg3d::sound::context;
-use rg3d::sound::context::SoundContext;
-use rg3d::sound::effects::{BaseEffect, Effect, EffectInput};
-use rg3d::sound::source::generic::GenericSourceBuilder;
-use rg3d::sound::source::spatial::SpatialSourceBuilder;
-use rg3d::sound::source::Status;
+use rg3d::core::algebra::Point3;
 use rg3d::{
-    core::rand::Rng,
     core::{
         algebra::{Matrix3, Vector3},
         color::Color,
         math::{aabb::AxisAlignedBoundingBox, ray::Ray, PositionProvider, Vector3Ext},
         pool::Handle,
+        rand::Rng,
         visitor::{Visit, VisitResult, Visitor},
     },
-    engine::resource_manager::ResourceManager,
+    engine::resource_manager::{MaterialSearchOptions, ResourceManager},
     event::Event,
-    physics::{
-        geometry::{ContactEvent, InteractionGroups, IntersectionEvent},
-        pipeline::ChannelEventCollector,
+    physics3d::{
+        rapier::{
+            geometry::{ContactEvent, InteractionGroups, IntersectionEvent},
+            pipeline::ChannelEventCollector,
+        },
+        RayCastOptions,
     },
     rand,
-    scene::{
-        self, base::BaseBuilder, camera::CameraBuilder, node::Node, physics::RayCastOptions, Scene,
+    scene::{self, base::BaseBuilder, camera::CameraBuilder, node::Node, Scene},
+    sound::{
+        context,
+        context::SoundContext,
+        effects::{BaseEffect, Effect, EffectInput},
+        source::{generic::GenericSourceBuilder, spatial::SpatialSourceBuilder, Status},
     },
-    utils::log::MessageKind,
-    utils::{log::Log, navmesh::Navmesh},
+    utils::{
+        log::{Log, MessageKind},
+        navmesh::Navmesh,
+    },
 };
-use std::time::Duration;
 use std::{
     path::{Path, PathBuf},
     sync::{mpsc::Sender, Arc, RwLock},
+    time::Duration,
 };
 
 pub const RESPAWN_TIME: f32 = 4.0;
@@ -788,7 +791,8 @@ impl Level {
         let scene = &mut engine.scenes[self.scene];
         let ray = Ray::from_two_points(from, to);
         let options = RayCastOptions {
-            ray,
+            ray_origin: Point3::from(ray.origin),
+            ray_direction: ray.dir,
             max_len: std::f32::MAX,
             groups: InteractionGroups::all(),
             sort_results: true,
@@ -1261,7 +1265,8 @@ impl Level {
                     let ray =
                         Ray::from_two_points(position, position - Vector3::new(0.0, 1000.0, 0.0));
                     let options = RayCastOptions {
-                        ray,
+                        ray_origin: Point3::from(ray.origin),
+                        ray_direction: ray.dir,
                         max_len: std::f32::MAX,
                         groups: InteractionGroups::all(),
                         sort_results: true,

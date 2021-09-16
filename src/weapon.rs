@@ -1,6 +1,7 @@
 use crate::{
     actor::Actor, actor::ActorContainer, message::Message, projectile::ProjectileKind, GameTime,
 };
+use rg3d::core::algebra::Point3;
 use rg3d::engine::resource_manager::MaterialSearchOptions;
 use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{
@@ -12,13 +13,13 @@ use rg3d::{
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    physics::geometry::InteractionGroups,
+    physics3d::{rapier::geometry::InteractionGroups, RayCastOptions},
     scene::{
         base::BaseBuilder,
         graph::Graph,
         light::{point::PointLightBuilder, BaseLightBuilder},
         node::Node,
-        physics::{Physics, RayCastOptions},
+        physics::Physics,
         Scene,
     },
 };
@@ -270,7 +271,8 @@ impl Weapon {
         let mut query_buffer = Vec::default();
         physics.cast_ray(
             RayCastOptions {
-                ray,
+                ray_origin: Point3::from(ray.origin),
+                ray_direction: ray.dir,
                 max_len: std::f32::MAX,
                 groups: InteractionGroups::all(),
                 sort_results: true,

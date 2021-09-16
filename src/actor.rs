@@ -9,7 +9,7 @@ use rg3d::{
         },
         visitor::{Visit, VisitResult, Visitor},
     },
-    physics::geometry::ContactEvent,
+    physics3d::rapier::geometry::ContactEvent,
     scene::Scene,
 };
 use std::ops::{Deref, DerefMut};

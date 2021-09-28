@@ -1,7 +1,11 @@
 use crate::{
     control_scheme::ControlScheme, match_menu::MatchMenu, message::Message,
-    options_menu::OptionsMenu, GameEngine, Gui, GuiMessage, UINodeHandle,
+    options_menu::OptionsMenu,
 };
+use rg3d::core::pool::Handle;
+use rg3d::engine::Engine;
+use rg3d::gui::message::UiMessage;
+use rg3d::gui::{UiNode, UserInterface};
 use rg3d::{
     event::{Event, WindowEvent},
     gui::{
@@ -21,19 +25,19 @@ use std::{
 
 pub struct Menu {
     sender: Sender<Message>,
-    root: UINodeHandle,
-    btn_new_game: UINodeHandle,
-    btn_save_game: UINodeHandle,
-    btn_settings: UINodeHandle,
-    btn_load_game: UINodeHandle,
-    btn_quit_game: UINodeHandle,
+    root: Handle<UiNode>,
+    btn_new_game: Handle<UiNode>,
+    btn_save_game: Handle<UiNode>,
+    btn_settings: Handle<UiNode>,
+    btn_load_game: Handle<UiNode>,
+    btn_quit_game: Handle<UiNode>,
     options_menu: OptionsMenu,
     match_menu: MatchMenu,
 }
 
 impl Menu {
     pub fn new(
-        engine: &mut GameEngine,
+        engine: &mut Engine,
         control_scheme: Arc<RwLock<ControlScheme>>,
         sender: Sender<Message>,
     ) -> Self {
@@ -54,7 +58,7 @@ impl Menu {
         let btn_save_game;
         let btn_load_game;
         let btn_quit_game;
-        let root: UINodeHandle = GridBuilder::new(
+        let root: Handle<UiNode> = GridBuilder::new(
             WidgetBuilder::new()
                 .with_width(frame_size.0 as f32)
                 .with_height(frame_size.1 as f32)
@@ -161,7 +165,7 @@ impl Menu {
         }
     }
 
-    pub fn set_visible(&mut self, ui: &mut Gui, visible: bool) {
+    pub fn set_visible(&mut self, ui: &mut UserInterface, visible: bool) {
         ui.send_message(WidgetMessage::visibility(
             self.root,
             MessageDirection::ToWidget,
@@ -179,11 +183,11 @@ impl Menu {
         }
     }
 
-    pub fn is_visible(&self, ui: &Gui) -> bool {
+    pub fn is_visible(&self, ui: &UserInterface) -> bool {
         ui.node(self.root).visibility()
     }
 
-    pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
+    pub fn process_input_event(&mut self, engine: &mut Engine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             if let WindowEvent::Resized(new_size) = event {
                 engine.user_interface.send_message(WidgetMessage::width(
@@ -202,7 +206,7 @@ impl Menu {
         self.options_menu.process_input_event(engine, event);
     }
 
-    pub fn handle_ui_event(&mut self, engine: &mut GameEngine, message: &GuiMessage) {
+    pub fn handle_ui_event(&mut self, engine: &mut Engine, message: &UiMessage) {
         if let UiMessageData::Button(msg) = message.data() {
             if let ButtonMessage::Click = msg {
                 if message.destination() == self.btn_new_game {

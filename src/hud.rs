@@ -1,8 +1,11 @@
 use crate::{
     leader_board::{LeaderBoard, LeaderBoardUI},
     message::Message,
-    GameEngine, GameTime, Gui, MatchOptions, UINodeHandle,
+    GameTime, MatchOptions,
 };
+use rg3d::core::pool::Handle;
+use rg3d::engine::Engine;
+use rg3d::gui::{UiNode, UserInterface};
 use rg3d::{
     core::color::Color,
     event::{Event, WindowEvent},
@@ -27,23 +30,23 @@ use std::{
 };
 
 pub struct Hud {
-    root: UINodeHandle,
-    health: UINodeHandle,
-    armor: UINodeHandle,
-    ammo: UINodeHandle,
-    time: UINodeHandle,
-    message: UINodeHandle,
+    root: Handle<UiNode>,
+    health: Handle<UiNode>,
+    armor: Handle<UiNode>,
+    ammo: Handle<UiNode>,
+    time: Handle<UiNode>,
+    message: Handle<UiNode>,
     message_queue: VecDeque<String>,
     message_timeout: f32,
     leader_board: LeaderBoardUI,
-    match_limit: UINodeHandle,
-    first_score: UINodeHandle,
-    second_score: UINodeHandle,
-    died: UINodeHandle,
+    match_limit: Handle<UiNode>,
+    first_score: Handle<UiNode>,
+    second_score: Handle<UiNode>,
+    died: Handle<UiNode>,
 }
 
 impl Hud {
-    pub fn new(engine: &mut GameEngine) -> Self {
+    pub fn new(engine: &mut Engine) -> Self {
         let leader_board = LeaderBoardUI::new(engine);
 
         let frame_size = engine.renderer.get_frame_size();
@@ -374,7 +377,7 @@ impl Hud {
         }
     }
 
-    pub fn set_health(&mut self, ui: &mut Gui, health: f32) {
+    pub fn set_health(&mut self, ui: &mut UserInterface, health: f32) {
         ui.send_message(TextMessage::text(
             self.health,
             MessageDirection::ToWidget,
@@ -382,7 +385,7 @@ impl Hud {
         ));
     }
 
-    pub fn set_armor(&mut self, ui: &mut Gui, armor: f32) {
+    pub fn set_armor(&mut self, ui: &mut UserInterface, armor: f32) {
         ui.send_message(TextMessage::text(
             self.armor,
             MessageDirection::ToWidget,
@@ -390,7 +393,7 @@ impl Hud {
         ));
     }
 
-    pub fn set_ammo(&mut self, ui: &mut Gui, ammo: u32) {
+    pub fn set_ammo(&mut self, ui: &mut UserInterface, ammo: u32) {
         ui.send_message(TextMessage::text(
             self.ammo,
             MessageDirection::ToWidget,
@@ -398,7 +401,7 @@ impl Hud {
         ));
     }
 
-    pub fn set_visible(&mut self, ui: &mut Gui, visible: bool) {
+    pub fn set_visible(&mut self, ui: &mut UserInterface, visible: bool) {
         ui.send_message(WidgetMessage::visibility(
             self.root,
             MessageDirection::ToWidget,
@@ -406,7 +409,7 @@ impl Hud {
         ));
     }
 
-    pub fn set_time(&mut self, ui: &mut Gui, time: f32) {
+    pub fn set_time(&mut self, ui: &mut UserInterface, time: f32) {
         let seconds = (time % 60.0) as u32;
         let minutes = (time / 60.0) as u32;
         let hours = (time / 3600.0) as u32;
@@ -418,7 +421,7 @@ impl Hud {
         ));
     }
 
-    pub fn set_is_died(&mut self, ui: &mut Gui, is_died: bool) {
+    pub fn set_is_died(&mut self, ui: &mut UserInterface, is_died: bool) {
         ui.send_message(WidgetMessage::visibility(
             self.died,
             MessageDirection::ToWidget,
@@ -430,7 +433,7 @@ impl Hud {
         self.message_queue.push_back(message.as_ref().to_owned())
     }
 
-    pub fn process_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
+    pub fn process_event(&mut self, engine: &mut Engine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             if let WindowEvent::Resized(new_size) = event {
                 engine.user_interface.send_message(WidgetMessage::width(
@@ -453,7 +456,7 @@ impl Hud {
         &self.leader_board
     }
 
-    pub fn update(&mut self, ui: &mut Gui, time: &GameTime) {
+    pub fn update(&mut self, ui: &mut UserInterface, time: &GameTime) {
         self.message_timeout -= time.delta;
 
         if self.message_timeout <= 0.0 {
@@ -476,7 +479,7 @@ impl Hud {
 
     fn update_leader_board_overview(
         &mut self,
-        ui: &mut Gui,
+        ui: &mut UserInterface,
         leader_board: &LeaderBoard,
         match_options: &MatchOptions,
     ) {
@@ -514,7 +517,7 @@ impl Hud {
     pub fn handle_message(
         &mut self,
         message: &Message,
-        ui: &mut Gui,
+        ui: &mut UserInterface,
         leader_board: &LeaderBoard,
         match_options: &MatchOptions,
     ) {

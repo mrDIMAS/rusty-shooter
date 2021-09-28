@@ -2,10 +2,11 @@
 //! However most of the styles are used from dark theme of rg3d-ui library so there
 //! is not much.
 
-use crate::{BuildContext, UINodeHandle};
+use rg3d::core::pool::Handle;
 use rg3d::gui::{
     check_box::CheckBoxBuilder, scroll_bar::ScrollBarBuilder, scroll_viewer::ScrollViewerBuilder,
-    widget::WidgetBuilder, HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
+    widget::WidgetBuilder, BuildContext, HorizontalAlignment, Orientation, Thickness, UiNode,
+    VerticalAlignment,
 };
 
 pub struct ScrollBarData {
@@ -20,7 +21,7 @@ pub struct ScrollBarData {
     pub orientation: Orientation,
 }
 
-pub fn create_scroll_bar(ctx: &mut BuildContext, data: ScrollBarData) -> UINodeHandle {
+pub fn create_scroll_bar(ctx: &mut BuildContext, data: ScrollBarData) -> Handle<UiNode> {
     let mut wb = WidgetBuilder::new();
     match data.orientation {
         Orientation::Vertical => wb = wb.with_width(30.0),
@@ -46,7 +47,7 @@ pub fn create_check_box(
     row: usize,
     column: usize,
     checked: bool,
-) -> UINodeHandle {
+) -> Handle<UiNode> {
     CheckBoxBuilder::new(
         WidgetBuilder::new()
             .with_margin(Thickness::uniform(2.0))
@@ -61,7 +62,7 @@ pub fn create_check_box(
     .build(ctx)
 }
 
-pub fn create_scroll_viewer(ctx: &mut BuildContext) -> UINodeHandle {
+pub fn create_scroll_viewer(ctx: &mut BuildContext) -> Handle<UiNode> {
     ScrollViewerBuilder::new(WidgetBuilder::new())
         .with_horizontal_scroll_bar(create_scroll_bar(
             ctx,

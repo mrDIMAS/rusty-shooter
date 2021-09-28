@@ -27,12 +27,6 @@ use crate::{
     actor::Actor, control_scheme::ControlScheme, hud::Hud, level::Level, menu::Menu,
     message::Message,
 };
-use rg3d::engine::resource_manager::TextureImportOptions;
-use rg3d::gui::message::ProgressBarMessage;
-use rg3d::gui::{HorizontalAlignment, VerticalAlignment};
-use rg3d::resource::texture::CompressionOptions;
-use rg3d::sound::context::SoundContext;
-use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{
     core::{
         pool::Handle,
@@ -43,16 +37,21 @@ use rg3d::{
     event_loop::{ControlFlow, EventLoop},
     gui::{
         grid::{Column, GridBuilder, Row},
-        message::{MessageDirection, TextMessage, UiMessage, WidgetMessage},
-        node::{StubNode, UINode},
+        message::{MessageDirection, ProgressBarMessage, TextMessage, WidgetMessage},
         progress_bar::ProgressBarBuilder,
         text::TextBuilder,
         widget::WidgetBuilder,
-        UserInterface,
+        BuildContext, HorizontalAlignment, UiNode, VerticalAlignment,
     },
     scene::Scene,
-    sound::source::{generic::GenericSourceBuilder, SoundSource, Status},
-    utils::translate_event,
+    sound::{
+        context::SoundContext,
+        source::{generic::GenericSourceBuilder, SoundSource, Status},
+    },
+    utils::{
+        log::{Log, MessageKind},
+        translate_event,
+    },
 };
 use std::{
     fs::File,
@@ -67,22 +66,13 @@ use std::{
 
 const FIXED_FPS: f32 = 60.0;
 
-// Define type aliases for engine structs.
-pub type UiNode = UINode<(), StubNode>;
-pub type UINodeHandle = Handle<UiNode>;
-pub type GameEngine = Engine<(), StubNode>;
-pub type Gui = UserInterface<(), StubNode>;
-pub type GuiMessage = UiMessage<(), StubNode>;
-pub type BuildContext<'a> = rg3d::gui::BuildContext<'a, (), StubNode>;
-
 pub struct Game {
     menu: Menu,
     hud: Hud,
-    engine: GameEngine,
+    engine: Engine,
     level: Option<Level>,
-    debug_text: UINodeHandle,
+    debug_text: Handle<UiNode>,
     debug_string: String,
-    last_tick_time: time::Instant,
     running: bool,
     control_scheme: Arc<RwLock<ControlScheme>>,
     time: GameTime,
@@ -97,13 +87,11 @@ pub struct Game {
 struct LoadingScreen {
     root: Handle<UiNode>,
     progress_bar: Handle<UiNode>,
-    text: Handle<UiNode>,
 }
 
 impl LoadingScreen {
     fn new(ctx: &mut BuildContext, width: f32, height: f32) -> Self {
         let progress_bar;
-        let text;
         let root = GridBuilder::new(
             WidgetBuilder::new()
                 .with_width(width)
@@ -120,14 +108,13 @@ impl LoadingScreen {
                                         .build(ctx);
                                 progress_bar
                             })
-                            .with_child({
-                                text = TextBuilder::new(WidgetBuilder::new().on_row(0))
+                            .with_child(
+                                TextBuilder::new(WidgetBuilder::new().on_row(0))
                                     .with_horizontal_text_alignment(HorizontalAlignment::Center)
                                     .with_vertical_text_alignment(VerticalAlignment::Center)
                                     .with_text("Loading... Please wait.")
-                                    .build(ctx);
-                                text
-                            }),
+                                    .build(ctx),
+                            ),
                     )
                     .add_row(Row::stretch())
                     .add_row(Row::strict(32.0))
@@ -142,11 +129,7 @@ impl LoadingScreen {
         .add_row(Row::strict(100.0))
         .add_row(Row::stretch())
         .build(ctx);
-        Self {
-            root,
-            progress_bar,
-            text,
-        }
+        Self { root, progress_bar }
     }
 }
 
@@ -314,7 +297,7 @@ impl Game {
             .with_inner_size(inner_size)
             .with_resizable(true);
 
-        let mut engine = GameEngine::new(window_builder, &events_loop, false).unwrap();
+        let mut engine = Engine::new(window_builder, &events_loop, false).unwrap();
 
         let control_scheme = Arc::new(RwLock::new(ControlScheme::default()));
 
@@ -368,7 +351,6 @@ impl Game {
             engine,
             level: None,
             debug_string: String::new(),
-            last_tick_time: time::Instant::now(),
             time,
             events_receiver: rx,
             events_sender: tx,
@@ -449,7 +431,7 @@ impl Game {
         let mut visitor = Visitor::new();
 
         // Visit engine state first.
-        self.engine.visit("GameEngine", &mut visitor)?;
+        self.engine.visit("Engine", &mut visitor)?;
         self.level.visit("Level", &mut visitor)?;
         self.menu_sound_context
             .visit("MenuSoundContext", &mut visitor)?;
@@ -480,7 +462,7 @@ impl Game {
             MessageKind::Information,
             "Trying to load a save file...".to_owned(),
         );
-        self.engine.visit("GameEngine", &mut visitor)?;
+        self.engine.visit("Engine", &mut visitor)?;
         self.level.visit("Level", &mut visitor)?;
         self.menu_sound_context
             .visit("MenuSoundContext", &mut visitor)?;

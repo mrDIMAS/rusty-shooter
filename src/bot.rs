@@ -23,7 +23,7 @@ use rg3d::{
     },
     engine::resource_manager::ResourceManager,
     physics3d::{
-        rapier::dynamics::{BodyStatus, RigidBodyBuilder},
+        rapier::dynamics::{RigidBodyBuilder, RigidBodyType},
         rapier::geometry::{ColliderBuilder, InteractionGroups},
         RayCastOptions,
     },
@@ -867,7 +867,7 @@ impl Bot {
             .build(&mut scene.graph);
 
         let body = scene.physics.add_body(
-            RigidBodyBuilder::new(BodyStatus::Dynamic)
+            RigidBodyBuilder::new(RigidBodyType::Dynamic)
                 .translation(position)
                 .build(),
         );

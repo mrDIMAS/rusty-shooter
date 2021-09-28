@@ -19,7 +19,7 @@ use rg3d::{
     engine::resource_manager::ResourceManager,
     physics3d::{
         rapier::{
-            dynamics::{BodyStatus, RigidBodyBuilder},
+            dynamics::{RigidBodyBuilder, RigidBodyType},
             geometry::{ColliderBuilder, InteractionGroups, IntersectionEvent},
         },
         RayCastOptions, RigidBodyHandle,
@@ -185,7 +185,7 @@ impl Projectile {
                     .build(&mut scene.graph);
 
                     let collider = ColliderBuilder::ball(size).sensor(true).build();
-                    let body = RigidBodyBuilder::new(BodyStatus::KinematicPositionBased)
+                    let body = RigidBodyBuilder::new(RigidBodyType::KinematicPositionBased)
                         .translation(position)
                         .build();
                     let body_handle = scene.physics.add_body(body);

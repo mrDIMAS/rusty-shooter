@@ -10,9 +10,10 @@ use crate::{
     player::Player,
     projectile::{Projectile, ProjectileContainer, ProjectileKind},
     weapon::{Weapon, WeaponContainer, WeaponKind},
-    GameEngine, GameTime, MatchOptions,
+    GameTime, MatchOptions,
 };
 use rg3d::core::algebra::Point3;
+use rg3d::engine::Engine;
 use rg3d::{
     core::{
         algebra::{Matrix3, Vector3},
@@ -718,13 +719,13 @@ impl Level {
         (level, scene)
     }
 
-    pub fn destroy(&mut self, engine: &mut GameEngine) {
+    pub fn destroy(&mut self, engine: &mut Engine) {
         engine.scenes.remove(self.scene);
     }
 
     async fn give_new_weapon(
         &mut self,
-        engine: &mut GameEngine,
+        engine: &mut Engine,
         actor: Handle<Actor>,
         kind: WeaponKind,
     ) {
@@ -741,7 +742,7 @@ impl Level {
         .await;
     }
 
-    async fn spawn_player(&mut self, engine: &mut GameEngine) -> Handle<Actor> {
+    async fn spawn_player(&mut self, engine: &mut Engine) -> Handle<Actor> {
         let scene = &mut engine.scenes[self.scene];
 
         let player = spawn_player(
@@ -787,7 +788,7 @@ impl Level {
         &self.weapons
     }
 
-    fn pick(&self, engine: &mut GameEngine, from: Vector3<f32>, to: Vector3<f32>) -> Vector3<f32> {
+    fn pick(&self, engine: &mut Engine, from: Vector3<f32>, to: Vector3<f32>) -> Vector3<f32> {
         let scene = &mut engine.scenes[self.scene];
         let ray = Ray::from_two_points(from, to);
         let options = RayCastOptions {
@@ -806,7 +807,7 @@ impl Level {
         }
     }
 
-    fn remove_weapon(&mut self, engine: &mut GameEngine, weapon: Handle<Weapon>) {
+    fn remove_weapon(&mut self, engine: &mut Engine, weapon: Handle<Weapon>) {
         for projectile in self.projectiles.iter_mut() {
             if projectile.owner == weapon {
                 // Reset owner because handle to weapon will be invalid after weapon freed.
@@ -819,7 +820,7 @@ impl Level {
 
     async fn add_bot(
         &mut self,
-        engine: &mut GameEngine,
+        engine: &mut Engine,
         kind: BotKind,
         position: Vector3<f32>,
         name: Option<String>,
@@ -838,7 +839,7 @@ impl Level {
         .await
     }
 
-    async fn remove_actor(&mut self, engine: &mut GameEngine, actor: Handle<Actor>) {
+    async fn remove_actor(&mut self, engine: &mut Engine, actor: Handle<Actor>) {
         if self.actors.contains(actor) {
             let scene = &mut engine.scenes[self.scene];
             let character = self.actors.get(actor);
@@ -872,7 +873,7 @@ impl Level {
         }
     }
 
-    async fn give_item(&mut self, engine: &mut GameEngine, actor: Handle<Actor>, kind: ItemKind) {
+    async fn give_item(&mut self, engine: &mut Engine, actor: Handle<Actor>, kind: ItemKind) {
         if self.actors.contains(actor) {
             let character = self.actors.get_mut(actor);
             match kind {
@@ -920,12 +921,7 @@ impl Level {
         }
     }
 
-    async fn pickup_item(
-        &mut self,
-        engine: &mut GameEngine,
-        actor: Handle<Actor>,
-        item: Handle<Item>,
-    ) {
+    async fn pickup_item(&mut self, engine: &mut Engine, actor: Handle<Actor>, item: Handle<Item>) {
         if self.actors.contains(actor) && self.items.contains(item) {
             let item = self.items.get_mut(item);
 
@@ -958,7 +954,7 @@ impl Level {
 
     async fn create_projectile(
         &mut self,
-        engine: &mut GameEngine,
+        engine: &mut Engine,
         kind: ProjectileKind,
         position: Vector3<f32>,
         direction: Vector3<f32>,
@@ -984,7 +980,7 @@ impl Level {
 
     async fn shoot_weapon(
         &mut self,
-        engine: &mut GameEngine,
+        engine: &mut Engine,
         weapon_handle: Handle<Weapon>,
         initial_velocity: Vector3<f32>,
         time: GameTime,
@@ -1015,13 +1011,13 @@ impl Level {
         }
     }
 
-    fn show_weapon(&mut self, engine: &mut GameEngine, weapon_handle: Handle<Weapon>, state: bool) {
+    fn show_weapon(&mut self, engine: &mut Engine, weapon_handle: Handle<Weapon>, state: bool) {
         self.weapons[weapon_handle].set_visibility(state, &mut engine.scenes[self.scene].graph)
     }
 
     async fn spawn_bot(
         &mut self,
-        engine: &mut GameEngine,
+        engine: &mut Engine,
         kind: BotKind,
         name: Option<String>,
     ) -> Handle<Actor> {
@@ -1051,7 +1047,7 @@ impl Level {
 
     fn damage_actor(
         &mut self,
-        engine: &GameEngine,
+        engine: &Engine,
         actor: Handle<Actor>,
         who: Handle<Actor>,
         amount: f32,
@@ -1101,7 +1097,7 @@ impl Level {
 
     async fn spawn_item(
         &mut self,
-        engine: &mut GameEngine,
+        engine: &mut Engine,
         kind: ItemKind,
         position: Vector3<f32>,
         adjust_height: bool,
@@ -1205,7 +1201,7 @@ impl Level {
         }
     }
 
-    pub fn update(&mut self, engine: &mut GameEngine, time: GameTime) {
+    pub fn update(&mut self, engine: &mut Engine, time: GameTime) {
         self.time += time.delta;
         self.update_respawn(time);
         let scene = &mut engine.scenes[self.scene];
@@ -1236,7 +1232,7 @@ impl Level {
         self.update_game_ending();
     }
 
-    pub async fn respawn_actor(&mut self, engine: &mut GameEngine, actor: Handle<Actor>) {
+    pub async fn respawn_actor(&mut self, engine: &mut Engine, actor: Handle<Actor>) {
         if self.actors.contains(actor) {
             let name = self.actors.get(actor).name.clone();
 
@@ -1294,12 +1290,7 @@ impl Level {
         }
     }
 
-    pub async fn handle_message(
-        &mut self,
-        engine: &mut GameEngine,
-        message: &Message,
-        time: GameTime,
-    ) {
+    pub async fn handle_message(&mut self, engine: &mut Engine, message: &Message, time: GameTime) {
         self.sound_manager
             .handle_message(engine.resource_manager.clone(), &message)
             .await;
@@ -1381,7 +1372,7 @@ impl Level {
         }
     }
 
-    pub fn set_message_sender(&mut self, sender: Sender<Message>, engine: &mut GameEngine) {
+    pub fn set_message_sender(&mut self, sender: Sender<Message>, engine: &mut Engine) {
         self.sender = Some(sender.clone());
 
         // Attach new sender to all event sources.
@@ -1410,7 +1401,7 @@ impl Level {
         ));
     }
 
-    pub fn debug_draw(&self, engine: &mut GameEngine) {
+    pub fn debug_draw(&self, engine: &mut Engine) {
         let scene = &mut engine.scenes[self.scene];
 
         let drawing_context = &mut scene.drawing_context;

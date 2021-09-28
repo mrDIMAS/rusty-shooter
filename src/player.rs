@@ -15,7 +15,7 @@ use rg3d::{
     },
     event::{DeviceEvent, ElementState, Event, MouseScrollDelta, WindowEvent},
     physics3d::rapier::{
-        dynamics::{BodyStatus, RigidBodyBuilder},
+        dynamics::{RigidBodyBuilder, RigidBodyType},
         geometry::ColliderBuilder,
     },
     rand,
@@ -157,7 +157,7 @@ impl Player {
         let height = Self::default().stand_body_height;
 
         let body_handle = scene.physics.add_body(
-            RigidBodyBuilder::new(BodyStatus::Dynamic)
+            RigidBodyBuilder::new(RigidBodyType::Dynamic)
                 .can_sleep(false)
                 .build(),
         );

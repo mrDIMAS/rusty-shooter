@@ -18,7 +18,6 @@ use rg3d::{
         transform::TransformBuilder,
     },
 };
-use std::path::Path;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum EffectKind {

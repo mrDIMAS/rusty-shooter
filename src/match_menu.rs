@@ -1,8 +1,12 @@
 use crate::{
     gui::{create_scroll_bar, ScrollBarData},
     message::Message,
-    DeathMatch, GameEngine, Gui, GuiMessage, MatchOptions, UINodeHandle,
+    DeathMatch, MatchOptions,
 };
+use rg3d::core::pool::Handle;
+use rg3d::engine::Engine;
+use rg3d::gui::message::UiMessage;
+use rg3d::gui::scroll_bar::ScrollBar;
 use rg3d::gui::{
     border::BorderBuilder,
     button::ButtonBuilder,
@@ -10,25 +14,24 @@ use rg3d::gui::{
     dropdown_list::DropdownListBuilder,
     grid::{Column, GridBuilder, Row},
     message::{ButtonMessage, UiMessageData},
-    node::UINode,
     text::TextBuilder,
     text_box::TextBoxBuilder,
     widget::WidgetBuilder,
     window::{WindowBuilder, WindowTitle},
-    HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
+    HorizontalAlignment, Orientation, Thickness, UiNode, UserInterface, VerticalAlignment,
 };
 use std::sync::mpsc::Sender;
 
 pub struct MatchMenu {
     sender: Sender<Message>,
-    pub window: UINodeHandle,
-    sb_frag_limit: UINodeHandle,
-    sb_time_limit: UINodeHandle,
-    start_button: UINodeHandle,
+    pub window: Handle<UiNode>,
+    sb_frag_limit: Handle<UiNode>,
+    sb_time_limit: Handle<UiNode>,
+    start_button: Handle<UiNode>,
 }
 
 impl MatchMenu {
-    pub fn new(ui: &mut Gui, sender: Sender<Message>) -> Self {
+    pub fn new(ui: &mut UserInterface, sender: Sender<Message>) -> Self {
         let common_row = Row::strict(36.0);
 
         let ctx = &mut ui.build_ctx();
@@ -168,21 +171,21 @@ impl MatchMenu {
         }
     }
 
-    pub fn handle_ui_event(&mut self, engine: &mut GameEngine, message: &GuiMessage) {
+    pub fn handle_ui_event(&mut self, engine: &mut Engine, message: &UiMessage) {
         let ui = &mut engine.user_interface;
 
         if let UiMessageData::Button(msg) = message.data() {
             if let ButtonMessage::Click = msg {
                 if message.destination() == self.start_button {
                     let time_limit_minutes =
-                        if let UINode::ScrollBar(scroll_bar) = ui.node(self.sb_time_limit) {
+                        if let Some(scroll_bar) = ui.node(self.sb_time_limit).cast::<ScrollBar>() {
                             scroll_bar.value()
                         } else {
                             0.0
                         };
 
                     let frag_limit =
-                        if let UINode::ScrollBar(scroll_bar) = ui.node(self.sb_frag_limit) {
+                        if let Some(scroll_bar) = ui.node(self.sb_frag_limit).cast::<ScrollBar>() {
                             scroll_bar.value()
                         } else {
                             0.0

@@ -1,4 +1,7 @@
-use crate::{character::Team, message::Message, GameEngine, Gui, MatchOptions, UINodeHandle};
+use crate::{character::Team, message::Message, MatchOptions};
+use rg3d::core::pool::Handle;
+use rg3d::engine::Engine;
+use rg3d::gui::{UiNode, UserInterface};
 use rg3d::{
     core::{
         color::Color,
@@ -149,16 +152,16 @@ impl Visit for LeaderBoard {
 }
 
 pub struct LeaderBoardUI {
-    root: UINodeHandle,
+    root: Handle<UiNode>,
 }
 
 impl LeaderBoardUI {
-    pub fn new(engine: &mut GameEngine) -> Self {
+    pub fn new(engine: &mut Engine) -> Self {
         let frame_size = engine.renderer.get_frame_size();
 
         let ui = &mut engine.user_interface;
 
-        let root: UINodeHandle = GridBuilder::new(
+        let root: Handle<UiNode> = GridBuilder::new(
             WidgetBuilder::new()
                 .with_visibility(false)
                 .with_width(frame_size.0 as f32)
@@ -176,7 +179,7 @@ impl LeaderBoardUI {
 
     fn sync_to_model(
         &mut self,
-        ui: &mut Gui,
+        ui: &mut UserInterface,
         leader_board: &LeaderBoard,
         match_options: &MatchOptions,
     ) {
@@ -399,7 +402,7 @@ impl LeaderBoardUI {
                                 .with_text("K/D")
                                 .build(ctx),
                             )
-                            .with_children(&children),
+                            .with_children(children),
                     )
                     .with_border_thickness(2.0)
                     .add_row(Row::strict(30.0))
@@ -434,7 +437,7 @@ impl LeaderBoardUI {
         ));
     }
 
-    pub fn set_visible(&self, visible: bool, ui: &mut Gui) {
+    pub fn set_visible(&self, visible: bool, ui: &mut UserInterface) {
         ui.send_message(WidgetMessage::visibility(
             self.root,
             MessageDirection::ToWidget,
@@ -442,7 +445,7 @@ impl LeaderBoardUI {
         ));
     }
 
-    pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
+    pub fn process_input_event(&mut self, engine: &mut Engine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             match event {
                 WindowEvent::Resized(new_size) => {
@@ -477,7 +480,7 @@ impl LeaderBoardUI {
     pub fn handle_message(
         &mut self,
         message: &Message,
-        ui: &mut Gui,
+        ui: &mut UserInterface,
         leader_board: &LeaderBoard,
         match_options: &MatchOptions,
     ) {

@@ -2,8 +2,11 @@ use crate::{
     control_scheme::{ControlButton, ControlScheme},
     gui::{create_check_box, create_scroll_bar, create_scroll_viewer, ScrollBarData},
     message::Message,
-    GameEngine, GuiMessage, UINodeHandle,
 };
+use rg3d::core::pool::Handle;
+use rg3d::engine::Engine;
+use rg3d::gui::button::Button;
+use rg3d::gui::message::UiMessage;
 use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{
     event::{Event, MouseButton, MouseScrollDelta, WindowEvent},
@@ -17,12 +20,11 @@ use rg3d::{
             ButtonMessage, CheckBoxMessage, ListViewMessage, MessageDirection, ScrollBarMessage,
             TextMessage, UiMessageData,
         },
-        node::UINode,
         tab_control::{TabControlBuilder, TabDefinition},
         text::TextBuilder,
         widget::WidgetBuilder,
         window::{WindowBuilder, WindowTitle},
-        HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
+        HorizontalAlignment, Orientation, Thickness, UiNode, VerticalAlignment,
     },
     monitor::VideoMode,
     window::Fullscreen,
@@ -30,35 +32,35 @@ use rg3d::{
 use std::sync::{mpsc::Sender, Arc, RwLock};
 
 pub struct OptionsMenu {
-    pub window: UINodeHandle,
+    pub window: Handle<UiNode>,
     sender: Sender<Message>,
-    sb_sound_volume: UINodeHandle,
-    pub sb_music_volume: UINodeHandle,
-    lb_video_modes: UINodeHandle,
-    cb_fullscreen: UINodeHandle,
-    cb_spot_shadows: UINodeHandle,
-    cb_soft_spot_shadows: UINodeHandle,
-    cb_point_shadows: UINodeHandle,
-    cb_soft_point_shadows: UINodeHandle,
-    sb_point_shadow_distance: UINodeHandle,
-    sb_spot_shadow_distance: UINodeHandle,
-    cb_use_light_scatter: UINodeHandle,
+    sb_sound_volume: Handle<UiNode>,
+    pub sb_music_volume: Handle<UiNode>,
+    lb_video_modes: Handle<UiNode>,
+    cb_fullscreen: Handle<UiNode>,
+    cb_spot_shadows: Handle<UiNode>,
+    cb_soft_spot_shadows: Handle<UiNode>,
+    cb_point_shadows: Handle<UiNode>,
+    cb_soft_point_shadows: Handle<UiNode>,
+    sb_point_shadow_distance: Handle<UiNode>,
+    sb_spot_shadow_distance: Handle<UiNode>,
+    cb_use_light_scatter: Handle<UiNode>,
     video_modes: Vec<VideoMode>,
     control_scheme: Arc<RwLock<ControlScheme>>,
-    control_scheme_buttons: Vec<UINodeHandle>,
+    control_scheme_buttons: Vec<Handle<UiNode>>,
     active_control_button: Option<usize>,
-    sb_mouse_sens: UINodeHandle,
-    cb_mouse_y_inverse: UINodeHandle,
-    cb_smooth_mouse: UINodeHandle,
-    cb_shake_camera: UINodeHandle,
-    btn_reset_control_scheme: UINodeHandle,
-    cb_use_hrtf: UINodeHandle,
-    btn_reset_audio_settings: UINodeHandle,
+    sb_mouse_sens: Handle<UiNode>,
+    cb_mouse_y_inverse: Handle<UiNode>,
+    cb_smooth_mouse: Handle<UiNode>,
+    cb_shake_camera: Handle<UiNode>,
+    btn_reset_control_scheme: Handle<UiNode>,
+    cb_use_hrtf: Handle<UiNode>,
+    btn_reset_audio_settings: Handle<UiNode>,
 }
 
 impl OptionsMenu {
     pub fn new(
-        engine: &mut GameEngine,
+        engine: &mut Engine,
         control_scheme: Arc<RwLock<ControlScheme>>,
         sender: Sender<Message>,
     ) -> Self {
@@ -579,7 +581,7 @@ impl OptionsMenu {
                                 .build(ctx);
                                 btn_reset_control_scheme
                             })
-                            .with_children(&children),
+                            .with_children(children),
                     )
                     .add_column(Column::strict(250.0))
                     .add_column(Column::stretch())
@@ -598,7 +600,7 @@ impl OptionsMenu {
             })
             .build(ctx);
 
-        let options_window: UINodeHandle =
+        let options_window: Handle<UiNode> =
             WindowBuilder::new(WidgetBuilder::new().with_width(500.0))
                 .with_title(WindowTitle::text("Options"))
                 .open(false)
@@ -633,12 +635,12 @@ impl OptionsMenu {
         }
     }
 
-    pub fn sync_to_model(&mut self, engine: &mut GameEngine) {
+    pub fn sync_to_model(&mut self, engine: &mut Engine) {
         let ui = &mut engine.user_interface;
         let control_scheme = self.control_scheme.read().unwrap();
         let settings = engine.renderer.get_quality_settings();
 
-        let sync_check_box = |handle: UINodeHandle, value: bool| {
+        let sync_check_box = |handle: Handle<UiNode>, value: bool| {
             ui.send_message(CheckBoxMessage::checked(
                 handle,
                 MessageDirection::ToWidget,
@@ -662,7 +664,7 @@ impl OptionsMenu {
                             };*/
         sync_check_box(self.cb_use_hrtf, is_hrtf);
 
-        let sync_scroll_bar = |handle: UINodeHandle, value: f32| {
+        let sync_scroll_bar = |handle: Handle<UiNode>, value: f32| {
             ui.send_message(ScrollBarMessage::value(
                 handle,
                 MessageDirection::ToWidget,
@@ -685,7 +687,7 @@ impl OptionsMenu {
             .iter()
             .zip(self.control_scheme.read().unwrap().buttons().iter())
         {
-            if let UINode::Button(button) = ui.node(*btn) {
+            if let Some(button) = ui.node(*btn).cast::<Button>() {
                 ui.send_message(TextMessage::text(
                     button.content(),
                     MessageDirection::ToWidget,
@@ -695,7 +697,7 @@ impl OptionsMenu {
         }
     }
 
-    pub fn process_input_event(&mut self, engine: &mut GameEngine, event: &Event<()>) {
+    pub fn process_input_event(&mut self, engine: &mut Engine, event: &Event<()>) {
         if let Event::WindowEvent { event, .. } = event {
             let mut control_button = None;
 
@@ -731,9 +733,10 @@ impl OptionsMenu {
 
             if let Some(control_button) = control_button {
                 if let Some(active_control_button) = self.active_control_button {
-                    if let UINode::Button(button) = engine
+                    if let Some(button) = engine
                         .user_interface
                         .node(self.control_scheme_buttons[active_control_button])
+                        .cast::<Button>()
                     {
                         engine.user_interface.send_message(TextMessage::text(
                             button.content(),
@@ -752,7 +755,7 @@ impl OptionsMenu {
     }
 
     #[allow(clippy::cognitive_complexity)]
-    pub fn handle_ui_event(&mut self, engine: &mut GameEngine, message: &GuiMessage) {
+    pub fn handle_ui_event(&mut self, engine: &mut Engine, message: &UiMessage) {
         let old_settings = engine.renderer.get_quality_settings();
         let mut settings = old_settings;
 
@@ -826,7 +829,9 @@ impl OptionsMenu {
 
                     for (i, button) in self.control_scheme_buttons.iter().enumerate() {
                         if message.destination() == *button {
-                            if let UINode::Button(button) = engine.user_interface.node(*button) {
+                            if let Some(button) =
+                                engine.user_interface.node(*button).cast::<Button>()
+                            {
                                 engine.user_interface.send_message(TextMessage::text(
                                     button.content(),
                                     MessageDirection::ToWidget,

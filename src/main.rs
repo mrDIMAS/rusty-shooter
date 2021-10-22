@@ -397,10 +397,7 @@ impl Game {
                         *control_flow = ControlFlow::Exit
                     }
                     WindowEvent::Resized(new_size) => {
-                        game.engine
-                            .renderer
-                            .set_frame_size(new_size.into())
-                            .unwrap();
+                        game.engine.set_frame_size(new_size.into()).unwrap();
                     }
                     _ => (),
                 },

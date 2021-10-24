@@ -3,7 +3,6 @@ use rg3d::{
         algebra::Vector3,
         color::Color,
         color_gradient::{ColorGradient, GradientPoint},
-        numeric_range::NumericRange,
         pool::Handle,
     },
     engine::resource_manager::ResourceManager,
@@ -96,11 +95,11 @@ fn create_bullet_impact(
         BaseEmitterBuilder::new()
             .with_max_particles(200)
             .with_spawn_rate(1000)
-            .with_size_modifier_range(NumericRange::new(-0.02, -0.025))
-            .with_size_range(NumericRange::new(0.025, 0.05))
-            .with_x_velocity_range(NumericRange::new(-0.03, 0.03))
-            .with_y_velocity_range(NumericRange::new(0.035, 0.05))
-            .with_z_velocity_range(NumericRange::new(-0.03, 0.03))
+            .with_size_modifier_range(-0.02..-0.025)
+            .with_size_range(0.025..0.05)
+            .with_x_velocity_range(-0.03..0.03)
+            .with_y_velocity_range(0.035..0.05)
+            .with_z_velocity_range(-0.03..0.03)
             .resurrect_particles(false),
     )
     .with_radius(0.01)
@@ -138,9 +137,9 @@ fn create_smoke(
         BaseEmitterBuilder::new()
             .with_max_particles(100)
             .with_spawn_rate(50)
-            .with_x_velocity_range(NumericRange::new(-0.01, 0.01))
-            .with_y_velocity_range(NumericRange::new(0.02, 0.03))
-            .with_z_velocity_range(NumericRange::new(-0.01, 0.01)),
+            .with_x_velocity_range(-0.01..0.01)
+            .with_y_velocity_range(0.02..0.03)
+            .with_z_velocity_range(-0.01..0.01),
     )
     .with_radius(0.01)
     .build()])
@@ -171,11 +170,11 @@ fn create_item_appear(
         BaseEmitterBuilder::new()
             .with_max_particles(100)
             .with_spawn_rate(200)
-            .with_size_modifier_range(NumericRange::new(-0.012, -0.015))
-            .with_size_range(NumericRange::new(0.05, 0.10))
-            .with_x_velocity_range(NumericRange::new(-0.02, 0.02))
-            .with_y_velocity_range(NumericRange::new(0.035, 0.05))
-            .with_z_velocity_range(NumericRange::new(-0.02, 0.02))
+            .with_size_modifier_range(-0.012..-0.015)
+            .with_size_range(0.05..0.10)
+            .with_x_velocity_range(-0.02..0.02)
+            .with_y_velocity_range(0.035..0.05)
+            .with_z_velocity_range(-0.02..0.02)
             .resurrect_particles(false),
     )
     .with_radius(0.01)

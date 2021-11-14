@@ -11,7 +11,7 @@ use rg3d::{
     gui::{
         button::ButtonBuilder,
         grid::{Column, GridBuilder, Row},
-        message::{ButtonMessage, MessageDirection, UiMessageData, WidgetMessage, WindowMessage},
+        message::{ButtonMessage, MessageDirection, WidgetMessage, WindowMessage},
         ttf::{Font, SharedFont},
         widget::WidgetBuilder,
         window::{WindowBuilder, WindowTitle},
@@ -207,27 +207,25 @@ impl Menu {
     }
 
     pub fn handle_ui_event(&mut self, engine: &mut Engine, message: &UiMessage) {
-        if let UiMessageData::Button(msg) = message.data() {
-            if let ButtonMessage::Click = msg {
-                if message.destination() == self.btn_new_game {
-                    engine.user_interface.send_message(WindowMessage::open(
-                        self.match_menu.window,
-                        MessageDirection::ToWidget,
-                        true,
-                    ));
-                } else if message.destination() == self.btn_save_game {
-                    self.sender.send(Message::SaveGame).unwrap();
-                } else if message.destination() == self.btn_load_game {
-                    self.sender.send(Message::LoadGame).unwrap();
-                } else if message.destination() == self.btn_quit_game {
-                    self.sender.send(Message::QuitGame).unwrap();
-                } else if message.destination() == self.btn_settings {
-                    engine.user_interface.send_message(WindowMessage::open(
-                        self.options_menu.window,
-                        MessageDirection::ToWidget,
-                        true,
-                    ));
-                }
+        if let Some(ButtonMessage::Click) = message.data() {
+            if message.destination() == self.btn_new_game {
+                engine.user_interface.send_message(WindowMessage::open(
+                    self.match_menu.window,
+                    MessageDirection::ToWidget,
+                    true,
+                ));
+            } else if message.destination() == self.btn_save_game {
+                self.sender.send(Message::SaveGame).unwrap();
+            } else if message.destination() == self.btn_load_game {
+                self.sender.send(Message::LoadGame).unwrap();
+            } else if message.destination() == self.btn_quit_game {
+                self.sender.send(Message::QuitGame).unwrap();
+            } else if message.destination() == self.btn_settings {
+                engine.user_interface.send_message(WindowMessage::open(
+                    self.options_menu.window,
+                    MessageDirection::ToWidget,
+                    true,
+                ));
             }
         }
 

@@ -13,7 +13,7 @@ use rg3d::gui::{
     decorator::DecoratorBuilder,
     dropdown_list::DropdownListBuilder,
     grid::{Column, GridBuilder, Row},
-    message::{ButtonMessage, UiMessageData},
+    message::ButtonMessage,
     text::TextBuilder,
     text_box::TextBoxBuilder,
     widget::WidgetBuilder,
@@ -174,30 +174,28 @@ impl MatchMenu {
     pub fn handle_ui_event(&mut self, engine: &mut Engine, message: &UiMessage) {
         let ui = &mut engine.user_interface;
 
-        if let UiMessageData::Button(msg) = message.data() {
-            if let ButtonMessage::Click = msg {
-                if message.destination() == self.start_button {
-                    let time_limit_minutes =
-                        if let Some(scroll_bar) = ui.node(self.sb_time_limit).cast::<ScrollBar>() {
-                            scroll_bar.value()
-                        } else {
-                            0.0
-                        };
+        if let Some(ButtonMessage::Click) = message.data() {
+            if message.destination() == self.start_button {
+                let time_limit_minutes =
+                    if let Some(scroll_bar) = ui.node(self.sb_time_limit).cast::<ScrollBar>() {
+                        scroll_bar.value()
+                    } else {
+                        0.0
+                    };
 
-                    let frag_limit =
-                        if let Some(scroll_bar) = ui.node(self.sb_frag_limit).cast::<ScrollBar>() {
-                            scroll_bar.value()
-                        } else {
-                            0.0
-                        };
+                let frag_limit =
+                    if let Some(scroll_bar) = ui.node(self.sb_frag_limit).cast::<ScrollBar>() {
+                        scroll_bar.value()
+                    } else {
+                        0.0
+                    };
 
-                    let options = MatchOptions::DeathMatch(DeathMatch {
-                        time_limit_secs: time_limit_minutes * 60.0,
-                        frag_limit: frag_limit as u32,
-                    });
+                let options = MatchOptions::DeathMatch(DeathMatch {
+                    time_limit_secs: time_limit_minutes * 60.0,
+                    frag_limit: frag_limit as u32,
+                });
 
-                    self.sender.send(Message::StartNewGame { options }).unwrap();
-                }
+                self.sender.send(Message::StartNewGame { options }).unwrap();
             }
         }
     }

@@ -3,22 +3,23 @@ use crate::{
     message::Message,
     DeathMatch, MatchOptions,
 };
-use rg3d::core::pool::Handle;
-use rg3d::engine::Engine;
-use rg3d::gui::message::UiMessage;
-use rg3d::gui::scroll_bar::ScrollBar;
-use rg3d::gui::{
-    border::BorderBuilder,
-    button::ButtonBuilder,
-    decorator::DecoratorBuilder,
-    dropdown_list::DropdownListBuilder,
-    grid::{Column, GridBuilder, Row},
-    message::ButtonMessage,
-    text::TextBuilder,
-    text_box::TextBoxBuilder,
-    widget::WidgetBuilder,
-    window::{WindowBuilder, WindowTitle},
-    HorizontalAlignment, Orientation, Thickness, UiNode, UserInterface, VerticalAlignment,
+use rg3d::{
+    core::pool::Handle,
+    engine::Engine,
+    gui::{
+        border::BorderBuilder,
+        button::{ButtonBuilder, ButtonMessage},
+        decorator::DecoratorBuilder,
+        dropdown_list::DropdownListBuilder,
+        grid::{Column, GridBuilder, Row},
+        message::UiMessage,
+        scroll_bar::ScrollBar,
+        text::TextBuilder,
+        text_box::TextBoxBuilder,
+        widget::WidgetBuilder,
+        window::{WindowBuilder, WindowTitle},
+        HorizontalAlignment, Orientation, Thickness, UiNode, UserInterface, VerticalAlignment,
+    },
 };
 use std::sync::mpsc::Sender;
 

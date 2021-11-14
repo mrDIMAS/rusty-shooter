@@ -3,24 +3,23 @@ use crate::{
     message::Message,
     GameTime, MatchOptions,
 };
-use rg3d::core::pool::Handle;
-use rg3d::engine::Engine;
-use rg3d::gui::{UiNode, UserInterface};
 use rg3d::{
-    core::color::Color,
+    core::{color::Color, pool::Handle},
+    engine::Engine,
     event::{Event, WindowEvent},
     gui::{
         border::BorderBuilder,
         brush::Brush,
         grid::{Column, GridBuilder, Row},
         image::ImageBuilder,
-        message::{MessageDirection, TextMessage, WidgetMessage},
+        message::MessageDirection,
         stack_panel::StackPanelBuilder,
-        text::TextBuilder,
+        text::{TextBuilder, TextMessage},
         ttf::{Font, SharedFont},
-        widget::WidgetBuilder,
+        widget::{WidgetBuilder, WidgetMessage},
         HorizontalAlignment, Orientation, Thickness, VerticalAlignment,
     },
+    gui::{UiNode, UserInterface},
     utils,
 };
 use std::{

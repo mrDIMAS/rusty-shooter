@@ -2,20 +2,18 @@ use crate::{
     control_scheme::ControlScheme, match_menu::MatchMenu, message::Message,
     options_menu::OptionsMenu,
 };
-use rg3d::core::pool::Handle;
-use rg3d::engine::Engine;
-use rg3d::gui::message::UiMessage;
-use rg3d::gui::{UiNode, UserInterface};
 use rg3d::{
+    core::pool::Handle,
+    engine::Engine,
     event::{Event, WindowEvent},
     gui::{
-        button::ButtonBuilder,
+        button::{ButtonBuilder, ButtonMessage},
         grid::{Column, GridBuilder, Row},
-        message::{ButtonMessage, MessageDirection, WidgetMessage, WindowMessage},
+        message::{MessageDirection, UiMessage},
         ttf::{Font, SharedFont},
-        widget::WidgetBuilder,
-        window::{WindowBuilder, WindowTitle},
-        Thickness,
+        widget::{WidgetBuilder, WidgetMessage},
+        window::{WindowBuilder, WindowMessage, WindowTitle},
+        Thickness, UiNode, UserInterface,
     },
 };
 use std::{

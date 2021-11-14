@@ -3,30 +3,27 @@ use crate::{
     gui::{create_check_box, create_scroll_bar, create_scroll_viewer, ScrollBarData},
     message::Message,
 };
-use rg3d::core::pool::Handle;
-use rg3d::engine::Engine;
-use rg3d::gui::button::Button;
-use rg3d::gui::message::UiMessage;
-use rg3d::utils::log::{Log, MessageKind};
 use rg3d::{
+    core::pool::Handle,
+    engine::Engine,
     event::{Event, MouseButton, MouseScrollDelta, WindowEvent},
     gui::{
         border::BorderBuilder,
-        button::ButtonBuilder,
+        button::{Button, ButtonBuilder, ButtonMessage},
+        check_box::CheckBoxMessage,
         decorator::DecoratorBuilder,
         grid::{Column, GridBuilder, Row},
-        list_view::ListViewBuilder,
-        message::{
-            ButtonMessage, CheckBoxMessage, ListViewMessage, MessageDirection, ScrollBarMessage,
-            TextMessage,
-        },
+        list_view::{ListViewBuilder, ListViewMessage},
+        message::{MessageDirection, UiMessage},
+        scroll_bar::ScrollBarMessage,
         tab_control::{TabControlBuilder, TabDefinition},
-        text::TextBuilder,
+        text::{TextBuilder, TextMessage},
         widget::WidgetBuilder,
         window::{WindowBuilder, WindowTitle},
         HorizontalAlignment, Orientation, Thickness, UiNode, VerticalAlignment,
     },
     monitor::VideoMode,
+    utils::log::{Log, MessageKind},
     window::Fullscreen,
 };
 use std::sync::{mpsc::Sender, Arc, RwLock};

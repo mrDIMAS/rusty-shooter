@@ -1,21 +1,19 @@
 use crate::{character::Team, message::Message, MatchOptions};
-use rg3d::core::pool::Handle;
-use rg3d::engine::Engine;
-use rg3d::gui::{UiNode, UserInterface};
 use rg3d::{
     core::{
         color::Color,
+        pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
+    engine::Engine,
     event::{ElementState, Event, VirtualKeyCode, WindowEvent},
-    gui::message::MessageDirection,
     gui::{
         brush::Brush,
         grid::{Column, GridBuilder, Row},
-        message::WidgetMessage,
+        message::MessageDirection,
         text::TextBuilder,
-        widget::WidgetBuilder,
-        HorizontalAlignment, Thickness, VerticalAlignment,
+        widget::{WidgetBuilder, WidgetMessage},
+        HorizontalAlignment, Thickness, UiNode, UserInterface, VerticalAlignment,
     },
 };
 use std::collections::HashMap;

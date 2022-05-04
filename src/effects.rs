@@ -1,4 +1,4 @@
-use rg3d::{
+use fyrox::{
     core::{
         algebra::Vector3,
         color::Color,
@@ -68,7 +68,7 @@ fn create_steam(
         .with_height(0.2)
         .with_radius(0.2)
         .build()])
-    .with_texture(resource_manager.request_texture("data/particles/smoke_04.tga", None))
+    .with_texture(resource_manager.request_texture("data/particles/smoke_04.tga"))
     .build(graph)
 }
 
@@ -104,7 +104,7 @@ fn create_bullet_impact(
     )
     .with_radius(0.01)
     .build()])
-    .with_texture(resource_manager.request_texture("data/particles/circle_05.png", None))
+    .with_texture(resource_manager.request_texture("data/particles/circle_05.png"))
     .build(graph)
 }
 
@@ -143,7 +143,7 @@ fn create_smoke(
     )
     .with_radius(0.01)
     .build()])
-    .with_texture(resource_manager.request_texture("data/particles/smoke_04.tga", None))
+    .with_texture(resource_manager.request_texture("data/particles/smoke_04.tga"))
     .build(graph)
 }
 
@@ -179,6 +179,6 @@ fn create_item_appear(
     )
     .with_radius(0.01)
     .build()])
-    .with_texture(resource_manager.request_texture("data/particles/star_09.png", None))
+    .with_texture(resource_manager.request_texture("data/particles/star_09.png"))
     .build(graph)
 }

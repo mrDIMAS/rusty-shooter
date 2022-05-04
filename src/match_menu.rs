@@ -3,7 +3,7 @@ use crate::{
     message::Message,
     DeathMatch, MatchOptions,
 };
-use rg3d::{
+use fyrox::{
     core::pool::Handle,
     engine::Engine,
     gui::{

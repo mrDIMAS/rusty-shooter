@@ -1,36 +1,37 @@
-use rg3d::{
-    core::{
-        algebra::Vector3,
-        pool::{Handle, Pool, PoolIterator},
-        visitor::{Visit, VisitResult, Visitor},
-    },
-    physics3d::RigidBodyHandle,
+use fyrox::core::{
+    algebra::Vector3,
+    pool::{Handle, Pool},
+    visitor::{Visit, VisitResult, Visitor},
 };
+use fyrox::scene::node::Node;
 
 pub struct JumpPad {
-    force: Vector3<f32>,
-    body: RigidBodyHandle,
+    velocity: Vector3<f32>,
+    collider: Handle<Node>,
 }
 
 impl JumpPad {
-    pub fn new(shape: RigidBodyHandle, force: Vector3<f32>) -> JumpPad {
-        Self { force, body: shape }
+    pub fn new(collider: Handle<Node>, force: Vector3<f32>) -> JumpPad {
+        Self {
+            velocity: force,
+            collider,
+        }
     }
 
-    pub fn rigid_body(&self) -> RigidBodyHandle {
-        self.body
+    pub fn collider(&self) -> Handle<Node> {
+        self.collider
     }
 
-    pub fn get_force(&self) -> Vector3<f32> {
-        self.force
+    pub fn velocity(&self) -> Vector3<f32> {
+        self.velocity
     }
 }
 
 impl Default for JumpPad {
     fn default() -> Self {
         Self {
-            force: Default::default(),
-            body: Default::default(),
+            velocity: Default::default(),
+            collider: Default::default(),
         }
     }
 }
@@ -39,8 +40,8 @@ impl Visit for JumpPad {
     fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
         visitor.enter_region(name)?;
 
-        self.force.visit("From", visitor)?;
-        self.body.visit("Shape", visitor)?;
+        self.velocity.visit("From", visitor)?;
+        self.collider.visit("Shape", visitor)?;
 
         visitor.leave_region()
     }
@@ -65,7 +66,7 @@ impl JumpPadContainer {
         self.pool.spawn(jump_pad)
     }
 
-    pub fn iter(&self) -> PoolIterator<JumpPad> {
+    pub fn iter(&self) -> impl Iterator<Item = &JumpPad> {
         self.pool.iter()
     }
 }

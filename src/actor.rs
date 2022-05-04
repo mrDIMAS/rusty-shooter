@@ -1,15 +1,12 @@
 use crate::{
     bot::Bot, character::Character, level::UpdateContext, message::Message, player::Player,
 };
-use rg3d::{
+use fyrox::{
     core::{
         algebra::Vector3,
-        pool::{
-            Handle, Pool, PoolIterator, PoolIteratorMut, PoolPairIterator, PoolPairIteratorMut,
-        },
+        pool::{Handle, Pool},
         visitor::{Visit, VisitResult, Visitor},
     },
-    physics3d::rapier::geometry::ContactEvent,
     scene::Scene,
 };
 use std::ops::{Deref, DerefMut};
@@ -159,7 +156,7 @@ impl ActorContainer {
             self.target_descriptors.push(TargetDescriptor {
                 handle,
                 health: actor.health,
-                position: actor.position(&context.scene.physics),
+                position: actor.position(&context.scene.graph),
             });
         }
 
@@ -172,10 +169,9 @@ impl ActorContainer {
             }
             if !is_dead {
                 for (item_handle, item) in context.items.pair_iter() {
-                    let body = context.scene.physics.bodies.get(&actor.get_body()).unwrap();
                     let distance = (context.scene.graph[item.get_pivot()].global_position()
-                        - body.position().translation.vector)
-                        .norm();
+                        - actor.position(&context.scene.graph))
+                    .norm();
                     if distance < 1.25 && !item.is_picked_up() {
                         actor
                             .sender
@@ -201,78 +197,45 @@ impl ActorContainer {
                     .unwrap();
             }
         }
+
+        self.handle_event(context);
     }
 
-    pub fn handle_event(&mut self, contact_event: &ContactEvent, context: &mut UpdateContext) {
-        if let &ContactEvent::Started(a, b) = contact_event {
-            for actor in self.pool.iter_mut() {
+    fn handle_event(&mut self, context: &mut UpdateContext) {
+        for actor in self.pool.iter_mut() {
+            let mut velocity = None;
+            for contact_manifold in context.scene.graph[actor.collider]
+                .as_collider()
+                .contacts(&context.scene.graph.physics)
+            {
                 for jump_pad in context.jump_pads.iter() {
-                    let coll_a = context
-                        .scene
-                        .physics
-                        .bodies
-                        .handle_map()
-                        .key_of(
-                            &context
-                                .scene
-                                .physics
-                                .colliders
-                                .native_ref(a)
-                                .unwrap()
-                                .parent()
-                                .unwrap(),
-                        )
-                        .cloned()
-                        .unwrap();
-                    let coll_b = context
-                        .scene
-                        .physics
-                        .bodies
-                        .handle_map()
-                        .key_of(
-                            &context
-                                .scene
-                                .physics
-                                .colliders
-                                .native_ref(b)
-                                .unwrap()
-                                .parent()
-                                .unwrap(),
-                        )
-                        .cloned()
-                        .unwrap();
-
-                    let body = context
-                        .scene
-                        .physics
-                        .bodies
-                        .get_mut(&actor.get_body())
-                        .unwrap();
-                    let capsule_collider = body.colliders()[0];
-
-                    if capsule_collider == a && coll_b == jump_pad.rigid_body()
-                        || capsule_collider == b && coll_a == jump_pad.rigid_body()
-                    {
-                        body.set_linvel(jump_pad.get_force(), true);
+                    if contact_manifold.collider2 == jump_pad.collider() {
+                        velocity = Some(jump_pad.velocity());
                     }
                 }
+            }
+
+            if let Some(velocity) = velocity {
+                context.scene.graph[actor.get_body()]
+                    .as_rigid_body_mut()
+                    .set_lin_vel(velocity);
             }
         }
     }
 
-    pub fn iter(&self) -> PoolIterator<Actor> {
+    pub fn iter(&self) -> impl Iterator<Item = &Actor> {
         self.pool.iter()
     }
 
-    pub fn pair_iter(&self) -> PoolPairIterator<Actor> {
+    pub fn pair_iter(&self) -> impl Iterator<Item = (Handle<Actor>, &Actor)> {
         self.pool.pair_iter()
     }
 
-    pub fn pair_iter_mut(&mut self) -> PoolPairIteratorMut<Actor> {
+    pub fn pair_iter_mut(&mut self) -> impl Iterator<Item = (Handle<Actor>, &mut Actor)> {
         self.pool.pair_iter_mut()
     }
 
-    pub fn iter_mut(&mut self) -> PoolIteratorMut<Actor> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Actor> {
         self.pool.iter_mut()
     }
 }

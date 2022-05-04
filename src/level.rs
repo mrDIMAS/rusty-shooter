@@ -12,33 +12,34 @@ use crate::{
     weapon::{Weapon, WeaponContainer, WeaponKind},
     GameTime, MatchOptions,
 };
-use rg3d::core::algebra::Point3;
-use rg3d::engine::Engine;
-use rg3d::{
+use fyrox::{
     core::{
+        algebra::Point3,
         algebra::{Matrix3, Vector3},
         color::Color,
-        math::{aabb::AxisAlignedBoundingBox, ray::Ray, PositionProvider, Vector3Ext},
+        math::Vector3Ext,
+        math::{aabb::AxisAlignedBoundingBox, ray::Ray, PositionProvider},
         pool::Handle,
         rand::Rng,
         visitor::{Visit, VisitResult, Visitor},
     },
-    engine::resource_manager::{MaterialSearchOptions, ResourceManager},
+    engine::{resource_manager::ResourceManager, Engine},
     event::Event,
-    physics3d::{
-        rapier::{
-            geometry::{ContactEvent, InteractionGroups, IntersectionEvent},
-            pipeline::ChannelEventCollector,
-        },
-        RayCastOptions,
-    },
     rand,
-    scene::{self, base::BaseBuilder, camera::CameraBuilder, node::Node, Scene},
-    sound::{
-        context,
-        context::SoundContext,
-        effects::{BaseEffect, Effect, EffectInput},
-        source::{generic::GenericSourceBuilder, spatial::SpatialSourceBuilder, Status},
+    scene::{
+        self,
+        base::BaseBuilder,
+        camera::Camera,
+        camera::CameraBuilder,
+        collider::InteractionGroups,
+        graph::physics::RayCastOptions,
+        graph::Graph,
+        node::Node,
+        sound::context::SoundContext,
+        sound::effect::{BaseEffectBuilder, Effect, EffectInput, ReverbEffectBuilder},
+        sound::{HrirSphere, HrtfRenderer, Renderer, SoundBuilder, Status, SAMPLE_RATE},
+        transform::TransformBuilder,
+        Scene,
     },
     utils::{
         log::{Log, MessageKind},
@@ -48,46 +49,36 @@ use rg3d::{
 use std::{
     path::{Path, PathBuf},
     sync::{mpsc::Sender, Arc, RwLock},
-    time::Duration,
 };
 
 pub const RESPAWN_TIME: f32 = 4.0;
 
 #[derive(Default)]
 pub struct SoundManager {
-    context: SoundContext,
     reverb: Handle<Effect>,
 }
 
 impl SoundManager {
-    pub fn new(context: SoundContext) -> Self {
-        let mut base_effect = BaseEffect::default();
-        base_effect.set_gain(0.7);
-        let mut reverb = rg3d::sound::effects::reverb::Reverb::new(base_effect);
-        reverb.set_dry(0.5);
-        reverb.set_wet(0.5);
-        reverb.set_decay_time(Duration::from_secs_f32(3.0));
-        let reverb = context
-            .state()
-            .add_effect(rg3d::sound::effects::Effect::Reverb(reverb));
+    pub fn new(context: &mut SoundContext) -> Self {
+        let reverb = ReverbEffectBuilder::new(BaseEffectBuilder::new().with_gain(0.7))
+            .with_dry(0.5)
+            .with_wet(0.5)
+            .with_decay_time(3.0)
+            .build(context);
 
-        let hrtf_sphere = rg3d::sound::hrtf::HrirSphere::from_file(
-            "data/sounds/IRC_1040_C.bin",
-            context::SAMPLE_RATE,
-        )
-        .unwrap();
-        context
-            .state()
-            .set_renderer(rg3d::sound::renderer::Renderer::HrtfRenderer(
-                rg3d::sound::renderer::hrtf::HrtfRenderer::new(hrtf_sphere),
-            ));
+        let hrir_sphere = HrirSphere::from_file("data/sounds/IRC_1040_C.bin", SAMPLE_RATE).unwrap();
 
-        Self { context, reverb }
+        context.set_renderer(Renderer::HrtfRenderer(HrtfRenderer::new(hrir_sphere)));
+
+        Self { reverb }
     }
 
-    pub async fn handle_message(&mut self, resource_manager: ResourceManager, message: &Message) {
-        let mut state = self.context.state();
-
+    pub async fn handle_message(
+        &mut self,
+        graph: &mut Graph,
+        resource_manager: ResourceManager,
+        message: &Message,
+    ) {
         match message {
             Message::PlaySound {
                 path,
@@ -96,27 +87,36 @@ impl SoundManager {
                 rolloff_factor,
                 radius,
             } => {
-                let shot_buffer = resource_manager
-                    .request_sound_buffer(path, false)
-                    .await
-                    .unwrap();
-                let shot_sound = SpatialSourceBuilder::new(
-                    GenericSourceBuilder::new()
-                        .with_buffer(shot_buffer.into())
-                        .with_status(Status::Playing)
-                        .with_play_once(true)
-                        .with_gain(*gain)
-                        .build()
-                        .unwrap(),
-                )
-                .with_position(*position)
-                .with_radius(*radius)
-                .with_rolloff_factor(*rolloff_factor)
-                .build_source();
-                let source = state.add_source(shot_sound);
-                state
-                    .effect_mut(self.reverb)
-                    .add_input(EffectInput::direct(source));
+                if let Ok(buffer) = resource_manager.request_sound_buffer(path).await {
+                    let sound = SoundBuilder::new(
+                        BaseBuilder::new().with_local_transform(
+                            TransformBuilder::new()
+                                .with_local_position(*position)
+                                .build(),
+                        ),
+                    )
+                    .with_buffer(buffer.into())
+                    .with_status(Status::Playing)
+                    .with_play_once(true)
+                    .with_gain(*gain)
+                    .with_radius(*radius)
+                    .with_rolloff_factor(*rolloff_factor)
+                    .build(graph);
+
+                    graph
+                        .sound_context
+                        .effect_mut(self.reverb)
+                        .inputs_mut()
+                        .push(EffectInput {
+                            sound,
+                            filter: None,
+                        });
+                } else {
+                    Log::writeln(
+                        MessageKind::Error,
+                        format!("Unable to play sound {:?}", path),
+                    );
+                }
             }
             _ => {}
         }
@@ -127,7 +127,6 @@ impl Visit for SoundManager {
     fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
         visitor.enter_region(name)?;
 
-        self.context.visit("Context", visitor)?;
         self.reverb.visit("Reverb", visitor)?;
 
         visitor.leave_region()
@@ -155,8 +154,6 @@ pub struct Level {
     spectator_camera: Handle<Node>,
     target_spectator_position: Vector3<f32>,
     sound_manager: SoundManager,
-    proximity_events_receiver: Option<crossbeam::channel::Receiver<IntersectionEvent>>,
-    contact_events_receiver: Option<crossbeam::channel::Receiver<ContactEvent>>,
 }
 
 impl Default for Level {
@@ -182,8 +179,6 @@ impl Default for Level {
             spectator_camera: Default::default(),
             target_spectator_position: Default::default(),
             sound_manager: Default::default(),
-            proximity_events_receiver: None,
-            contact_events_receiver: None,
         }
     }
 }
@@ -398,9 +393,7 @@ pub async fn analyze(
                 let len = d.norm();
                 let force = d.try_normalize(std::f32::EPSILON);
                 let force = force.unwrap_or(Vector3::y()).scale(len * 3.0);
-                let shape = scene.physics.mesh_to_trimesh(handle, &scene.graph);
-                scene.physics_binder.bind(handle, shape);
-                result.jump_pads.add(JumpPad::new(shape, force));
+                result.jump_pads.add(JumpPad::new(Handle::NONE, force)); // TODO: Create shape for jump pads in the editor
             };
         } else if name.starts_with("Medkit") {
             items.push((ItemKind::Medkit, position));
@@ -413,8 +406,8 @@ pub async fn analyze(
         } else if name.starts_with("SpawnPoint") {
             spawn_points.push(node.global_position())
         } else if name.starts_with("DeathZone") {
-            if let Node::Mesh(_) = node {
-                death_zones.push(handle);
+            if node.is_mesh() {
+                //   death_zones.push(handle);
             }
         }
     }
@@ -464,7 +457,7 @@ async fn spawn_player(
     let player = actors.add(Actor::Player(player));
     actors
         .get_mut(player)
-        .set_position(&mut scene.physics, spawn_position);
+        .set_position(&mut scene.graph, spawn_position);
 
     let weapons_to_give = [
         WeaponKind::M4,
@@ -528,7 +521,7 @@ fn find_suitable_spawn_point(
     for (i, pt) in spawn_points.iter().enumerate() {
         let mut sum_distance = 0.0;
         for actor in actors.iter() {
-            let position = actor.position(&scene.physics);
+            let position = actor.position(&scene.graph);
             sum_distance += pt.position.metric_distance(&position);
         }
         if sum_distance > max_distance {
@@ -618,15 +611,7 @@ impl Level {
 
         scene.ambient_lighting_color = Color::opaque(60, 60, 60);
 
-        let sound_manager = SoundManager::new(scene.sound_context.clone());
-
-        let (proximity_events_sender, proximity_events_receiver) = crossbeam::channel::unbounded();
-        let (contact_events_sender, contact_events_receiver) = crossbeam::channel::unbounded();
-
-        scene.physics.event_handler = Box::new(ChannelEventCollector::new(
-            proximity_events_sender.clone(),
-            contact_events_sender.clone(),
-        ));
+        let sound_manager = SoundManager::new(&mut scene.graph.sound_context);
 
         // Spectator camera is used when there is no player on level.
         // This includes situation when player is dead - all dead actors are removed
@@ -635,27 +620,12 @@ impl Level {
             .enabled(false)
             .build(&mut scene.graph);
 
-        let map_model = resource_manager
-            .request_model(
-                Path::new("data/models/dm6.fbx"),
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures")),
-            )
-            .await
-            .unwrap();
-
         // Instantiate map
-        let map_root = map_model.instantiate_geometry(&mut scene);
-
-        // Create collision geometry
-        let polygon_handle = scene.graph.find_by_name(map_root, "Polygon");
-        if polygon_handle.is_some() {
-            scene.physics.mesh_to_trimesh(polygon_handle, &scene.graph);
-        } else {
-            Log::writeln(
-                MessageKind::Warning,
-                "Unable to find Polygon node to build collision shape for level!".to_owned(),
-            );
-        }
+        let map_root = resource_manager
+            .request_model(Path::new("data/levels/dm6.rgs"))
+            .await
+            .unwrap()
+            .instantiate_geometry(&mut scene);
 
         let AnalysisResult {
             jump_pads,
@@ -709,8 +679,6 @@ impl Level {
             control_scheme: Some(control_scheme),
             time: 0.0,
             respawn_list: Default::default(),
-            contact_events_receiver: Some(contact_events_receiver),
-            proximity_events_receiver: Some(proximity_events_receiver),
             projectiles: ProjectileContainer::new(),
             target_spectator_position: Default::default(),
             sound_manager,
@@ -756,7 +724,7 @@ impl Level {
         )
         .await;
 
-        if let Node::Camera(spectator_camera) = &mut scene.graph[self.spectator_camera] {
+        if let Some(spectator_camera) = scene.graph[self.spectator_camera].cast_mut::<Camera>() {
             spectator_camera.set_enabled(false);
         }
 
@@ -794,12 +762,12 @@ impl Level {
         let options = RayCastOptions {
             ray_origin: Point3::from(ray.origin),
             ray_direction: ray.dir,
-            max_len: std::f32::MAX,
-            groups: InteractionGroups::all(),
+            max_len: f32::MAX,
+            groups: InteractionGroups::default(),
             sort_results: true,
         };
         let mut query_buffer = Vec::default();
-        scene.physics.cast_ray(options, &mut query_buffer);
+        scene.graph.physics.cast_ray(options, &mut query_buffer);
         if let Some(pt) = query_buffer.first() {
             pt.position.coords
         } else {
@@ -845,7 +813,7 @@ impl Level {
             let character = self.actors.get(actor);
 
             // Make sure to remove weapons and drop appropriate items (items will be temporary).
-            let drop_position = character.position(&scene.physics);
+            let drop_position = character.position(&scene.graph);
             let weapons = character
                 .weapons()
                 .iter()
@@ -1077,7 +1045,7 @@ impl Level {
 
             let who_position = if who.is_some() {
                 let scene = &engine.scenes[self.scene];
-                Some(self.actors.get(who).position(&scene.physics))
+                Some(self.actors.get(who).position(&scene.graph))
             } else {
                 None
             };
@@ -1165,7 +1133,7 @@ impl Level {
     }
 
     fn update_spectator_camera(&mut self, scene: &mut Scene) {
-        if let Node::Camera(spectator_camera) = &mut scene.graph[self.spectator_camera] {
+        if let Some(spectator_camera) = scene.graph[self.spectator_camera].cast_mut::<Camera>() {
             let mut position = spectator_camera.global_position();
             position.follow(&self.target_spectator_position, 0.1);
             spectator_camera
@@ -1179,7 +1147,7 @@ impl Level {
             for death_zone in self.death_zones.iter() {
                 if death_zone
                     .bounds
-                    .is_contains_point(actor.position(&scene.physics))
+                    .is_contains_point(actor.position(&scene.graph))
                 {
                     self.sender
                         .as_ref()
@@ -1205,12 +1173,6 @@ impl Level {
         self.time += time.delta;
         self.update_respawn(time);
         let scene = &mut engine.scenes[self.scene];
-        while let Ok(proximity_event) = self.proximity_events_receiver.as_ref().unwrap().try_recv()
-        {
-            for proj in self.projectiles.iter_mut() {
-                proj.handle_proximity(&proximity_event, scene, &self.actors, &self.weapons);
-            }
-        }
         self.update_spectator_camera(scene);
         self.update_death_zones(scene);
         self.weapons.update(scene, &self.actors);
@@ -1226,9 +1188,7 @@ impl Level {
             weapons: &self.weapons,
         };
         self.actors.update(&mut ctx);
-        while let Ok(contact_event) = self.contact_events_receiver.as_ref().unwrap().try_recv() {
-            self.actors.handle_event(&contact_event, &mut ctx);
-        }
+
         self.update_game_ending();
     }
 
@@ -1249,7 +1209,8 @@ impl Level {
                     // camera will be used to render world until player is despawned.
                     let scene = &mut engine.scenes[self.scene];
                     let position = scene.graph[player.camera()].global_position();
-                    if let Node::Camera(spectator_camera) = &mut scene.graph[self.spectator_camera]
+                    if let Some(spectator_camera) =
+                        scene.graph[self.spectator_camera].cast_mut::<Camera>()
                     {
                         spectator_camera
                             .set_enabled(true)
@@ -1263,13 +1224,13 @@ impl Level {
                     let options = RayCastOptions {
                         ray_origin: Point3::from(ray.origin),
                         ray_direction: ray.dir,
-                        max_len: std::f32::MAX,
-                        groups: InteractionGroups::all(),
+                        max_len: f32::MAX,
+                        groups: InteractionGroups::default(),
                         sort_results: true,
                     };
 
                     let mut query_buffer = Vec::default();
-                    scene.physics.cast_ray(options, &mut query_buffer);
+                    scene.graph.physics.cast_ray(options, &mut query_buffer);
                     if let Some(hit) = query_buffer.first() {
                         self.target_spectator_position = hit.position.coords;
                         // Prevent see-thru-floor
@@ -1292,7 +1253,11 @@ impl Level {
 
     pub async fn handle_message(&mut self, engine: &mut Engine, message: &Message, time: GameTime) {
         self.sound_manager
-            .handle_message(engine.resource_manager.clone(), &message)
+            .handle_message(
+                &mut engine.scenes[self.scene].graph,
+                engine.resource_manager.clone(),
+                &message,
+            )
             .await;
 
         match message {
@@ -1372,7 +1337,7 @@ impl Level {
         }
     }
 
-    pub fn set_message_sender(&mut self, sender: Sender<Message>, engine: &mut Engine) {
+    pub fn set_message_sender(&mut self, sender: Sender<Message>) {
         self.sender = Some(sender.clone());
 
         // Attach new sender to all event sources.
@@ -1388,17 +1353,6 @@ impl Level {
         for item in self.items.iter_mut() {
             item.sender = Some(sender.clone());
         }
-
-        let (proximity_events_sender, proximity_events_receiver) = crossbeam::channel::unbounded();
-        let (contact_events_sender, contact_events_receiver) = crossbeam::channel::unbounded();
-
-        self.proximity_events_receiver = Some(proximity_events_receiver);
-        self.contact_events_receiver = Some(contact_events_receiver);
-
-        engine.scenes[self.scene].physics.event_handler = Box::new(ChannelEventCollector::new(
-            proximity_events_sender.clone(),
-            contact_events_sender.clone(),
-        ));
     }
 
     pub fn debug_draw(&self, engine: &mut Engine) {
@@ -1408,7 +1362,7 @@ impl Level {
 
         drawing_context.clear_lines();
 
-        scene.physics.draw(drawing_context);
+        scene.graph.physics.draw(drawing_context);
 
         if self.navmesh.is_some() {
             let navmesh = &scene.navmeshes[self.navmesh];

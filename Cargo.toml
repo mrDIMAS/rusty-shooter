@@ -9,8 +9,5 @@ license = "MIT"
 opt-level = 3
 
 [dependencies]
-rg3d = { path = "../rg3d" }
+fyrox = { path = "../Fyrox" }
 crossbeam = "0.8.0"
-
-[features]
-enable_profiler = ["rg3d/enable_profiler"]

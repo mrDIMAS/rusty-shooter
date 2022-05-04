@@ -3,7 +3,8 @@ use crate::{
     message::Message,
     GameTime, MatchOptions,
 };
-use rg3d::{
+use fyrox::core::parking_lot::Mutex;
+use fyrox::{
     core::{color::Color, pool::Handle},
     engine::Engine,
     event::{Event, WindowEvent},
@@ -22,11 +23,7 @@ use rg3d::{
     gui::{UiNode, UserInterface},
     utils,
 };
-use std::{
-    collections::VecDeque,
-    path::Path,
-    sync::{Arc, Mutex},
-};
+use std::{collections::VecDeque, path::Path, sync::Arc};
 
 pub struct Hud {
     root: Handle<UiNode>,
@@ -52,7 +49,7 @@ impl Hud {
         let ctx = &mut engine.user_interface.build_ctx();
         let resource_manager = engine.resource_manager.clone();
 
-        let font = rg3d::core::futures::executor::block_on(Font::from_file(
+        let font = fyrox::core::futures::executor::block_on(Font::from_file(
             Path::new("data/ui/SquaresBold.ttf"),
             35.0,
             Font::default_char_set(),
@@ -85,7 +82,7 @@ impl Hud {
                             .on_column(1),
                     )
                     .with_texture(utils::into_gui_texture(
-                        resource_manager.request_texture("data/ui/crosshair.tga", None),
+                        resource_manager.request_texture("data/ui/crosshair.tga"),
                     ))
                     .build(ctx),
                 )
@@ -208,8 +205,7 @@ impl Hud {
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
                                 .with_texture(utils::into_gui_texture(
-                                    resource_manager
-                                        .request_texture("data/ui/health_icon.png", None),
+                                    resource_manager.request_texture("data/ui/health_icon.png"),
                                 ))
                                 .build(ctx),
                             )
@@ -249,7 +245,7 @@ impl Hud {
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
                                 .with_texture(utils::into_gui_texture(
-                                    resource_manager.request_texture("data/ui/ammo_icon.png", None),
+                                    resource_manager.request_texture("data/ui/ammo_icon.png"),
                                 ))
                                 .build(ctx),
                             )
@@ -289,8 +285,7 @@ impl Hud {
                                     WidgetBuilder::new().with_width(35.0).with_height(35.0),
                                 )
                                 .with_texture(utils::into_gui_texture(
-                                    resource_manager
-                                        .request_texture("data/ui/shield_icon.png", None),
+                                    resource_manager.request_texture("data/ui/shield_icon.png"),
                                 ))
                                 .build(ctx),
                             )

@@ -18,7 +18,7 @@ use crate::{
     weapon::{Weapon, WeaponKind},
     MatchOptions,
 };
-use rg3d::core::{
+use fyrox::core::{
     algebra::{Matrix3, Vector3},
     pool::Handle,
 };

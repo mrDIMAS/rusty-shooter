@@ -5,32 +5,25 @@ use crate::{
     weapon::{Weapon, WeaponContainer},
     GameTime,
 };
-use rg3d::core::algebra::Point3;
-use rg3d::engine::resource_manager::MaterialSearchOptions;
-use rg3d::{
-    core::rand::Rng,
+use fyrox::{
     core::{
-        algebra::{Isometry3, Matrix3, Translation3, UnitQuaternion, Vector3},
+        algebra::{Matrix3, Point3, UnitQuaternion, Vector3},
         color::Color,
         math::{ray::Ray, Vector3Ext},
-        pool::{Handle, Pool, PoolIteratorMut},
+        pool::{Handle, Pool},
+        rand::Rng,
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    physics3d::{
-        rapier::{
-            dynamics::{RigidBodyBuilder, RigidBodyType},
-            geometry::{ColliderBuilder, InteractionGroups, IntersectionEvent},
-        },
-        RayCastOptions, RigidBodyHandle,
-    },
     rand,
     scene::{
         base::BaseBuilder,
-        graph::Graph,
+        collider::{ColliderBuilder, ColliderShape, InteractionGroups},
+        graph::{physics::RayCastOptions, Graph},
         light::{point::PointLightBuilder, BaseLightBuilder},
         node::Node,
-        sprite::SpriteBuilder,
+        rigidbody::{RigidBodyBuilder, RigidBodyType},
+        sprite::{Sprite, SpriteBuilder},
         transform::TransformBuilder,
         Scene,
     },
@@ -70,7 +63,7 @@ pub struct Projectile {
     /// rockets, plasma balls could have rigid body to detect collisions with
     /// environment. Some projectiles do not have rigid body - they're ray-based -
     /// interaction with environment handled with ray cast.
-    body: Option<RigidBodyHandle>,
+    body: Option<Handle<Node>>,
     dir: Vector3<f32>,
     lifetime: f32,
     rotation_angle: f32,
@@ -170,29 +163,37 @@ impl Projectile {
                     let size = rand::thread_rng().gen_range(0.09..0.12);
 
                     let color = Color::opaque(0, 162, 232);
-                    let model = SpriteBuilder::new(
-                        BaseBuilder::new().with_children(&[PointLightBuilder::new(
-                            BaseLightBuilder::new(BaseBuilder::new()).with_color(color),
-                        )
-                        .with_radius(1.5)
-                        .build(&mut scene.graph)]),
-                    )
-                    .with_size(size)
-                    .with_color(color)
-                    .with_texture(
-                        resource_manager.request_texture("data/particles/light_01.png", None),
-                    )
+
+                    let model;
+                    let collider;
+                    let body = RigidBodyBuilder::new(BaseBuilder::new().with_children(&[
+                        {
+                            model = SpriteBuilder::new(
+                                BaseBuilder::new().with_children(&[PointLightBuilder::new(
+                                    BaseLightBuilder::new(BaseBuilder::new()).with_color(color),
+                                )
+                                .with_radius(1.5)
+                                .build(&mut scene.graph)]),
+                            )
+                            .with_size(size)
+                            .with_color(color)
+                            .with_texture(
+                                resource_manager.request_texture("data/particles/light_01.png"),
+                            )
+                            .build(&mut scene.graph);
+                            model
+                        },
+                        {
+                            collider = ColliderBuilder::new(BaseBuilder::new())
+                                .with_shape(ColliderShape::ball(size))
+                                .build(&mut scene.graph);
+                            collider
+                        },
+                    ]))
+                    .with_body_type(RigidBodyType::KinematicPositionBased)
                     .build(&mut scene.graph);
 
-                    let collider = ColliderBuilder::ball(size).sensor(true).build();
-                    let body = RigidBodyBuilder::new(RigidBodyType::KinematicPositionBased)
-                        .translation(position)
-                        .build();
-                    let body_handle = scene.physics.add_body(body);
-                    scene.physics.add_collider(collider, &body_handle);
-                    scene.physics_binder.bind(model, body_handle);
-
-                    (model, Some(body_handle))
+                    (model, Some(body))
                 }
                 ProjectileKind::Bullet => {
                     let model = SpriteBuilder::new(
@@ -203,21 +204,14 @@ impl Projectile {
                         ),
                     )
                     .with_size(0.05)
-                    .with_texture(
-                        resource_manager.request_texture("data/particles/light_01.png", None),
-                    )
+                    .with_texture(resource_manager.request_texture("data/particles/light_01.png"))
                     .build(&mut scene.graph);
 
                     (model, None)
                 }
                 ProjectileKind::Rocket => {
                     let resource = resource_manager
-                        .request_model(
-                            "data/models/rocket.FBX",
-                            MaterialSearchOptions::MaterialsDirectory(PathBuf::from(
-                                "data/textures",
-                            )),
-                        )
+                        .request_model("data/models/rocket.FBX")
                         .await
                         .unwrap();
                     let model = resource.instantiate_geometry(scene);
@@ -269,14 +263,7 @@ impl Projectile {
     ) {
         // Fetch current position of projectile.
         let position = if let Some(body) = self.body.as_ref() {
-            scene
-                .physics
-                .bodies
-                .get(body)
-                .unwrap()
-                .position()
-                .translation
-                .vector
+            scene.graph[*body].global_position()
         } else {
             scene.graph[self.model].global_position()
         };
@@ -287,12 +274,12 @@ impl Projectile {
         // fast moving projectiles.
         let ray = Ray::from_two_points(self.last_position, position);
         let mut query_buffer = Vec::default();
-        scene.physics.cast_ray(
+        scene.graph.physics.cast_ray(
             RayCastOptions {
                 ray_origin: Point3::from(ray.origin),
                 ray_direction: ray.origin,
                 max_len: ray.dir.norm(),
-                groups: InteractionGroups::all(),
+                groups: InteractionGroups::default(),
                 sort_results: true,
             },
             &mut query_buffer,
@@ -300,16 +287,10 @@ impl Projectile {
 
         // List of hits sorted by distance from ray origin.
         'hit_loop: for hit in query_buffer.iter() {
-            let collider = scene.physics.colliders.get(&hit.collider).unwrap();
-            let body = scene
-                .physics
-                .bodies
-                .handle_map()
-                .key_of(&collider.parent().unwrap())
-                .cloned()
-                .unwrap();
+            let collider = scene.graph[hit.collider].as_collider();
+            let body = collider.parent();
 
-            if collider.shape().as_trimesh().is_some() {
+            if matches!(collider.shape(), ColliderShape::Trimesh(_)) {
                 self.kill();
                 effect_position = Some(hit.position.coords);
                 break 'hit_loop;
@@ -340,14 +321,9 @@ impl Projectile {
             // Special case for projectiles with rigid body.
             if let Some(body) = self.body.as_ref() {
                 // Move rigid body explicitly.
-                let body = scene.physics.bodies.get_mut(body).unwrap();
-                let position = Isometry3 {
-                    rotation: Default::default(),
-                    translation: Translation3 {
-                        vector: body.position().translation.vector + total_velocity,
-                    },
-                };
-                body.set_next_kinematic_position(position);
+                scene.graph[*body]
+                    .local_transform_mut()
+                    .offset(total_velocity);
             } else {
                 // We have just model - move it.
                 scene.graph[self.model]
@@ -356,7 +332,7 @@ impl Projectile {
             }
         }
 
-        if let Node::Sprite(sprite) = &mut scene.graph[self.model] {
+        if let Some(sprite) = scene.graph[self.model].cast_mut::<Sprite>() {
             sprite.set_rotation(self.rotation_angle);
             self.rotation_angle += 1.5;
         }
@@ -407,87 +383,17 @@ impl Projectile {
         self.last_position = position;
     }
 
-    /// Some projectiles have just proximity sensors which used to detect contacts with
-    /// environment and actors. We have to handle proximity events separately.
-    pub fn handle_proximity(
-        &mut self,
-        proximity_event: &IntersectionEvent,
-        scene: &mut Scene,
-        actors: &ActorContainer,
-        weapons: &WeaponContainer,
-    ) {
-        if proximity_event.intersecting {
-            let mut owner_contact = false;
-
-            let body_a = scene
-                .physics
-                .bodies
-                .handle_map()
-                .key_of(
-                    &scene
-                        .physics
-                        .colliders
-                        .native_ref(proximity_event.collider1)
-                        .unwrap()
-                        .parent()
-                        .unwrap(),
-                )
-                .cloned()
-                .unwrap();
-            let body_b = scene
-                .physics
-                .bodies
-                .handle_map()
-                .key_of(
-                    &scene
-                        .physics
-                        .colliders
-                        .native_ref(proximity_event.collider2)
-                        .unwrap()
-                        .parent()
-                        .unwrap(),
-                )
-                .cloned()
-                .unwrap();
-
-            // Check if we got contact with any actor and damage it then.
-            for (actor_handle, actor) in actors.pair_iter() {
-                if let Some(self_body) = self.body {
-                    if (body_a == actor.get_body() && body_b == self_body
-                        || body_b == actor.get_body() && body_a == self_body)
-                        && self.owner.is_some()
-                    {
-                        // Prevent self-damage.
-                        let weapon = &weapons[self.owner];
-                        if weapon.owner() != actor_handle {
-                            self.hits.insert(Hit {
-                                actor: actor_handle,
-                                who: weapon.owner(),
-                            });
-                        } else {
-                            // Make sure that projectile won't die on contact with owner.
-                            owner_contact = true;
-                        }
-                    }
-                }
-            }
-
-            if !owner_contact {
-                self.kill();
-            }
-        }
-    }
-
     pub fn get_position(&self, graph: &Graph) -> Vector3<f32> {
         graph[self.model].global_position()
     }
 
     fn clean_up(&mut self, scene: &mut Scene) {
         if let Some(body) = self.body.as_ref() {
-            scene.physics.remove_body(body);
-        }
-        if self.model.is_some() {
-            scene.graph.remove_node(self.model);
+            scene.graph.remove_node(*body);
+        } else {
+            if self.model.is_some() {
+                scene.graph.remove_node(self.model);
+            }
         }
     }
 }
@@ -534,7 +440,7 @@ impl ProjectileContainer {
         self.pool.spawn(projectile)
     }
 
-    pub fn iter_mut(&mut self) -> PoolIteratorMut<Projectile> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Projectile> {
         self.pool.iter_mut()
     }
 

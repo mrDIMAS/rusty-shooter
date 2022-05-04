@@ -4,8 +4,11 @@ use crate::{
     level::UpdateContext,
     message::Message,
 };
-use rg3d::sound::context::SoundContext;
-use rg3d::{
+use fyrox::scene::collider::{ColliderBuilder, ColliderShape};
+use fyrox::scene::pivot::PivotBuilder;
+use fyrox::scene::rigidbody::{RigidBodyBuilder, RigidBodyType};
+use fyrox::scene::sound::listener::ListenerBuilder;
+use fyrox::{
     core::rand::Rng,
     core::{
         algebra::{Matrix3, UnitQuaternion, Vector3},
@@ -14,10 +17,6 @@ use rg3d::{
         visitor::{Visit, VisitResult, Visitor},
     },
     event::{DeviceEvent, ElementState, Event, MouseScrollDelta, WindowEvent},
-    physics3d::rapier::{
-        dynamics::{RigidBodyBuilder, RigidBodyType},
-        geometry::ColliderBuilder,
-    },
     rand,
     scene::transform::TransformBuilder,
     scene::{base::BaseBuilder, camera::CameraBuilder, node::Node, Scene},
@@ -156,60 +155,71 @@ impl Player {
     pub fn new(scene: &mut Scene, sender: Sender<Message>) -> Player {
         let height = Self::default().stand_body_height;
 
-        let body_handle = scene.physics.add_body(
-            RigidBodyBuilder::new(RigidBodyType::Dynamic)
-                .can_sleep(false)
-                .build(),
-        );
-        scene.physics.add_collider(
-            ColliderBuilder::capsule_y(height * 0.5, 0.35)
-                .friction(0.0)
-                .build(),
-            &body_handle,
-        );
-
         let camera_handle;
         let camera_pivot_handle;
         let weapon_base_pivot_handle;
         let weapon_pivot_handle;
-        let pivot_handle = BaseBuilder::new()
-            .with_children(&[{
-                camera_pivot_handle = BaseBuilder::new()
-                    .with_children(&[{
-                        camera_handle = CameraBuilder::new(BaseBuilder::new().with_children(&[{
-                            weapon_base_pivot_handle = BaseBuilder::new()
-                                .with_children(&[{
-                                    weapon_pivot_handle =
-                                        BaseBuilder::new().build(&mut scene.graph);
-                                    weapon_pivot_handle
-                                }])
-                                .with_local_transform(
-                                    TransformBuilder::new()
-                                        .with_local_position(Vector3::new(-0.065, -0.052, 0.02))
-                                        .build(),
-                                )
-                                .build(&mut scene.graph);
-                            weapon_base_pivot_handle
-                        }]))
-                        .build(&mut scene.graph);
-                        camera_handle
-                    }])
-                    .with_local_transform(
-                        TransformBuilder::new()
-                            .with_local_position(Vector3::new(0.0, height - 0.20, 0.0))
-                            .build(),
-                    )
+        let collider;
+        let body_handle = RigidBodyBuilder::new(BaseBuilder::new().with_children(&[
+            {
+                collider = ColliderBuilder::new(BaseBuilder::new())
+                    .with_shape(ColliderShape::capsule_y(height * 0.5, 0.35))
+                    .with_friction(0.5)
                     .build(&mut scene.graph);
+                collider
+            },
+            {
+                camera_pivot_handle = PivotBuilder::new(
+                    BaseBuilder::new()
+                        .with_children(&[{
+                            camera_handle = CameraBuilder::new(
+                                BaseBuilder::new().with_children(&[
+                                    {
+                                        weapon_base_pivot_handle = PivotBuilder::new(
+                                            BaseBuilder::new()
+                                                .with_children(&[{
+                                                    weapon_pivot_handle =
+                                                        PivotBuilder::new(BaseBuilder::new())
+                                                            .build(&mut scene.graph);
+                                                    weapon_pivot_handle
+                                                }])
+                                                .with_local_transform(
+                                                    TransformBuilder::new()
+                                                        .with_local_position(Vector3::new(
+                                                            -0.065, -0.052, 0.02,
+                                                        ))
+                                                        .build(),
+                                                ),
+                                        )
+                                        .build(&mut scene.graph);
+                                        weapon_base_pivot_handle
+                                    },
+                                    ListenerBuilder::new(BaseBuilder::new())
+                                        .build(&mut scene.graph),
+                                ]),
+                            )
+                            .build(&mut scene.graph);
+                            camera_handle
+                        }])
+                        .with_local_transform(
+                            TransformBuilder::new()
+                                .with_local_position(Vector3::new(0.0, height - 0.20, 0.0))
+                                .build(),
+                        ),
+                )
+                .build(&mut scene.graph);
                 camera_pivot_handle
-            }])
-            .build(&mut scene.graph);
-
-        scene.physics_binder.bind(pivot_handle, body_handle.into());
+            },
+        ]))
+        .with_locked_rotations(true)
+        .with_can_sleep(false)
+        .with_body_type(RigidBodyType::Dynamic)
+        .build(&mut scene.graph);
 
         Player {
             character: Character {
-                pivot: pivot_handle,
-                body: body_handle.into(),
+                body: body_handle,
+                collider,
                 weapon_pivot: weapon_pivot_handle,
                 sender: Some(sender),
                 name: "Player".to_owned(),
@@ -263,11 +273,11 @@ impl Player {
     }
 
     fn update_movement(&mut self, context: &mut UpdateContext) {
-        let pivot = &context.scene.graph[self.character.pivot];
-        let look = pivot.look_vector();
-        let side = pivot.side_vector();
+        let has_ground_contact = self.character.has_ground_contact(&context.scene.graph);
 
-        let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
+        let body = context.scene.graph[self.character.body].as_rigid_body_mut();
+        let look = body.look_vector();
+        let side = body.side_vector();
 
         let mut velocity = Vector3::default();
         if self.controller.move_forward {
@@ -289,22 +299,12 @@ impl Player {
             1.0
         };
 
-        let body = context
-            .scene
-            .physics
-            .bodies
-            .get_mut(&self.character.body)
-            .unwrap();
-        body.set_angvel(Default::default(), true);
         if let Some(normalized_velocity) = velocity.try_normalize(std::f32::EPSILON) {
-            body.set_linvel(
-                Vector3::new(
-                    normalized_velocity.x * self.move_speed * speed_mult,
-                    body.linvel().y,
-                    normalized_velocity.z * self.move_speed * speed_mult,
-                ),
-                true,
-            );
+            body.set_lin_vel(Vector3::new(
+                normalized_velocity.x * self.move_speed * speed_mult,
+                body.lin_vel().y,
+                normalized_velocity.z * self.move_speed * speed_mult,
+            ));
 
             self.weapon_dest_offset.x = 0.01 * (self.weapon_shake_factor * 0.5).cos();
             self.weapon_dest_offset.y = 0.005 * self.weapon_shake_factor.sin();
@@ -320,34 +320,20 @@ impl Player {
             self.weapon_dest_offset = Vector3::default();
         }
 
-        // Damping to prevent sliding.
-        // TODO: This is needed because Rapier does not have selection of friction
-        // models yet.
-        if has_ground_contact {
-            let mut vel = *body.linvel();
-            vel.x *= 0.9;
-            vel.z *= 0.9;
-            body.set_linvel(vel, true);
-        }
-
         self.weapon_offset.follow(&self.weapon_dest_offset, 0.1);
-
-        context.scene.graph[self.character.weapon_pivot]
-            .local_transform_mut()
-            .set_position(self.weapon_offset);
 
         if self.controller.jump {
             if has_ground_contact {
-                let mut vel = *body.linvel();
+                let mut vel = body.lin_vel();
                 vel.y = 4.2;
-                body.set_linvel(vel, true);
+                body.set_lin_vel(vel);
             }
             self.controller.jump = false;
         }
 
         //self.handle_crouch(body);
 
-        self.feet_position = body.position().translation.vector;
+        self.feet_position = body.global_position();
         self.feet_position.y -= self.stand_body_height;
 
         if self
@@ -362,20 +348,6 @@ impl Player {
         } else {
             self.camera_offset = Vector3::default();
         }
-
-        let camera_node = &mut context.scene.graph[self.camera];
-        camera_node
-            .local_transform_mut()
-            .set_position(self.camera_offset);
-
-        self.head_position = camera_node.global_position();
-        self.look_direction = camera_node.look_vector();
-        self.up_direction = camera_node.up_vector();
-        self.listener_basis = Matrix3::from_columns(&[
-            camera_node.side_vector(),
-            camera_node.up_vector(),
-            -camera_node.look_vector(),
-        ]);
 
         if self
             .control_scheme
@@ -392,10 +364,11 @@ impl Player {
             self.pitch = self.dest_pitch;
         }
 
-        let mut position = *body.position();
-        position.rotation =
-            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), self.yaw.to_radians());
-        body.set_position(position, true);
+        body.local_transform_mut()
+            .set_rotation(UnitQuaternion::from_axis_angle(
+                &Vector3::y_axis(),
+                self.yaw.to_radians(),
+            ));
 
         context.scene.graph[self.camera_pivot]
             .local_transform_mut()
@@ -403,13 +376,24 @@ impl Player {
                 &Vector3::x_axis(),
                 self.pitch.to_radians(),
             ));
-    }
 
-    fn update_listener(&mut self, sound_context: SoundContext) {
-        let mut sound_context = sound_context.state();
-        let listener = sound_context.listener_mut();
-        listener.set_basis(self.listener_basis);
-        listener.set_position(self.head_position);
+        context.scene.graph[self.character.weapon_pivot]
+            .local_transform_mut()
+            .set_position(self.weapon_offset);
+
+        let camera_node = &mut context.scene.graph[self.camera];
+        camera_node
+            .local_transform_mut()
+            .set_position(self.camera_offset);
+
+        self.head_position = camera_node.global_position();
+        self.look_direction = camera_node.look_vector();
+        self.up_direction = camera_node.up_vector();
+        self.listener_basis = Matrix3::from_columns(&[
+            camera_node.side_vector(),
+            camera_node.up_vector(),
+            -camera_node.look_vector(),
+        ]);
     }
 
     pub fn can_be_removed(&self) -> bool {
@@ -536,13 +520,9 @@ impl Player {
             .weapons
             .get(self.character.current_weapon as usize)
         {
-            let velocity = context
-                .scene
-                .physics
-                .bodies
-                .get(&self.character.body)
-                .unwrap()
-                .linvel();
+            let initial_velocity = context.scene.graph[self.character.body]
+                .as_rigid_body()
+                .lin_vel();
 
             if self.controller.shoot {
                 self.character
@@ -551,7 +531,7 @@ impl Player {
                     .unwrap()
                     .send(Message::ShootWeapon {
                         weapon: *current_weapon_handle,
-                        initial_velocity: *velocity,
+                        initial_velocity,
                         direction: None,
                     })
                     .unwrap();
@@ -571,7 +551,7 @@ impl Player {
                 .unwrap()
                 .send(Message::PlaySound {
                     path: footsteps[rand::thread_rng().gen_range(0..footsteps.len())].into(),
-                    position: self.character.position(&context.scene.physics),
+                    position: self.character.position(&context.scene.graph),
                     gain: 1.0,
                     rolloff_factor: 2.0,
                     radius: 3.0,
@@ -580,8 +560,6 @@ impl Player {
 
             self.path_len = 0.0;
         }
-
-        self.update_listener(context.scene.sound_context.clone());
     }
 
     pub fn clean_up(&mut self, scene: &mut Scene) {

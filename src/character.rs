@@ -1,19 +1,18 @@
 use crate::{message::Message, weapon::Weapon};
-use rg3d::{
+use fyrox::{
     core::{
         algebra::Vector3,
         pool::Handle,
         visitor::{Visit, VisitError, VisitResult, Visitor},
     },
-    physics3d::RigidBodyHandle,
-    scene::{node::Node, physics::Physics, Scene},
+    scene::{graph::Graph, node::Node, Scene},
 };
 use std::sync::mpsc::Sender;
 
 pub struct Character {
     pub name: String,
-    pub pivot: Handle<Node>,
-    pub body: RigidBodyHandle,
+    pub body: Handle<Node>,
+    pub collider: Handle<Node>,
     pub health: f32,
     pub armor: f32,
     pub weapons: Vec<Handle<Weapon>>,
@@ -60,8 +59,8 @@ impl Default for Character {
     fn default() -> Self {
         Self {
             name: Default::default(),
-            pivot: Handle::NONE,
             body: Default::default(),
+            collider: Default::default(),
             health: 100.0,
             armor: 100.0,
             weapons: Vec::new(),
@@ -78,7 +77,7 @@ impl Visit for Character {
         visitor.enter_region(name)?;
 
         self.name.visit("Name", visitor)?;
-        self.pivot.visit("Pivot", visitor)?;
+        self.collider.visit("Collider", visitor)?;
         self.body.visit("Body", visitor)?;
         self.health.visit("Health", visitor)?;
         self.armor.visit("Armor", visitor)?;
@@ -92,13 +91,13 @@ impl Visit for Character {
 }
 
 impl Character {
-    pub fn get_body(&self) -> RigidBodyHandle {
+    pub fn get_body(&self) -> Handle<Node> {
         self.body
     }
 
-    pub fn has_ground_contact(&self, physics: &Physics) -> bool {
-        let body = physics.bodies.get(&self.body).unwrap();
-        for contact in physics.narrow_phase.contacts_with(body.colliders()[0]) {
+    pub fn has_ground_contact(&self, graph: &Graph) -> bool {
+        let body = graph[self.collider].as_collider();
+        for contact in body.contacts(&graph.physics) {
             for manifold in contact.manifolds.iter() {
                 if manifold.local_n1.y > 0.7 {
                     return true;
@@ -124,21 +123,14 @@ impl Character {
         self.armor
     }
 
-    pub fn set_position(&mut self, physics: &mut Physics, position: Vector3<f32>) {
-        let body = physics.bodies.get_mut(&self.get_body()).unwrap();
-        let mut body_position = *body.position();
-        body_position.translation.vector = position;
-        body.set_position(body_position, true);
+    pub fn set_position(&mut self, graph: &mut Graph, position: Vector3<f32>) {
+        graph[self.body]
+            .local_transform_mut()
+            .set_position(position);
     }
 
-    pub fn position(&self, physics: &Physics) -> Vector3<f32> {
-        physics
-            .bodies
-            .get(&self.get_body())
-            .unwrap()
-            .position()
-            .translation
-            .vector
+    pub fn position(&self, graph: &Graph) -> Vector3<f32> {
+        graph[self.body].global_position()
     }
 
     pub fn damage(&mut self, amount: f32) {
@@ -243,7 +235,6 @@ impl Character {
     }
 
     pub fn clean_up(&mut self, scene: &mut Scene) {
-        scene.remove_node(self.pivot);
-        scene.physics.remove_body(&self.body);
+        scene.remove_node(self.body);
     }
 }

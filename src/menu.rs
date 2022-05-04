@@ -2,7 +2,8 @@ use crate::{
     control_scheme::ControlScheme, match_menu::MatchMenu, message::Message,
     options_menu::OptionsMenu,
 };
-use rg3d::{
+use fyrox::core::parking_lot::Mutex;
+use fyrox::{
     core::pool::Handle,
     engine::Engine,
     event::{Event, WindowEvent},
@@ -18,7 +19,7 @@ use rg3d::{
 };
 use std::{
     path::Path,
-    sync::{mpsc::Sender, Arc, Mutex, RwLock},
+    sync::{mpsc::Sender, Arc, RwLock},
 };
 
 pub struct Menu {
@@ -41,7 +42,7 @@ impl Menu {
     ) -> Self {
         let frame_size = engine.renderer.get_frame_size();
 
-        let font: Font = rg3d::core::futures::executor::block_on(Font::from_file(
+        let font: Font = fyrox::core::futures::executor::block_on(Font::from_file(
             Path::new("data/ui/SquaresBold.ttf"),
             31.0,
             Font::default_char_set(),

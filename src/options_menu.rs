@@ -3,7 +3,7 @@ use crate::{
     gui::{create_check_box, create_scroll_bar, create_scroll_viewer, ScrollBarData},
     message::Message,
 };
-use rg3d::{
+use fyrox::{
     core::pool::Handle,
     engine::Engine,
     event::{Event, MouseButton, MouseScrollDelta, WindowEvent},
@@ -633,6 +633,7 @@ impl OptionsMenu {
     }
 
     pub fn sync_to_model(&mut self, engine: &mut Engine) {
+        let sound_gain = engine.sound_gain();
         let ui = &mut engine.user_interface;
         let control_scheme = self.control_scheme.read().unwrap();
         let settings = engine.renderer.get_quality_settings();
@@ -652,7 +653,7 @@ impl OptionsMenu {
         sync_check_box(self.cb_mouse_y_inverse, control_scheme.mouse_y_inverse);
         sync_check_box(self.cb_smooth_mouse, control_scheme.smooth_mouse);
         sync_check_box(self.cb_shake_camera, control_scheme.shake_camera);
-        let is_hrtf = true; /*if let rg3d::sound::renderer::Renderer::HrtfRenderer(_) =
+        let is_hrtf = true; /*if let fyrox::sound::renderer::Renderer::HrtfRenderer(_) =
                                 engine.sound_context.lock().unwrap().renderer()
                             {
                                 true
@@ -674,10 +675,7 @@ impl OptionsMenu {
         );
         sync_scroll_bar(self.sb_spot_shadow_distance, settings.spot_shadows_distance);
         sync_scroll_bar(self.sb_mouse_sens, control_scheme.mouse_sens);
-        sync_scroll_bar(
-            self.sb_sound_volume,
-            engine.sound_engine.lock().unwrap().master_gain(),
-        );
+        sync_scroll_bar(self.sb_sound_volume, sound_gain);
 
         for (btn, def) in self
             .control_scheme_buttons
@@ -759,11 +757,7 @@ impl OptionsMenu {
         if let Some(ScrollBarMessage::Value(new_value)) = message.data() {
             if message.direction() == MessageDirection::FromWidget {
                 if message.destination() == self.sb_sound_volume {
-                    engine
-                        .sound_engine
-                        .lock()
-                        .unwrap()
-                        .set_master_gain(*new_value)
+                    engine.set_sound_gain(*new_value)
                 } else if message.destination() == self.sb_point_shadow_distance {
                     settings.point_shadows_distance = *new_value;
                 } else if message.destination() == self.sb_spot_shadow_distance {
@@ -810,7 +804,7 @@ impl OptionsMenu {
                 self.control_scheme.write().unwrap().reset();
                 self.sync_to_model(engine);
             } else if message.destination() == self.btn_reset_audio_settings {
-                engine.sound_engine.lock().unwrap().set_master_gain(1.0);
+                engine.set_sound_gain(1.0);
                 self.sync_to_model(engine);
             }
 

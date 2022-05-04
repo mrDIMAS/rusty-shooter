@@ -1,4 +1,4 @@
-use rg3d::event::VirtualKeyCode;
+use fyrox::event::VirtualKeyCode;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ControlButton {
@@ -19,7 +19,7 @@ impl ControlButton {
                 5 => "MB5",
                 _ => "Unknown",
             },
-            ControlButton::Key(code) => rg3d::utils::virtual_key_code_name(code),
+            ControlButton::Key(code) => fyrox::utils::virtual_key_code_name(code),
             ControlButton::WheelUp => "Wheel Up",
             ControlButton::WheelDown => "Wheel Down",
         }

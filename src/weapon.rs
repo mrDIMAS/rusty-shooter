@@ -1,27 +1,24 @@
 use crate::{
     actor::Actor, actor::ActorContainer, message::Message, projectile::ProjectileKind, GameTime,
 };
-use rg3d::core::algebra::Point3;
-use rg3d::engine::resource_manager::MaterialSearchOptions;
-use rg3d::utils::log::{Log, MessageKind};
-use rg3d::{
+use fyrox::{
     core::{
-        algebra::{Matrix3, Vector3},
+        algebra::{Matrix3, Point3, Vector3},
         color::Color,
         math::{ray::Ray, Matrix4Ext, Vector3Ext},
-        pool::{Handle, Pool, PoolIteratorMut},
+        pool::{Handle, Pool},
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    physics3d::{rapier::geometry::InteractionGroups, RayCastOptions},
     scene::{
         base::BaseBuilder,
-        graph::Graph,
+        collider::InteractionGroups,
+        graph::{physics::RayCastOptions, Graph},
         light::{point::PointLightBuilder, BaseLightBuilder},
         node::Node,
-        physics::Physics,
         Scene,
     },
+    utils::log::{Log, MessageKind},
 };
 use std::{
     ops::{Index, IndexMut},
@@ -178,10 +175,7 @@ impl Weapon {
         let definition = Self::get_definition(kind);
 
         let model = resource_manager
-            .request_model(
-                Path::new(definition.model),
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures")),
-            )
+            .request_model(Path::new(definition.model))
             .await
             .unwrap()
             .instantiate_geometry(scene);
@@ -225,7 +219,7 @@ impl Weapon {
     pub fn update(&mut self, scene: &mut Scene, actors: &ActorContainer) {
         self.offset.follow(&self.dest_offset, 0.2);
 
-        self.update_laser_sight(&mut scene.graph, &mut scene.physics, actors);
+        self.update_laser_sight(&mut scene.graph, actors);
 
         let node = &mut scene.graph[self.model];
         node.local_transform_mut().set_position(self.offset);
@@ -257,33 +251,27 @@ impl Weapon {
         self.ammo += amount;
     }
 
-    fn update_laser_sight(
-        &self,
-        graph: &mut Graph,
-        physics: &mut Physics,
-        actors: &ActorContainer,
-    ) {
+    fn update_laser_sight(&self, graph: &mut Graph, actors: &ActorContainer) {
         let mut laser_dot_position = Vector3::default();
         let model = &graph[self.model];
         let begin = model.global_position();
         let end = begin + model.look_vector().scale(100.0);
         let ray = Ray::from_two_points(begin, end);
         let mut query_buffer = Vec::default();
-        physics.cast_ray(
+        graph.physics.cast_ray(
             RayCastOptions {
                 ray_origin: Point3::from(ray.origin),
                 ray_direction: ray.dir,
-                max_len: std::f32::MAX,
-                groups: InteractionGroups::all(),
+                max_len: f32::MAX,
+                groups: InteractionGroups::default(),
                 sort_results: true,
             },
             &mut query_buffer,
         );
         'hit_loop: for hit in query_buffer.iter() {
             // Filter hit with owner capsule
-            let body = physics.collider_parent(&hit.collider).cloned().unwrap();
             for (handle, actor) in actors.pair_iter() {
-                if self.owner == handle && actor.body == body {
+                if self.owner == handle && actor.collider == hit.collider {
                     continue 'hit_loop;
                 }
             }
@@ -369,7 +357,7 @@ impl WeaponContainer {
         self.pool.free(weapon);
     }
 
-    pub fn iter_mut(&mut self) -> PoolIteratorMut<Weapon> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Weapon> {
         self.pool.iter_mut()
     }
 

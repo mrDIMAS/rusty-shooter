@@ -1,16 +1,14 @@
-use crate::{effects::EffectKind, message::Message, rg3d::core::math::Vector3Ext, GameTime};
-use rg3d::engine::resource_manager::MaterialSearchOptions;
-use rg3d::sound::pool::PoolIteratorMut;
-use rg3d::{
+use crate::{effects::EffectKind, fyrox::core::math::Vector3Ext, message::Message, GameTime};
+use fyrox::scene::pivot::PivotBuilder;
+use fyrox::{
     core::{
         algebra::Vector3,
-        pool::{Handle, Pool, PoolIterator, PoolPairIterator},
+        pool::{Handle, Pool},
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
     scene::{base::BaseBuilder, graph::Graph, node::Node, transform::TransformBuilder, Scene},
 };
-use std::path::PathBuf;
 use std::{path::Path, sync::mpsc::Sender};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -176,16 +174,13 @@ impl Item {
         let definition = Self::get_definition(kind);
 
         let model = resource_manager
-            .request_model(
-                Path::new(definition.model),
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures")),
-            )
+            .request_model(Path::new(definition.model))
             .await
             .unwrap()
             .instantiate_geometry(scene);
 
-        let pivot = BaseBuilder::new()
-            .with_local_transform(
+        let pivot = PivotBuilder::new(
+            BaseBuilder::new().with_local_transform(
                 TransformBuilder::new()
                     .with_local_position(position)
                     .with_local_scale(Vector3::new(
@@ -194,8 +189,9 @@ impl Item {
                         definition.scale,
                     ))
                     .build(),
-            )
-            .build(&mut scene.graph);
+            ),
+        )
+        .build(&mut scene.graph);
 
         scene.graph.link_nodes(model, pivot);
 
@@ -338,15 +334,15 @@ impl ItemContainer {
         self.pool.is_valid_handle(item)
     }
 
-    pub fn pair_iter(&self) -> PoolPairIterator<Item> {
+    pub fn pair_iter(&self) -> impl Iterator<Item = (Handle<Item>, &Item)> {
         self.pool.pair_iter()
     }
 
-    pub fn iter(&self) -> PoolIterator<Item> {
+    pub fn iter(&self) -> impl Iterator<Item = &Item> {
         self.pool.iter()
     }
 
-    pub fn iter_mut(&mut self) -> PoolIteratorMut<Item> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Item> {
         self.pool.iter_mut()
     }
 

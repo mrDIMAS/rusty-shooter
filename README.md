@@ -1,14 +1,14 @@
 # What is this?
 
-Single player 3d shooter written in Rust and based on [rg3d engine](https://github.com/mrDIMAS/rg3d)
+Single player 3d shooter written in Rust and based on [fyrox engine](https://github.com/mrDIMAS/fyrox)
 
 ## How to build
 
-Cargo.toml contains hardcoded relative path to engine `rg3d = { path = "../rg3d" }`, so you have to change this or put engine folder near the game folder to get game compile, because it always uses latest rg3d which could be not published on crates.io.
+Cargo.toml contains hardcoded relative path to engine `fyrox = { path = "../fyrox" }`, so you have to change this or put engine folder near the game folder to get game compile, because it always uses latest fyrox which could be not published on crates.io.
 
 In other words you can do something like this:
 ```
-git clone https://github.com/mrDIMAS/rg3d
+git clone https://github.com/mrDIMAS/fyrox
 git clone https://github.com/mrDIMAS/rusty-shooter
 cd rusty-shooter
 cargo run --release
@@ -16,7 +16,7 @@ cargo run --release
 
 Or if you're updating to the latest version, do this:
 ```
-cd rg3d
+cd fyrox
 git pull
 cd ../rusty-shooter
 git pull

@@ -1,0 +1,507 @@
+[INFO]: Shader BlurShader_VertexShader compiled!
+
+[INFO]: Shader BlurShader_FragmentShader compiled!
+
+[INFO]: Shader BlurShader linked!
+
+[INFO]: Shader SsaoShader_VertexShader compiled!
+
+[INFO]: Shader SsaoShader_FragmentShader compiled!
+
+[INFO]: Shader SsaoShader linked!
+
+[INFO]: Shader SpotLightShader_VertexShader compiled!
+
+[INFO]: Shader SpotLightShader_FragmentShader compiled!
+
+[INFO]: Shader SpotLightShader linked!
+
+[INFO]: Shader PointLightShader_VertexShader compiled!
+
+[INFO]: Shader PointLightShader_FragmentShader compiled!
+
+[INFO]: Shader PointLightShader linked!
+
+[INFO]: Shader DirectionalLightShader_VertexShader compiled!
+
+[INFO]: Shader DirectionalLightShader_FragmentShader compiled!
+
+[INFO]: Shader DirectionalLightShader linked!
+
+[INFO]: Shader AmbientLightShader_VertexShader compiled!
+
+[INFO]: Shader AmbientLightShader_FragmentShader compiled!
+
+[INFO]: Shader AmbientLightShader linked!
+
+[INFO]: Shader FlatShader_VertexShader compiled!
+
+[INFO]: Shader FlatShader_FragmentShader compiled!
+
+[INFO]: Shader FlatShader linked!
+
+[INFO]: Shader SkyboxShader_VertexShader compiled!
+
+[INFO]: Shader SkyboxShader_FragmentShader compiled!
+
+[INFO]: Shader SkyboxShader linked!
+
+[INFO]: Shader SpotVolumetricLight_VertexShader compiled!
+
+[INFO]: Shader SpotVolumetricLight_FragmentShader compiled!
+
+[INFO]: Shader SpotVolumetricLight linked!
+
+[INFO]: Shader PointVolumetricLight_VertexShader compiled!
+
+[INFO]: Shader PointVolumetricLight_FragmentShader compiled!
+
+[INFO]: Shader PointVolumetricLight linked!
+
+[INFO]: Shader FlatShader_VertexShader compiled!
+
+[INFO]: Shader FlatShader_FragmentShader compiled!
+
+[INFO]: Shader FlatShader linked!
+
+[INFO]: Shader FlatShader_VertexShader compiled!
+
+[INFO]: Shader FlatShader_FragmentShader compiled!
+
+[INFO]: Shader FlatShader linked!
+
+[INFO]: Shader SpriteShader_VertexShader compiled!
+
+[INFO]: Shader SpriteShader_FragmentShader compiled!
+
+[INFO]: Shader SpriteShader linked!
+
+[INFO]: Shader UIShader_VertexShader compiled!
+
+[INFO]: Shader UIShader_FragmentShader compiled!
+
+[INFO]: Shader UIShader linked!
+
+[INFO]: Shader ParticleSystemShader_VertexShader compiled!
+
+[INFO]: Shader ParticleSystemShader_FragmentShader compiled!
+
+[INFO]: Shader ParticleSystemShader linked!
+
+[INFO]: Shader DebugShader_VertexShader compiled!
+
+[INFO]: Shader DebugShader_FragmentShader compiled!
+
+[INFO]: Shader DebugShader linked!
+
+[INFO]: Shader FXAAShader_VertexShader compiled!
+
+[INFO]: Shader FXAAShader_FragmentShader compiled!
+
+[INFO]: Shader FXAAShader linked!
+
+[INFO]: Shader SpriteShader2D_VertexShader compiled!
+
+[INFO]: Shader SpriteShader2D_FragmentShader compiled!
+
+[INFO]: Shader SpriteShader2D linked!
+
+[INFO]: Sound buffer "data/sounds/Antonio_Bizarro_Berzerker.ogg" is loaded!
+[INFO]: Texture "data/ui/crosshair.tga" is loaded in 411.8µs!
+[INFO]: Texture "data/ui/ammo_icon.png" is loaded in 7.8668ms!
+[INFO]: Texture "data/ui/shield_icon.png" is loaded in 8.8319ms!
+[INFO]: Texture "data/ui/health_icon.png" is loaded in 9.1701ms!
+[INFO]: Trying to load "data/models/dm6.fbx"
+[INFO]: Texture "data/textures\\largeblockfloor3.tga" is loaded in 8.2399ms!
+[INFO]: Texture "data/textures\\largeblockfloor4.tga" is loaded in 8.1291ms!
+[INFO]: Texture "data/textures\\largeblockfloor3_normal.tga" is loaded in 8.606ms!
+[INFO]: Texture "data/textures\\largeblockfloor4_normal.tga" is loaded in 12.2583ms!
+[INFO]: Texture "data/textures\\blocks15_normal.tga" is loaded in 33.6066ms!
+[INFO]: Texture "data/textures\\metal5.tga" is loaded in 36.04ms!
+[INFO]: Texture "data/textures\\blocks9_normal.tga" is loaded in 36.5026ms!
+[INFO]: Texture "data/textures\\blocks11b.tga" is loaded in 36.8723ms!
+[INFO]: Texture "data/textures\\blocks9.tga" is loaded in 37.6845ms!
+[INFO]: Texture "data/textures\\clang_floor2.tga" is loaded in 38.989ms!
+[INFO]: Texture "data/textures\\blocks15.tga" is loaded in 40.1984ms!
+[INFO]: Texture "data/textures\\white.jpg" is loaded in 3.3192ms!
+[INFO]: Texture "data/textures\\metal1_1.tga" is loaded in 7.6939ms!
+[INFO]: Texture "data/textures\\metal4.tga" is loaded in 29.5283ms!
+[INFO]: Texture "data/textures\\concrete2.tga" is loaded in 34.079ms!
+[INFO]: Texture "data/textures\\blocks10.tga" is loaded in 35.398ms!
+[INFO]: Texture "data/textures\\blocks17floor2.tga" is loaded in 36.0365ms!
+[INFO]: Texture "data/textures\\metal8.jpg" is loaded in 9.2625ms!
+[INFO]: Texture "data/textures\\metal_rusted.jpg" is loaded in 20.224ms!
+[INFO]: Texture "data/textures\\barrel.jpg" is loaded in 15.9975ms!
+[INFO]: FBX "data/models/dm6.fbx" loaded in 301 ms
+	- Parsing - 127 ms
+	- DOM Prepare - 18 ms
+	- Conversion - 155 ms
+[INFO]: Model "data/models/dm6.fbx" is loaded!
+[INFO]: Resource data/models/dm6.fbx was successfully embedded into physics world!
+[INFO]: Trying to load "data/models/medkit.fbx"
+[INFO]: FBX "data/models/medkit.fbx" loaded in 7 ms
+	- Parsing - 4 ms
+	- DOM Prepare - 0 ms
+	- Conversion - 1 ms
+[INFO]: Model "data/models/medkit.fbx" is loaded!
+[INFO]: Resource data/models/medkit.fbx was successfully embedded into physics world!
+[INFO]: Resource data/models/medkit.fbx was successfully embedded into physics world!
+[INFO]: Resource data/models/medkit.fbx was successfully embedded into physics world!
+[INFO]: Resource data/models/medkit.fbx was successfully embedded into physics world!
+[INFO]: Trying to load "data/models/box_medium.FBX"
+[INFO]: Texture "data/textures\\medkit_ao.png" is loaded in 26.517ms!
+[INFO]: Texture "data/textures\\medkit_metallic.png" is loaded in 30.1074ms!
+[INFO]: Texture "data/textures\\medkit_roughness.png" is loaded in 31.174ms!
+[INFO]: Texture "data/textures\\medkit_normal.png" is loaded in 31.3473ms!
+[INFO]: Texture "data/textures\\medkit_diffuse.png" is loaded in 32.0939ms!
+[INFO]: Texture "data/textures\\box.jpg" is loaded in 104.8003ms!
+[INFO]: FBX "data/models/box_medium.FBX" loaded in 55 ms
+	- Parsing - 43 ms
+	- DOM Prepare - 0 ms
+	- Conversion - 10 ms
+[INFO]: Model "data/models/box_medium.FBX" is loaded!
+[INFO]: Resource data/models/box_medium.FBX was successfully embedded into physics world!
+[INFO]: Trying to load "data/models/box_small.FBX"
+[INFO]: Texture "data/textures\\camouflage.jpg" is loaded in 26.6194ms!
+[INFO]: FBX "data/models/box_small.FBX" loaded in 45 ms
+	- Parsing - 24 ms
+	- DOM Prepare - 1 ms
+	- Conversion - 19 ms
+[INFO]: Model "data/models/box_small.FBX" is loaded!
+[INFO]: Resource data/models/box_small.FBX was successfully embedded into physics world!
+[INFO]: Trying to load "data/models/yellow_box.FBX"
+[INFO]: FBX "data/models/yellow_box.FBX" loaded in 54 ms
+	- Parsing - 42 ms
+	- DOM Prepare - 5 ms
+	- Conversion - 7 ms
+[INFO]: Texture "data/textures\\yellow.jpg" is loaded in 2.753ms!
+[INFO]: Model "data/models/yellow_box.FBX" is loaded!
+[INFO]: Resource data/models/yellow_box.FBX was successfully embedded into physics world!
+[INFO]: Resource data/models/yellow_box.FBX was successfully embedded into physics world!
+[INFO]: Resource data/models/box_small.FBX was successfully embedded into physics world!
+[INFO]: Trying to load "data/models/maw.fbx"
+[ERROR]: Unable to load texture "data/textures\\maria_specular.png"! Reason FileLoadError(Io(Os { code: 2, kind: NotFound, message: "Не удается найти указанный файл." }))
+[INFO]: FBX "data/models/maw.fbx" loaded in 326 ms
+	- Parsing - 295 ms
+	- DOM Prepare - 7 ms
+	- Conversion - 23 ms
+[INFO]: Texture "data/textures\\MAW_glow.png" is loaded in 16.599ms!
+[INFO]: Model "data/models/maw.fbx" is loaded!
+[INFO]: Resource data/models/maw.fbx was successfully embedded into physics world!
+[INFO]: Trying to load "data/animations/maw/walk.fbx"
+[INFO]: Trying to load "data/animations/maw/idle.fbx"
+[INFO]: Trying to load "data/animations/maw/jump.fbx"
+[INFO]: Trying to load "data/animations/maw/falling.fbx"
+[INFO]: FBX "data/animations/maw/falling.fbx" loaded in 13 ms
+	- Parsing - 11 ms
+	- DOM Prepare - 1 ms
+	- Conversion - 0 ms
+[INFO]: Model "data/animations/maw/falling.fbx" is loaded!
+[INFO]: FBX "data/animations/maw/walk.fbx" loaded in 16 ms
+	- Parsing - 12 ms
+	- DOM Prepare - 3 ms
+	- Conversion - 0 ms
+[INFO]: FBX "data/animations/maw/jump.fbx" loaded in 17 ms
+	- Parsing - 12 ms
+	- DOM Prepare - 3 ms
+	- Conversion - 1 ms
+[INFO]: FBX "data/animations/maw/idle.fbx" loaded in 19 ms
+	- Parsing - 12 ms
+	- DOM Prepare - 3 ms
+	- Conversion - 2 ms
+[INFO]: Model "data/animations/maw/walk.fbx" is loaded!
+[INFO]: Model "data/animations/maw/idle.fbx" is loaded!
+[INFO]: Model "data/animations/maw/jump.fbx" is loaded!
+[INFO]: Trying to load "data/animations/maw/whip.fbx"
+[INFO]: Trying to load "data/animations/maw/aim.fbx"
+[INFO]: Trying to load "data/animations/maw/hit_reaction.fbx"
+[INFO]: FBX "data/animations/maw/aim.fbx" loaded in 15 ms
+	- Parsing - 9 ms
+	- DOM Prepare - 4 ms
+	- Conversion - 0 ms
+[INFO]: Model "data/animations/maw/aim.fbx" is loaded!
+[INFO]: FBX "data/animations/maw/hit_reaction.fbx" loaded in 18 ms
+	- Parsing - 13 ms
+	- DOM Prepare - 3 ms
+	- Conversion - 1 ms
+[INFO]: FBX "data/animations/maw/whip.fbx" loaded in 19 ms
+	- Parsing - 15 ms
+	- DOM Prepare - 2 ms
+	- Conversion - 1 ms
+[INFO]: Model "data/animations/maw/hit_reaction.fbx" is loaded!
+[INFO]: Model "data/animations/maw/whip.fbx" is loaded!
+[INFO]: Trying to load "data/animations/maw/dying.fbx"
+[INFO]: Trying to load "data/animations/maw/dead.fbx"
+[INFO]: Texture "data/textures\\MAW_normal.png" is loaded in 107.6802ms!
+[INFO]: FBX "data/animations/maw/dying.fbx" loaded in 23 ms
+	- Parsing - 14 ms
+	- DOM Prepare - 4 ms
+	- Conversion - 4 ms
+[INFO]: Model "data/animations/maw/dying.fbx" is loaded!
+[INFO]: FBX "data/animations/maw/dead.fbx" loaded in 37 ms
+	- Parsing - 29 ms
+	- DOM Prepare - 2 ms
+	- Conversion - 5 ms
+[INFO]: Model "data/animations/maw/dead.fbx" is loaded!
+[INFO]: Trying to load "data/models/ak47.FBX"
+[INFO]: FBX "data/models/ak47.FBX" loaded in 22 ms
+	- Parsing - 14 ms
+	- DOM Prepare - 1 ms
+	- Conversion - 6 ms
+[INFO]: Model "data/models/ak47.FBX" is loaded!
+[INFO]: Resource data/models/ak47.FBX was successfully embedded into physics world!
+[INFO]: Trying to load "data/models/mutant.FBX"
+[INFO]: Texture "data/textures\\Ak47_Body_normal.png" is loaded in 88.3829ms!
+[INFO]: Texture "data/textures\\Ak47_Magazine_normal.png" is loaded in 89.7413ms!
+[INFO]: Texture "data/textures\\Ak47_Magazine.png" is loaded in 94.0795ms!
+[INFO]: Texture "data/textures\\Ak47_Body.png" is loaded in 111.6744ms!
+[INFO]: Texture "data/textures\\MAW_diffuse.png" is loaded in 306.409ms!
+[INFO]: FBX "data/models/mutant.FBX" loaded in 171 ms
+	- Parsing - 102 ms
+	- DOM Prepare - 2 ms
+	- Conversion - 66 ms
+[INFO]: Model "data/models/mutant.FBX" is loaded!
+[INFO]: Resource data/models/mutant.FBX was successfully embedded into physics world!
+[INFO]: Trying to load "data/animations/mutant/idle.fbx"
+[INFO]: Trying to load "data/animations/mutant/walk.fbx"
+[INFO]: Trying to load "data/animations/mutant/jump.fbx"
+[INFO]: Trying to load "data/animations/mutant/falling.fbx"
+[INFO]: FBX "data/animations/mutant/walk.fbx" loaded in 18 ms
+	- Parsing - 16 ms
+	- DOM Prepare - 0 ms
+	- Conversion - 0 ms
+[INFO]: Model "data/animations/mutant/walk.fbx" is loaded!
+[INFO]: FBX "data/animations/mutant/idle.fbx" loaded in 19 ms
+	- Parsing - 18 ms
+	- DOM Prepare - 0 ms
+	- Conversion - 0 ms
+[INFO]: Model "data/animations/mutant/idle.fbx" is loaded!
+[INFO]: FBX "data/animations/mutant/jump.fbx" loaded in 23 ms
+	- Parsing - 20 ms
+	- DOM Prepare - 1 ms
+	- Conversion - 0 ms
+[INFO]: Model "data/animations/mutant/jump.fbx" is loaded!
+[INFO]: FBX "data/animations/mutant/falling.fbx" loaded in 23 ms
+	- Parsing - 22 ms
+	- DOM Prepare - 1 ms
+	- Conversion - 0 ms
+[INFO]: Model "data/animations/mutant/falling.fbx" is loaded!
+[INFO]: Trying to load "data/animations/mutant/aim.fbx"
+[INFO]: Trying to load "data/animations/mutant/hit_reaction.fbx"
+[INFO]: Trying to load "data/animations/mutant/whip.fbx"
+[INFO]: FBX "data/animations/mutant/aim.fbx" loaded in 8 ms
+	- Parsing - 6 ms
+	- DOM Prepare - 1 ms
+	- Conversion - 0 ms
+[INFO]: FBX "data/animations/mutant/hit_reaction.fbx" loaded in 8 ms
+	- Parsing - 5 ms
+	- DOM Prepare - 2 ms
+	- Conversion - 1 ms
+[INFO]: Model "data/animations/mutant/aim.fbx" is loaded!
+[INFO]: Model "data/animations/mutant/hit_reaction.fbx" is loaded!
+[INFO]: FBX "data/animations/mutant/whip.fbx" loaded in 10 ms
+	- Parsing - 6 ms
+	- DOM Prepare - 1 ms
+	- Conversion - 1 ms
+[INFO]: Model "data/animations/mutant/whip.fbx" is loaded!
+[INFO]: Trying to load "data/animations/mutant/dying.fbx"
+[INFO]: Trying to load "data/animations/mutant/dead.fbx"
+[INFO]: FBX "data/animations/mutant/dying.fbx" loaded in 10 ms
+	- Parsing - 6 ms
+	- DOM Prepare - 1 ms
+	- Conversion - 2 ms
+[INFO]: Model "data/animations/mutant/dying.fbx" is loaded!
+[INFO]: FBX "data/animations/mutant/dead.fbx" loaded in 22 ms
+	- Parsing - 15 ms
+	- DOM Prepare - 1 ms
+	- Conversion - 5 ms
+[INFO]: Model "data/animations/mutant/dead.fbx" is loaded!
+[INFO]: Resource data/models/ak47.FBX was successfully embedded into physics world!
+[INFO]: Trying to load "data/models/parasite.FBX"
+[INFO]: Texture "data/textures\\Mutant_diffuse.png" is loaded in 322.1863ms!
+[INFO]: Texture "data/textures\\Mutant_normal.png" is loaded in 339.584ms!
+[INFO]: FBX "data/models/parasite.FBX" loaded in 404 ms
+	- Parsing - 231 ms
+	- DOM Prepare - 7 ms
+	- Conversion - 165 ms
+[INFO]: Model "data/models/parasite.FBX" is loaded!
+[INFO]: Resource data/models/parasite.FBX was successfully embedded into physics world!
+[INFO]: Trying to load "data/animations/parasite/idle.fbx"
+[INFO]: Trying to load "data/animations/parasite/walk.fbx"
+[INFO]: Trying to load "data/animations/parasite/jump.fbx"
+[INFO]: Trying to load "data/animations/parasite/falling.fbx"
+[INFO]: FBX "data/animations/parasite/walk.fbx" loaded in 18 ms
+	- Parsing - 13 ms
+	- DOM Prepare - 4 ms
+	- Conversion - 0 ms
+[INFO]: FBX "data/animations/parasite/falling.fbx" loaded in 18 ms
+	- Parsing - 14 ms
+	- DOM Prepare - 3 ms
+	- Conversion - 0 ms
+[INFO]: FBX "data/animations/parasite/jump.fbx" loaded in 19 ms
+	- Parsing - 14 ms
+	- DOM Prepare - 3 ms
+	- Conversion - 1 ms
+[INFO]: Model "data/animations/parasite/walk.fbx" is loaded!
+[INFO]: Model "data/animations/parasite/falling.fbx" is loaded!
+[INFO]: Model "data/animations/parasite/jump.fbx" is loaded!
+[INFO]: FBX "data/animations/parasite/idle.fbx" loaded in 99 ms
+	- Parsing - 69 ms
+	- DOM Prepare - 4 ms
+	- Conversion - 25 ms
+[INFO]: Model "data/animations/parasite/idle.fbx" is loaded!
+[INFO]: Trying to load "data/animations/parasite/aim.fbx"
+[INFO]: Trying to load "data/animations/parasite/whip.fbx"
+[INFO]: Trying to load "data/animations/parasite/hit_reaction.fbx"
+[INFO]: FBX "data/animations/parasite/aim.fbx" loaded in 16 ms
+	- Parsing - 10 ms
+	- DOM Prepare - 5 ms
+	- Conversion - 1 ms
+[INFO]: Model "data/animations/parasite/aim.fbx" is loaded!
+[INFO]: FBX "data/animations/parasite/hit_reaction.fbx" loaded in 22 ms
+	- Parsing - 14 ms
+	- DOM Prepare - 6 ms
+	- Conversion - 1 ms
+[INFO]: Model "data/animations/parasite/hit_reaction.fbx" is loaded!
+[INFO]: FBX "data/animations/parasite/whip.fbx" loaded in 26 ms
+	- Parsing - 16 ms
+	- DOM Prepare - 5 ms
+	- Conversion - 4 ms
+[INFO]: Model "data/animations/parasite/whip.fbx" is loaded!
+[INFO]: Trying to load "data/animations/parasite/dead.fbx"
+[INFO]: Trying to load "data/animations/parasite/dying.fbx"
+[INFO]: FBX "data/animations/parasite/dying.fbx" loaded in 26 ms
+	- Parsing - 17 ms
+	- DOM Prepare - 6 ms
+	- Conversion - 3 ms
+[INFO]: Model "data/animations/parasite/dying.fbx" is loaded!
+[INFO]: FBX "data/animations/parasite/dead.fbx" loaded in 54 ms
+	- Parsing - 34 ms
+	- DOM Prepare - 7 ms
+	- Conversion - 12 ms
+[INFO]: Model "data/animations/parasite/dead.fbx" is loaded!
+[INFO]: Resource data/models/ak47.FBX was successfully embedded into physics world!
+[INFO]: Trying to load "data/models/m4.FBX"
+[INFO]: FBX "data/models/m4.FBX" loaded in 66 ms
+	- Parsing - 42 ms
+	- DOM Prepare - 4 ms
+	- Conversion - 19 ms
+[INFO]: Model "data/models/m4.FBX" is loaded!
+[INFO]: Resource data/models/m4.FBX was successfully embedded into physics world!
+[INFO]: Resource data/models/ak47.FBX was successfully embedded into physics world!
+[INFO]: Trying to load "data/models/plasma_rifle.FBX"
+[INFO]: Texture "data/textures\\parasiteZombie_specular.png" is loaded in 324.3075ms!
+[INFO]: FBX "data/models/plasma_rifle.FBX" loaded in 16 ms
+	- Parsing - 12 ms
+	- DOM Prepare - 0 ms
+	- Conversion - 2 ms
+[INFO]: Model "data/models/plasma_rifle.FBX" is loaded!
+[INFO]: Resource data/models/plasma_rifle.FBX was successfully embedded into physics world!
+[INFO]: Texture "data/textures\\M4_Magazine.png" is loaded in 94.5239ms!
+[INFO]: Texture "data/textures\\M4_Sight.png" is loaded in 94.833ms!
+[INFO]: Trying to load "data/models/Rpg7.FBX"
+[INFO]: Texture "data/textures\\M4_Sight_normal.png" is loaded in 99.0336ms!
+[INFO]: Texture "data/textures\\M4_Magazine_normal.png" is loaded in 110.1161ms!
+[INFO]: Texture "data/textures\\M4_Body_normal.png" is loaded in 107.8005ms!
+[INFO]: Texture "data/textures\\M4_Body.png" is loaded in 123.3408ms!
+[INFO]: Texture "data/textures\\parasiteZombie_normal.png" is loaded in 435.889ms!
+[INFO]: Texture "data/textures\\parasiteZombie_diffuse.png" is loaded in 446.9015ms!
+[INFO]: Texture "data/textures\\plasma_gun_emissive.png" is loaded in 267.4828ms!
+[INFO]: Texture "data/textures\\plasma_gun.png" is loaded in 317.734ms!
+[INFO]: Texture "data/textures\\plasma_gun_ao.png" is loaded in 328.7616ms!
+[INFO]: Texture "data/textures\\rpg7_diffuse.png" is loaded in 54.4744ms!
+[INFO]: Texture "data/textures\\plasma_gun_normal.png" is loaded in 347.215ms!
+[INFO]: Texture "data/textures\\rpg7_normal.png" is loaded in 42.4419ms!
+[INFO]: Texture "data/textures\\plasma_gun_metallic.png" is loaded in 314.7294ms!
+[INFO]: FBX "data/models/Rpg7.FBX" loaded in 316 ms
+	- Parsing - 88 ms
+	- DOM Prepare - 3 ms
+	- Conversion - 224 ms
+[INFO]: Model "data/models/Rpg7.FBX" is loaded!
+[INFO]: Resource data/models/Rpg7.FBX was successfully embedded into physics world!
+[WARNING]: Shot point not found!
+[INFO]: Sound buffer "data/sounds/item_pickup.ogg" is loaded!
+[INFO]: Shader DecalShader_VertexShader compiled!
+
+[INFO]: Shader DecalShader_FragmentShader compiled!
+
+[INFO]: Shader DecalShader linked!
+
+[INFO]: Shader AdaptationShader_VertexShader compiled!
+
+[INFO]: Shader AdaptationShader_FragmentShader compiled!
+
+[INFO]: Shader AdaptationShader linked!
+
+[INFO]: Shader LuminanceShader_VertexShader compiled!
+
+[INFO]: Shader LuminanceShader_FragmentShader compiled!
+
+[INFO]: Shader LuminanceShader linked!
+
+[INFO]: Shader DownscaleShader_VertexShader compiled!
+
+[INFO]: Shader DownscaleShader_FragmentShader compiled!
+
+[INFO]: Shader DownscaleShader linked!
+
+[INFO]: Shader HdrToLdrShader_VertexShader compiled!
+
+[INFO]: Shader HdrToLdrShader_FragmentShader compiled!
+
+[INFO]: Shader HdrToLdrShader linked!
+
+[INFO]: Shader BloomShader_VertexShader compiled!
+
+[INFO]: Shader BloomShader_FragmentShader compiled!
+
+[INFO]: Shader BloomShader linked!
+
+[INFO]: Shader GaussianBlurShader_VertexShader compiled!
+
+[INFO]: Shader GaussianBlurShader_FragmentShader compiled!
+
+[INFO]: Shader GaussianBlurShader linked!
+
+[INFO]: Shader StandardShader_GBuffer_VertexShader compiled!
+
+[INFO]: Shader StandardShader_GBuffer_FragmentShader compiled!
+
+[INFO]: Shader StandardShader_GBuffer linked!
+
+[INFO]: Shader StandardShader_Forward_VertexShader compiled!
+
+[INFO]: Shader StandardShader_Forward_FragmentShader compiled!
+
+[INFO]: Shader StandardShader_Forward linked!
+
+[INFO]: Shader StandardShader_SpotShadow_VertexShader compiled!
+
+[INFO]: Shader StandardShader_SpotShadow_FragmentShader compiled!
+
+[INFO]: Shader StandardShader_SpotShadow linked!
+
+[INFO]: Shader StandardShader_PointShadow_VertexShader compiled!
+
+[INFO]: Shader StandardShader_PointShadow_FragmentShader compiled!
+
+[INFO]: Shader StandardShader_PointShadow linked!
+
+[INFO]: Sound buffer "data/sounds/footsteps/FootStep_shoe_stone_step1.wav" is loaded!
+[INFO]: Sound buffer "data/sounds/footsteps/FootStep_shoe_stone_step4.wav" is loaded!
+[INFO]: Trying to load "data/models/rocket.FBX"
+[INFO]: FBX "data/models/rocket.FBX" loaded in 5 ms
+	- Parsing - 4 ms
+	- DOM Prepare - 0 ms
+	- Conversion - 0 ms
+[INFO]: Model "data/models/rocket.FBX" is loaded!
+[INFO]: Resource data/models/rocket.FBX was successfully embedded into physics world!
+[INFO]: Sound buffer "data/sounds/grenade_launcher_fire.ogg" is loaded!
+[INFO]: Texture "data/particles/circle_05.png" is loaded in 22.7814ms!
+[INFO]: Sound buffer "data/sounds/explosion.ogg" is loaded!
+[INFO]: Sound buffer "data/sounds/ak47.ogg" is loaded!
+[INFO]: Texture "data/particles/light_01.png" is loaded in 11.0216ms!
+[INFO]: Sound buffer "data/sounds/bullet_impact_concrete.ogg" is loaded!
+[INFO]: Sound buffer "data/sounds/footsteps/FootStep_shoe_stone_step3.wav" is loaded!
+[INFO]: Sound buffer "data/sounds/footsteps/FootStep_shoe_stone_step2.wav" is loaded!
+[INFO]: Current level destroyed!

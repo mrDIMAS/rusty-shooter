@@ -2,7 +2,7 @@
 #![deny(unused_must_use)]
 
 extern crate crossbeam;
-extern crate rg3d;
+extern crate fyrox;
 
 mod actor;
 mod bot;
@@ -27,7 +27,14 @@ use crate::{
     actor::Actor, control_scheme::ControlScheme, hud::Hud, level::Level, menu::Menu,
     message::Message,
 };
-use rg3d::{
+use fyrox::core::futures::executor::block_on;
+use fyrox::engine::resource_manager::ResourceManager;
+use fyrox::engine::{EngineInitParams, SerializationContext};
+use fyrox::scene::base::BaseBuilder;
+use fyrox::scene::node::Node;
+use fyrox::scene::sound::{SoundBuilder, Status};
+use fyrox::scene::SceneLoader;
+use fyrox::{
     core::{
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
@@ -44,10 +51,6 @@ use rg3d::{
         BuildContext, HorizontalAlignment, UiNode, VerticalAlignment,
     },
     scene::Scene,
-    sound::{
-        context::SoundContext,
-        source::{generic::GenericSourceBuilder, SoundSource, Status},
-    },
     utils::{
         log::{Log, MessageKind},
         translate_event,
@@ -80,8 +83,8 @@ pub struct Game {
     events_sender: Sender<Message>,
     load_context: Option<Arc<Mutex<LoadContext>>>,
     loading_screen: LoadingScreen,
-    menu_sound_context: SoundContext,
-    music: Handle<SoundSource>,
+    menu_scene: Handle<Scene>,
+    music: Handle<Node>,
 }
 
 struct LoadingScreen {
@@ -292,12 +295,20 @@ impl Game {
         monitor_dimensions.width = (monitor_dimensions.width as f32 * 0.7) as u32;
         let inner_size = monitor_dimensions.to_logical::<f32>(primary_monitor.scale_factor());
 
-        let window_builder = rg3d::window::WindowBuilder::new()
+        let window_builder = fyrox::window::WindowBuilder::new()
             .with_title("Rusty Shooter")
             .with_inner_size(inner_size)
             .with_resizable(true);
 
-        let mut engine = Engine::new(window_builder, &events_loop, false).unwrap();
+        let serialization_context = Arc::new(SerializationContext::new());
+        let mut engine = Engine::new(EngineInitParams {
+            window_builder,
+            resource_manager: ResourceManager::new(serialization_context.clone()),
+            serialization_context,
+            events_loop: &events_loop,
+            vsync: false,
+        })
+        .unwrap();
 
         let control_scheme = Arc::new(RwLock::new(ControlScheme::default()));
 
@@ -310,30 +321,20 @@ impl Game {
         };
 
         let (tx, rx) = mpsc::channel();
-
-        let menu_sound_context = SoundContext::new();
-
-        let buffer = rg3d::core::futures::executor::block_on(
+        let buffer = fyrox::core::futures::executor::block_on(
             engine
                 .resource_manager
-                .request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg", true),
+                .request_sound_buffer("data/sounds/Antonio_Bizarro_Berzerker.ogg"),
         )
         .unwrap();
-        let music = menu_sound_context.state().add_source(
-            GenericSourceBuilder::new()
-                .with_buffer(buffer.into())
-                .with_looping(true)
-                .with_status(Status::Playing)
-                .with_gain(0.25)
-                .build_source()
-                .unwrap(),
-        );
 
-        engine
-            .sound_engine
-            .lock()
-            .unwrap()
-            .add_context(menu_sound_context.clone());
+        let mut menu_scene = Scene::new();
+        let music = SoundBuilder::new(BaseBuilder::new())
+            .with_buffer(Some(buffer))
+            .with_looping(true)
+            .with_status(Status::Playing)
+            .with_gain(0.25)
+            .build(&mut menu_scene.graph);
 
         let mut game = Game {
             loading_screen: LoadingScreen::new(
@@ -341,7 +342,7 @@ impl Game {
                 inner_size.width,
                 inner_size.height,
             ),
-            menu_sound_context,
+            menu_scene: engine.scenes.add(menu_scene),
             music,
             hud: Hud::new(&mut engine),
             running: true,
@@ -402,7 +403,7 @@ impl Game {
                     _ => (),
                 },
                 Event::LoopDestroyed => {
-                    if let Ok(profiling_results) = rg3d::core::profiler::print() {
+                    if let Ok(profiling_results) = fyrox::core::profiler::print() {
                         if let Ok(mut file) = File::create("profiling.log") {
                             let _ = writeln!(file, "{}", profiling_results);
                         }
@@ -425,21 +426,21 @@ impl Game {
     }
 
     pub fn save_game(&mut self) -> VisitResult {
-        let mut visitor = Visitor::new();
+        if let Some(level) = self.level.as_mut() {
+            let mut visitor = Visitor::new();
 
-        // Visit engine state first.
-        self.engine.visit("Engine", &mut visitor)?;
-        self.level.visit("Level", &mut visitor)?;
-        self.menu_sound_context
-            .visit("MenuSoundContext", &mut visitor)?;
-        self.music.visit("Music", &mut visitor)?;
+            self.engine.scenes[level.scene].save("Scene", &mut visitor)?;
+            level.visit("Level", &mut visitor)?;
 
-        // Debug output
-        if let Ok(mut file) = File::create(Path::new("save.txt")) {
-            file.write_all(visitor.save_text().as_bytes()).unwrap();
+            // Debug output
+            if let Ok(mut file) = File::create(Path::new("save.txt")) {
+                file.write_all(visitor.save_text().as_bytes()).unwrap();
+            }
+
+            visitor.save_binary(Path::new("save.bin"))
+        } else {
+            Ok(())
         }
-
-        visitor.save_binary(Path::new("save.bin"))
     }
 
     pub fn load_game(&mut self) -> VisitResult {
@@ -448,8 +449,7 @@ impl Game {
             "Attempting load a save...".to_owned(),
         );
 
-        let mut visitor =
-            rg3d::core::futures::executor::block_on(Visitor::load_binary(Path::new("save.bin")))?;
+        let mut visitor = block_on(Visitor::load_binary(Path::new("save.bin")))?;
 
         // Clean up.
         self.destroy_level();
@@ -459,11 +459,20 @@ impl Game {
             MessageKind::Information,
             "Trying to load a save file...".to_owned(),
         );
-        self.engine.visit("Engine", &mut visitor)?;
-        self.level.visit("Level", &mut visitor)?;
-        self.menu_sound_context
-            .visit("MenuSoundContext", &mut visitor)?;
-        self.music.visit("Music", &mut visitor)?;
+
+        let scene = block_on(
+            SceneLoader::load(
+                "Scene",
+                self.engine.serialization_context.clone(),
+                &mut visitor,
+            )?
+            .finish(self.engine.resource_manager.clone()),
+        );
+
+        let mut level = Level::default();
+        level.visit("Level", &mut visitor)?;
+        level.scene = self.engine.scenes.add(scene);
+        self.level = Some(level);
 
         Log::writeln(
             MessageKind::Information,
@@ -475,7 +484,7 @@ impl Game {
 
         // Set control scheme for player.
         if let Some(level) = &mut self.level {
-            level.set_message_sender(self.events_sender.clone(), &mut self.engine);
+            level.set_message_sender(self.events_sender.clone());
             level.control_scheme = Some(self.control_scheme.clone());
             let player = level.get_player();
             if let Actor::Player(player) = level.actors_mut().get_mut(player) {
@@ -520,7 +529,7 @@ impl Game {
         let sender = self.events_sender.clone();
 
         std::thread::spawn(move || {
-            let level = rg3d::core::futures::executor::block_on(Level::new(
+            let level = fyrox::core::futures::executor::block_on(Level::new(
                 resource_manager,
                 control_scheme,
                 sender,
@@ -634,16 +643,15 @@ impl Game {
                         .set_visible(true, &mut self.engine.user_interface);
                 }
                 Message::SetMusicVolume { volume } => {
-                    self.menu_sound_context
-                        .state()
-                        .source_mut(self.music)
+                    self.engine.scenes[self.menu_scene].graph[self.music]
+                        .as_sound_mut()
                         .set_gain(*volume);
                 }
                 _ => (),
             }
 
             if let Some(ref mut level) = self.level {
-                rg3d::core::futures::executor::block_on(level.handle_message(
+                fyrox::core::futures::executor::block_on(level.handle_message(
                     &mut self.engine,
                     &message,
                     time,

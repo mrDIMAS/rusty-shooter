@@ -7,8 +7,11 @@ use crate::{
     weapon::WeaponContainer,
     GameTime,
 };
-use rg3d::engine::resource_manager::MaterialSearchOptions;
-use rg3d::{
+use fyrox::scene::collider::{ColliderBuilder, ColliderShape, InteractionGroups};
+use fyrox::scene::graph::physics::RayCastOptions;
+use fyrox::scene::pivot::PivotBuilder;
+use fyrox::scene::rigidbody::RigidBodyBuilder;
+use fyrox::{
     animation::{
         machine::{self, Machine, PoseNode, State},
         Animation, AnimationSignal,
@@ -22,21 +25,15 @@ use rg3d::{
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    physics3d::{
-        rapier::dynamics::{RigidBodyBuilder, RigidBodyType},
-        rapier::geometry::{ColliderBuilder, InteractionGroups},
-        RayCastOptions,
-    },
     rand,
     resource::model::Model,
     scene::{
         self, base::BaseBuilder, debug::SceneDrawingContext, graph::Graph, node::Node,
-        physics::Physics, transform::TransformBuilder, Scene,
+        transform::TransformBuilder, Scene,
     },
     utils::log::{Log, MessageKind},
     utils::navmesh::Navmesh,
 };
-use std::path::PathBuf;
 use std::{
     ops::{Deref, DerefMut},
     path::Path,
@@ -270,23 +267,11 @@ impl LocomotionMachine {
         scene: &mut Scene,
         spine: Handle<Node>,
     ) -> Self {
-        let (idle_animation, walk_animation, jump_animation, falling_animation) = rg3d::core::futures::join!(
-            resource_manager.request_model(
-                definition.idle_animation,
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
-            ),
-            resource_manager.request_model(
-                definition.walk_animation,
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
-            ),
-            resource_manager.request_model(
-                definition.jump_animation,
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
-            ),
-            resource_manager.request_model(
-                definition.falling_animation,
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
-            )
+        let (idle_animation, walk_animation, jump_animation, falling_animation) = fyrox::core::futures::join!(
+            resource_manager.request_model(definition.idle_animation,),
+            resource_manager.request_model(definition.walk_animation,),
+            resource_manager.request_model(definition.jump_animation,),
+            resource_manager.request_model(definition.falling_animation,)
         );
 
         let idle_animation = prepare_animation(scene, idle_animation.unwrap(), model, spine);
@@ -300,7 +285,7 @@ impl LocomotionMachine {
             .add_signal(AnimationSignal::new(Self::STEP_SIGNAL, 0.4))
             .add_signal(AnimationSignal::new(Self::STEP_SIGNAL, 0.8));
 
-        let mut machine = Machine::new();
+        let mut machine = Machine::new(model);
 
         let jump_node = machine.add_node(machine::PoseNode::make_play_animation(jump_animation));
         let jump_state = machine.add_state(State::new("Jump", jump_node));
@@ -444,15 +429,9 @@ impl DyingMachine {
         scene: &mut Scene,
         spine: Handle<Node>,
     ) -> Self {
-        let (dying_animation, dead_animation) = rg3d::core::futures::join!(
-            resource_manager.request_model(
-                definition.dying_animation,
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
-            ),
-            resource_manager.request_model(
-                definition.dead_animation,
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
-            )
+        let (dying_animation, dead_animation) = fyrox::core::futures::join!(
+            resource_manager.request_model(definition.dying_animation,),
+            resource_manager.request_model(definition.dead_animation,)
         );
 
         let dying_animation = prepare_animation(scene, dying_animation.unwrap(), model, spine);
@@ -470,7 +449,7 @@ impl DyingMachine {
             .set_enabled(false)
             .set_loop(false);
 
-        let mut machine = Machine::new();
+        let mut machine = Machine::new(model);
 
         let dying_node = machine.add_node(machine::PoseNode::make_play_animation(dying_animation));
         let dying_state = machine.add_state(State::new("Dying", dying_node));
@@ -564,19 +543,10 @@ impl CombatMachine {
         scene: &mut Scene,
         spine: Handle<Node>,
     ) -> Self {
-        let (aim_animation, whip_animation, hit_reaction_animation) = rg3d::core::futures::join!(
-            resource_manager.request_model(
-                definition.aim_animation,
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
-            ),
-            resource_manager.request_model(
-                definition.whip_animation,
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
-            ),
-            resource_manager.request_model(
-                definition.hit_reaction_animation,
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures"))
-            )
+        let (aim_animation, whip_animation, hit_reaction_animation) = fyrox::core::futures::join!(
+            resource_manager.request_model(definition.aim_animation,),
+            resource_manager.request_model(definition.whip_animation,),
+            resource_manager.request_model(definition.hit_reaction_animation,)
         );
 
         let aim_animation = prepare_animation(scene, aim_animation.unwrap(), model, spine);
@@ -635,7 +605,7 @@ impl CombatMachine {
             &scene.graph,
         );
 
-        let mut machine = Machine::new();
+        let mut machine = Machine::new(model);
 
         let hit_reaction_node = machine.add_node(machine::PoseNode::make_play_animation(
             hit_reaction_animation,
@@ -837,10 +807,7 @@ impl Bot {
         let body_height = 1.25;
 
         let model = resource_manager
-            .request_model(
-                Path::new(definition.model),
-                MaterialSearchOptions::MaterialsDirectory(PathBuf::from("data/textures")),
-            )
+            .request_model(Path::new(definition.model))
             .await
             .unwrap()
             .instantiate_geometry(scene);
@@ -862,28 +829,32 @@ impl Bot {
             );
         }
 
-        let pivot = BaseBuilder::new()
-            .with_children(&[model])
-            .build(&mut scene.graph);
-
-        let body = scene.physics.add_body(
-            RigidBodyBuilder::new(RigidBodyType::Dynamic)
-                .translation(position)
-                .build(),
-        );
-        scene.physics.add_collider(
-            ColliderBuilder::capsule_y(body_height * 0.5, 0.28)
-                .friction(0.0)
-                .build(),
-            &body,
-        );
-
-        scene.physics_binder.bind(pivot, body.into());
+        let collider;
+        let body = RigidBodyBuilder::new(
+            BaseBuilder::new()
+                .with_local_transform(
+                    TransformBuilder::new()
+                        .with_local_position(position)
+                        .build(),
+                )
+                .with_children(&[
+                    {
+                        collider = ColliderBuilder::new(BaseBuilder::new())
+                            .with_shape(ColliderShape::capsule_y(body_height * 0.5, 0.28))
+                            .with_friction(0.0)
+                            .build(&mut scene.graph);
+                        collider
+                    },
+                    model,
+                ]),
+        )
+        .with_can_sleep(false)
+        .build(&mut scene.graph);
 
         let hand = scene.graph.find_by_name(model, definition.weapon_hand_name);
         let wpn_scale = definition.weapon_scale * (1.0 / definition.scale);
-        let weapon_pivot = BaseBuilder::new()
-            .with_local_transform(
+        let weapon_pivot = PivotBuilder::new(
+            BaseBuilder::new().with_local_transform(
                 TransformBuilder::new()
                     .with_local_scale(Vector3::new(wpn_scale, wpn_scale, wpn_scale))
                     .with_local_rotation(
@@ -896,8 +867,9 @@ impl Bot {
                         ),
                     )
                     .build(),
-            )
-            .build(&mut scene.graph);
+            ),
+        )
+        .build(&mut scene.graph);
 
         scene.graph.link_nodes(weapon_pivot, hand);
 
@@ -911,8 +883,8 @@ impl Bot {
 
         Self {
             character: Character {
-                pivot,
                 body,
+                collider,
                 weapon_pivot,
                 health: definition.health,
                 sender: Some(sender),
@@ -946,18 +918,18 @@ impl Bot {
         targets: &[TargetDescriptor],
     ) {
         self.target = None;
-        let position = self.character.position(&scene.physics);
+        let position = self.character.position(&scene.graph);
         let mut closest_distance = std::f32::MAX;
 
         let mut query_buffer = Vec::default();
         'target_loop: for desc in targets {
             if desc.handle != self_handle && self.frustum.is_contains_point(desc.position) {
                 let ray = Ray::from_two_points(desc.position, position);
-                scene.physics.cast_ray(
+                scene.graph.physics.cast_ray(
                     RayCastOptions {
                         ray_origin: Point3::from(ray.origin),
                         ray_direction: ray.dir,
-                        groups: InteractionGroups::all(),
+                        groups: InteractionGroups::default(),
                         max_len: ray.dir.norm(),
                         sort_results: true,
                     },
@@ -965,16 +937,10 @@ impl Bot {
                 );
 
                 'hit_loop: for hit in query_buffer.iter() {
-                    let collider = scene.physics.colliders.get(&hit.collider).unwrap();
-                    let body = scene
-                        .physics
-                        .bodies
-                        .handle_map()
-                        .key_of(&collider.parent().unwrap())
-                        .cloned()
-                        .unwrap();
+                    let collider = scene.graph[hit.collider].as_collider();
+                    let body = collider.parent();
 
-                    if collider.shape().as_trimesh().is_some() {
+                    if matches!(collider.shape(), ColliderShape::Trimesh(_)) {
                         // Target is behind something.
                         continue 'target_loop;
                     } else {
@@ -1000,7 +966,7 @@ impl Bot {
     fn select_point_of_interest(&mut self, items: &ItemContainer, scene: &Scene, time: &GameTime) {
         if time.elapsed - self.last_poi_update_time >= 1.25 {
             // Select closest non-despawned item as point of interest.
-            let self_position = self.position(&scene.physics);
+            let self_position = self.position(&scene.graph);
             let mut closest_distance = std::f32::MAX;
             for item in items.iter() {
                 if !item.is_picked_up() {
@@ -1070,16 +1036,15 @@ impl Bot {
         }
     }
 
-    fn aim_horizontally(&mut self, look_dir: Vector3<f32>, physics: &mut Physics, time: GameTime) {
+    fn aim_horizontally(&mut self, look_dir: Vector3<f32>, graph: &mut Graph, time: GameTime) {
         let angle = self.yaw.angle();
         self.yaw
             .set_target(look_dir.x.atan2(look_dir.z))
             .update(time.delta);
 
-        let body = physics.bodies.get_mut(&self.body).unwrap();
-        let mut position = *body.position();
-        position.rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), angle);
-        body.set_position(position, true);
+        graph[self.body]
+            .local_transform_mut()
+            .set_rotation(UnitQuaternion::from_axis_angle(&Vector3::y_axis(), angle));
     }
 
     fn rebuild_path(&mut self, position: Vector3<f32>, navmesh: &mut Navmesh, time: GameTime) {
@@ -1113,26 +1078,18 @@ impl Bot {
             self.select_weapon(context.weapons);
             self.select_point_of_interest(context.items, context.scene, &context.time);
 
-            let has_ground_contact = self.character.has_ground_contact(&context.scene.physics);
-            let body = context
-                .scene
-                .physics
-                .bodies
-                .get_mut(&self.character.body)
-                .unwrap();
+            let has_ground_contact = self.character.has_ground_contact(&context.scene.graph);
+            let body = context.scene.graph[self.character.body].as_rigid_body_mut();
             let (in_close_combat, look_dir) = match self.target.as_ref() {
-                None => (
-                    false,
-                    self.point_of_interest - body.position().translation.vector,
-                ),
+                None => (false, self.point_of_interest - body.global_position()),
                 Some(target) => {
-                    let d = target.position - body.position().translation.vector;
+                    let d = target.position - body.global_position();
                     let close_combat_threshold = 2.0;
                     (d.norm() <= close_combat_threshold, d)
                 }
             };
 
-            let position = body.position().translation.vector;
+            let position = body.global_position();
 
             if let Some(path_point) = self.path.get(self.current_path_point) {
                 self.move_target = *path_point;
@@ -1143,11 +1100,9 @@ impl Bot {
                 }
             }
 
-            self.update_frustum(position, &context.scene.graph);
-
             let need_jump = look_dir.y >= 0.3 && has_ground_contact && in_close_combat;
             if need_jump {
-                body.set_linvel(Vector3::new(body.linvel().x, 0.08, body.linvel().z), true);
+                body.set_lin_vel(Vector3::new(body.lin_vel().x, 0.08, body.lin_vel().z));
             }
             let was_damaged = self.character.health < self.last_health;
             if was_damaged {
@@ -1169,21 +1124,23 @@ impl Bot {
                         (self.move_target - position).try_normalize(std::f32::EPSILON)
                     {
                         let mut vel = move_dir.scale(self.definition.walk_speed);
-                        vel.y = body.linvel().y;
-                        body.set_linvel(vel, true);
+                        vel.y = body.lin_vel().y;
+                        body.set_lin_vel(vel);
                         self.last_move_dir = move_dir;
                     }
                 } else {
                     // A bit of air control. This helps jump of ledges when there is jump pad below bot.
                     let mut vel = self.last_move_dir.scale(self.definition.walk_speed);
-                    vel.y = body.linvel().y;
-                    body.set_linvel(vel, true);
+                    vel.y = body.lin_vel().y;
+                    body.set_lin_vel(vel);
                 }
             }
 
-            if let Some(look_dir) = look_dir.try_normalize(std::f32::EPSILON) {
+            self.update_frustum(position, &context.scene.graph);
+
+            if let Some(look_dir) = look_dir.try_normalize(f32::EPSILON) {
                 self.aim_vertically(look_dir, &mut context.scene.graph, context.time);
-                self.aim_horizontally(look_dir, &mut context.scene.physics, context.time);
+                self.aim_horizontally(look_dir, &mut context.scene.graph, context.time);
             }
 
             self.locomotion_machine.apply(

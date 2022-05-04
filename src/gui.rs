@@ -1,9 +1,9 @@
 //! Contains all helper functions that creates styled widgets for game user interface.
-//! However most of the styles are used from dark theme of rg3d-ui library so there
+//! However most of the styles are used from dark theme of fyrox-ui library so there
 //! is not much.
 
-use rg3d::core::pool::Handle;
-use rg3d::gui::{
+use fyrox::core::pool::Handle;
+use fyrox::gui::{
     check_box::CheckBoxBuilder, scroll_bar::ScrollBarBuilder, scroll_viewer::ScrollViewerBuilder,
     widget::WidgetBuilder, BuildContext, HorizontalAlignment, Orientation, Thickness, UiNode,
     VerticalAlignment,

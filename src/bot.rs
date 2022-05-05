@@ -7,32 +7,38 @@ use crate::{
     weapon::WeaponContainer,
     GameTime,
 };
-use fyrox::scene::collider::{ColliderBuilder, ColliderShape, InteractionGroups};
-use fyrox::scene::graph::physics::RayCastOptions;
-use fyrox::scene::pivot::PivotBuilder;
-use fyrox::scene::rigidbody::RigidBodyBuilder;
 use fyrox::{
     animation::{
         machine::{self, Machine, PoseNode, State},
         Animation, AnimationSignal,
     },
-    core::rand::Rng,
     core::{
         algebra::{Matrix4, Point3, UnitQuaternion, Vector3},
         color::Color,
         math::{frustum::Frustum, ray::Ray, SmoothAngle, Vector3Ext},
         pool::Handle,
+        rand::Rng,
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
     rand,
     resource::model::Model,
     scene::{
-        self, base::BaseBuilder, debug::SceneDrawingContext, graph::Graph, node::Node,
-        transform::TransformBuilder, Scene,
+        self,
+        base::BaseBuilder,
+        collider::{ColliderBuilder, ColliderShape, InteractionGroups},
+        debug::SceneDrawingContext,
+        graph::{physics::RayCastOptions, Graph},
+        node::Node,
+        pivot::PivotBuilder,
+        rigidbody::RigidBodyBuilder,
+        transform::TransformBuilder,
+        Scene,
     },
-    utils::log::{Log, MessageKind},
-    utils::navmesh::Navmesh,
+    utils::{
+        log::{Log, MessageKind},
+        navmesh::Navmesh,
+    },
 };
 use std::{
     ops::{Deref, DerefMut},
@@ -40,7 +46,7 @@ use std::{
     sync::mpsc::Sender,
 };
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Visit)]
 pub enum BotKind {
     // Beasts
     Mutant,
@@ -49,24 +55,13 @@ pub enum BotKind {
     // Humans
 }
 
+impl Default for BotKind {
+    fn default() -> Self {
+        Self::Mutant
+    }
+}
+
 impl BotKind {
-    pub fn from_id(id: i32) -> Result<Self, String> {
-        match id {
-            0 => Ok(BotKind::Mutant),
-            1 => Ok(BotKind::Parasite),
-            2 => Ok(BotKind::Maw),
-            _ => Err(format!("Invalid bot kind {}", id)),
-        }
-    }
-
-    pub fn id(self) -> i32 {
-        match self {
-            BotKind::Mutant => 0,
-            BotKind::Parasite => 1,
-            BotKind::Maw => 2,
-        }
-    }
-
     pub fn description(self) -> &'static str {
         match self {
             BotKind::Mutant => "Mutant",
@@ -76,38 +71,18 @@ impl BotKind {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default, Visit)]
 pub struct Target {
     position: Vector3<f32>,
     handle: Handle<Actor>,
 }
 
-impl Default for Target {
-    fn default() -> Self {
-        Self {
-            position: Default::default(),
-            handle: Default::default(),
-        }
-    }
-}
-
-impl Visit for Target {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.position.visit("Position", visitor)?;
-        self.handle.visit("Handle", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
+#[derive(Visit)]
 pub struct Bot {
     target: Option<Target>,
     kind: BotKind,
     model: Handle<Node>,
     character: Character,
-    pub definition: &'static BotDefinition,
     locomotion_machine: LocomotionMachine,
     combat_machine: CombatMachine,
     dying_machine: DyingMachine,
@@ -115,6 +90,7 @@ pub struct Bot {
     restoration_time: f32,
     path: Vec<Vector3<f32>>,
     move_target: Vector3<f32>,
+    #[visit(skip)]
     current_path_point: usize,
     frustum: Frustum,
     last_poi_update_time: f64,
@@ -147,7 +123,6 @@ impl Default for Bot {
             kind: BotKind::Mutant,
             model: Default::default(),
             target: Default::default(),
-            definition: Self::get_definition(BotKind::Mutant),
             locomotion_machine: Default::default(),
             combat_machine: Default::default(),
             dying_machine: Default::default(),
@@ -222,6 +197,7 @@ fn disable_leg_tracks(
     animation.set_tracks_enabled_from(graph.find_by_name(root, leg_name), false, graph)
 }
 
+#[derive(Visit)]
 struct LocomotionMachine {
     machine: Machine,
     walk_animation: Handle<Animation>,
@@ -235,18 +211,6 @@ impl Default for LocomotionMachine {
             walk_animation: Default::default(),
             walk_state: Default::default(),
         }
-    }
-}
-
-impl Visit for LocomotionMachine {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.machine.visit("Machine", visitor)?;
-        self.walk_animation.visit("WalkAnimation", visitor)?;
-        self.walk_state.visit("WalkState", visitor)?;
-
-        visitor.leave_region()
     }
 }
 
@@ -401,6 +365,7 @@ impl LocomotionMachine {
     }
 }
 
+#[derive(Visit)]
 struct DyingMachine {
     machine: Machine,
     dead_state: Handle<State>,
@@ -496,19 +461,7 @@ impl DyingMachine {
     }
 }
 
-impl Visit for DyingMachine {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.machine.visit("Machine", visitor)?;
-        self.dead_state.visit("DeadState", visitor)?;
-        self.dying_animation.visit("DyingAnimation", visitor)?;
-        self.dead_animation.visit("DeadAnimation", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
+#[derive(Visit)]
 struct CombatMachine {
     machine: Machine,
     hit_reaction_animation: Handle<Animation>,
@@ -700,20 +653,6 @@ impl CombatMachine {
     }
 }
 
-impl Visit for CombatMachine {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.machine.visit("Machine", visitor)?;
-        self.hit_reaction_animation
-            .visit("HitReactionAnimation", visitor)?;
-        self.whip_animation.visit("WhipAnimation", visitor)?;
-        self.aim_state.visit("AimState", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
 impl Bot {
     pub fn get_definition(kind: BotKind) -> &'static BotDefinition {
         match kind {
@@ -892,7 +831,6 @@ impl Bot {
                 ..Default::default()
             },
             spine,
-            definition,
             last_health: definition.health,
             model,
             kind,
@@ -1020,12 +958,16 @@ impl Bot {
         self.frustum = Frustum::from(view_projection_matrix).unwrap();
     }
 
+    pub fn definition(&self) -> &BotDefinition {
+        Self::get_definition(self.kind)
+    }
+
     fn aim_vertically(&mut self, look_dir: Vector3<f32>, graph: &mut Graph, time: GameTime) {
         let angle = self.pitch.angle();
         self.pitch
             .set_target(
                 look_dir.dot(&Vector3::y()).acos() - std::f32::consts::PI / 2.0
-                    + self.definition.v_aim_angle_hack.to_radians(),
+                    + self.definition().v_aim_angle_hack.to_radians(),
             )
             .update(time.delta);
 
@@ -1123,14 +1065,14 @@ impl Bot {
                     if let Some(move_dir) =
                         (self.move_target - position).try_normalize(std::f32::EPSILON)
                     {
-                        let mut vel = move_dir.scale(self.definition.walk_speed);
+                        let mut vel = move_dir.scale(self.definition().walk_speed);
                         vel.y = body.lin_vel().y;
                         body.set_lin_vel(vel);
                         self.last_move_dir = move_dir;
                     }
                 } else {
                     // A bit of air control. This helps jump of ledges when there is jump pad below bot.
-                    let mut vel = self.last_move_dir.scale(self.definition.walk_speed);
+                    let mut vel = self.last_move_dir.scale(self.definition().walk_speed);
                     vel.y = body.lin_vel().y;
                     body.set_lin_vel(vel);
                 }
@@ -1262,30 +1204,5 @@ fn clean_machine(machine: &Machine, scene: &mut Scene) {
         if let PoseNode::PlayAnimation(node) = node {
             scene.animations.remove(node.animation);
         }
-    }
-}
-
-impl Visit for Bot {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        let mut kind_id = self.kind.id();
-        kind_id.visit("Kind", visitor)?;
-        if visitor.is_reading() {
-            self.kind = BotKind::from_id(kind_id)?;
-        }
-
-        self.definition = Self::get_definition(self.kind);
-        self.character.visit("Character", visitor)?;
-        self.model.visit("Model", visitor)?;
-        self.target.visit("Target", visitor)?;
-        self.locomotion_machine
-            .visit("LocomotionMachine", visitor)?;
-        self.combat_machine.visit("AimMachine", visitor)?;
-        self.restoration_time.visit("RestorationTime", visitor)?;
-        self.yaw.visit("Yaw", visitor)?;
-        self.pitch.visit("Pitch", visitor)?;
-
-        visitor.leave_region()
     }
 }

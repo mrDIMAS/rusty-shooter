@@ -152,132 +152,34 @@ pub enum CollisionGroups {
     All = std::isize::MAX,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Visit, Default)]
 pub struct DeathMatch {
     pub time_limit_secs: f32,
     pub frag_limit: u32,
 }
 
-impl Default for DeathMatch {
-    fn default() -> Self {
-        Self {
-            time_limit_secs: Default::default(),
-            frag_limit: 0,
-        }
-    }
-}
-
-impl Visit for DeathMatch {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.time_limit_secs.visit("TimeLimit", visitor)?;
-        self.frag_limit.visit("FragLimit", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Visit, Default)]
 pub struct TeamDeathMatch {
     pub time_limit_secs: f32,
     pub team_frag_limit: u32,
 }
 
-impl Default for TeamDeathMatch {
-    fn default() -> Self {
-        Self {
-            time_limit_secs: Default::default(),
-            team_frag_limit: 0,
-        }
-    }
-}
-
-impl Visit for TeamDeathMatch {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.time_limit_secs.visit("TimeLimit", visitor)?;
-        self.team_frag_limit.visit("TeamFragLimit", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Visit, Default)]
 pub struct CaptureTheFlag {
     pub time_limit_secs: f32,
     pub flag_limit: u32,
 }
 
-impl Default for CaptureTheFlag {
-    fn default() -> Self {
-        Self {
-            time_limit_secs: Default::default(),
-            flag_limit: 0,
-        }
-    }
-}
-
-impl Visit for CaptureTheFlag {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.time_limit_secs.visit("TimeLimit", visitor)?;
-        self.flag_limit.visit("FlagLimit", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Visit)]
 pub enum MatchOptions {
     DeathMatch(DeathMatch),
     TeamDeathMatch(TeamDeathMatch),
     CaptureTheFlag(CaptureTheFlag),
 }
 
-impl MatchOptions {
-    fn from_id(id: u32) -> Result<Self, String> {
-        match id {
-            0 => Ok(MatchOptions::DeathMatch(Default::default())),
-            1 => Ok(MatchOptions::TeamDeathMatch(Default::default())),
-            2 => Ok(MatchOptions::CaptureTheFlag(Default::default())),
-            _ => Err(format!("Invalid match options {}", id)),
-        }
-    }
-
-    fn id(&self) -> u32 {
-        match self {
-            MatchOptions::DeathMatch(_) => 0,
-            MatchOptions::TeamDeathMatch(_) => 1,
-            MatchOptions::CaptureTheFlag(_) => 2,
-        }
-    }
-}
-
 impl Default for MatchOptions {
     fn default() -> Self {
         MatchOptions::DeathMatch(Default::default())
-    }
-}
-
-impl Visit for MatchOptions {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        let mut id = self.id();
-        id.visit("Id", visitor)?;
-        if visitor.is_reading() {
-            *self = Self::from_id(id)?;
-        }
-        match self {
-            MatchOptions::DeathMatch(o) => o.visit("Data", visitor)?,
-            MatchOptions::TeamDeathMatch(o) => o.visit("Data", visitor)?,
-            MatchOptions::CaptureTheFlag(o) => o.visit("Data", visitor)?,
-        }
-
-        visitor.leave_region()
     }
 }
 

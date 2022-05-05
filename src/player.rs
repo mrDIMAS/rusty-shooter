@@ -52,10 +52,12 @@ impl Default for Controller {
     }
 }
 
+#[derive(Visit)]
 pub struct Player {
     character: Character,
     camera: Handle<Node>,
     camera_pivot: Handle<Node>,
+    #[visit(skip)]
     controller: Controller,
     yaw: f32,
     dest_yaw: f32,
@@ -78,6 +80,7 @@ pub struct Player {
     crouch_speed: f32,
     stand_up_speed: f32,
     listener_basis: Matrix3<f32>,
+    #[visit(skip)]
     control_scheme: Option<Arc<RwLock<ControlScheme>>>,
 }
 
@@ -125,29 +128,6 @@ impl Default for Player {
             listener_basis: Default::default(),
             control_scheme: None,
         }
-    }
-}
-
-impl Visit for Player {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.character.visit("Character", visitor)?;
-        self.camera.visit("Camera", visitor)?;
-        self.camera_pivot.visit("CameraPivot", visitor)?;
-        self.yaw.visit("Yaw", visitor)?;
-        self.dest_yaw.visit("DestYaw", visitor)?;
-        self.pitch.visit("Pitch", visitor)?;
-        self.dest_pitch.visit("DestPitch", visitor)?;
-        self.run_speed_multiplier
-            .visit("RunSpeedMultiplier", visitor)?;
-        self.stand_body_height.visit("StandBodyRadius", visitor)?;
-        self.crouch_body_height.visit("CrouchBodyRadius", visitor)?;
-        self.move_speed.visit("MoveSpeed", visitor)?;
-        self.camera_offset.visit("CameraOffset", visitor)?;
-        self.camera_dest_offset.visit("CameraDestOffset", visitor)?;
-
-        visitor.leave_region()
     }
 }
 

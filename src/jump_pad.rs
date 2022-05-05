@@ -5,6 +5,7 @@ use fyrox::core::{
 };
 use fyrox::scene::node::Node;
 
+#[derive(Visit)]
 pub struct JumpPad {
     velocity: Vector3<f32>,
     collider: Handle<Node>,
@@ -36,17 +37,7 @@ impl Default for JumpPad {
     }
 }
 
-impl Visit for JumpPad {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.velocity.visit("From", visitor)?;
-        self.collider.visit("Shape", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
+#[derive(Visit)]
 pub struct JumpPadContainer {
     pool: Pool<JumpPad>,
 }
@@ -68,15 +59,5 @@ impl JumpPadContainer {
 
     pub fn iter(&self) -> impl Iterator<Item = &JumpPad> {
         self.pool.iter()
-    }
-}
-
-impl Visit for JumpPadContainer {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.pool.visit("Pool", visitor)?;
-
-        visitor.leave_region()
     }
 }

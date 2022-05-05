@@ -3,12 +3,13 @@ use fyrox::{
     core::{
         algebra::Vector3,
         pool::Handle,
-        visitor::{Visit, VisitError, VisitResult, Visitor},
+        visitor::{Visit, VisitResult, Visitor},
     },
     scene::{graph::Graph, node::Node, Scene},
 };
 use std::sync::mpsc::Sender;
 
+#[derive(Visit)]
 pub struct Character {
     pub name: String,
     pub body: Handle<Node>,
@@ -18,11 +19,12 @@ pub struct Character {
     pub weapons: Vec<Handle<Weapon>>,
     pub current_weapon: u32,
     pub weapon_pivot: Handle<Node>,
+    #[visit(skip)]
     pub sender: Option<Sender<Message>>,
     pub team: Team,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Visit)]
 pub enum Team {
     None,
     Red,
@@ -32,26 +34,6 @@ pub enum Team {
 impl Default for Team {
     fn default() -> Self {
         Team::None
-    }
-}
-
-impl Visit for Team {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        let mut id = match self {
-            Team::None => 0,
-            Team::Red => 1,
-            Team::Blue => 2,
-        };
-        id.visit(name, visitor)?;
-        if visitor.is_reading() {
-            *self = match id {
-                0 => Team::None,
-                1 => Team::Red,
-                2 => Team::Blue,
-                _ => return Err(VisitError::User(format!("Invalid team id {}", id))),
-            }
-        }
-        Ok(())
     }
 }
 
@@ -69,24 +51,6 @@ impl Default for Character {
             sender: None,
             team: Team::None,
         }
-    }
-}
-
-impl Visit for Character {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.name.visit("Name", visitor)?;
-        self.collider.visit("Collider", visitor)?;
-        self.body.visit("Body", visitor)?;
-        self.health.visit("Health", visitor)?;
-        self.armor.visit("Armor", visitor)?;
-        self.weapons.visit("Weapons", visitor)?;
-        self.current_weapon.visit("CurrentWeapon", visitor)?;
-        self.weapon_pivot.visit("WeaponPivot", visitor)?;
-        self.team.visit("Team", visitor)?;
-
-        visitor.leave_region()
     }
 }
 

@@ -18,7 +18,7 @@ use fyrox::{
 };
 use std::collections::HashMap;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Visit)]
 pub struct PersonalScore {
     pub kills: u32,
     pub deaths: u32,
@@ -33,17 +33,7 @@ impl Default for PersonalScore {
     }
 }
 
-impl Visit for PersonalScore {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.kills.visit("Kills", visitor)?;
-        self.deaths.visit("Deaths", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
+#[derive(Visit)]
 pub struct LeaderBoard {
     personal_score: HashMap<String, PersonalScore>,
     team_score: HashMap<Team, u32>,
@@ -135,17 +125,6 @@ impl Default for LeaderBoard {
             personal_score: Default::default(),
             team_score: Default::default(),
         }
-    }
-}
-
-impl Visit for LeaderBoard {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.personal_score.visit("PersonalScore", visitor)?;
-        self.team_score.visit("TeamScore", visitor)?;
-
-        visitor.leave_region()
     }
 }
 

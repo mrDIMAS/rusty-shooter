@@ -30,32 +30,14 @@ use fyrox::{
 };
 use std::{collections::HashSet, path::PathBuf, sync::mpsc::Sender};
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Visit)]
 pub enum ProjectileKind {
     Plasma,
     Bullet,
     Rocket,
 }
 
-impl ProjectileKind {
-    pub fn new(id: u32) -> Result<Self, String> {
-        match id {
-            0 => Ok(ProjectileKind::Plasma),
-            1 => Ok(ProjectileKind::Bullet),
-            2 => Ok(ProjectileKind::Rocket),
-            _ => Err(format!("Invalid projectile kind id {}", id)),
-        }
-    }
-
-    pub fn id(self) -> u32 {
-        match self {
-            ProjectileKind::Plasma => 0,
-            ProjectileKind::Bullet => 1,
-            ProjectileKind::Rocket => 2,
-        }
-    }
-}
-
+#[derive(Visit)]
 pub struct Projectile {
     kind: ProjectileKind,
     model: Handle<Node>,
@@ -73,8 +55,9 @@ pub struct Projectile {
     /// Position of projectile on the previous frame, it is used to simulate
     /// continuous intersection detection from fast moving projectiles.
     last_position: Vector3<f32>,
-    definition: &'static ProjectileDefinition,
+    #[visit(skip)]
     pub sender: Option<Sender<Message>>,
+    #[visit(skip)]
     hits: HashSet<Hit>,
 }
 
@@ -90,7 +73,6 @@ impl Default for Projectile {
             owner: Default::default(),
             initial_velocity: Default::default(),
             last_position: Default::default(),
-            definition: Self::get_definition(ProjectileKind::Plasma),
             sender: None,
             hits: Default::default(),
         }
@@ -240,7 +222,6 @@ impl Projectile {
             model,
             last_position: position,
             owner,
-            definition,
             sender: Some(sender),
             ..Default::default()
         }
@@ -252,6 +233,10 @@ impl Projectile {
 
     pub fn kill(&mut self) {
         self.lifetime = 0.0;
+    }
+
+    pub fn definition(&self) -> &'static ProjectileDefinition {
+        Self::get_definition(self.kind)
     }
 
     pub fn update(
@@ -315,8 +300,8 @@ impl Projectile {
         }
 
         // Movement of kinematic projectiles are controlled explicitly.
-        if self.definition.is_kinematic {
-            let total_velocity = self.dir.scale(self.definition.speed);
+        if self.definition().is_kinematic {
+            let total_velocity = self.dir.scale(self.definition().speed);
 
             // Special case for projectiles with rigid body.
             if let Some(body) = self.body.as_ref() {
@@ -359,7 +344,7 @@ impl Projectile {
                 .as_ref()
                 .unwrap()
                 .send(Message::PlaySound {
-                    path: PathBuf::from(self.definition.impact_sound),
+                    path: PathBuf::from(self.definition().impact_sound),
                     position: pos,
                     gain: 1.0,
                     rolloff_factor: 4.0,
@@ -368,6 +353,7 @@ impl Projectile {
                 .unwrap();
         }
 
+        let definition = self.definition();
         for hit in self.hits.drain() {
             self.sender
                 .as_ref()
@@ -375,7 +361,7 @@ impl Projectile {
                 .send(Message::DamageActor {
                     actor: hit.actor,
                     who: hit.who,
-                    amount: self.definition.damage,
+                    amount: definition.damage,
                 })
                 .unwrap();
         }
@@ -404,29 +390,7 @@ struct Hit {
     who: Handle<Actor>,
 }
 
-impl Visit for Projectile {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        let mut kind = self.kind.id();
-        kind.visit("KindId", visitor)?;
-        if visitor.is_reading() {
-            self.kind = ProjectileKind::new(kind)?;
-        }
-
-        self.definition = Self::get_definition(self.kind);
-        self.lifetime.visit("Lifetime", visitor)?;
-        self.dir.visit("Direction", visitor)?;
-        self.model.visit("Model", visitor)?;
-        self.body.visit("Body", visitor)?;
-        self.rotation_angle.visit("RotationAngle", visitor)?;
-        self.initial_velocity.visit("InitialVelocity", visitor)?;
-        self.owner.visit("Owner", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
+#[derive(Visit)]
 pub struct ProjectileContainer {
     pool: Pool<Projectile>,
 }
@@ -459,15 +423,5 @@ impl ProjectileContainer {
         }
 
         self.pool.retain(|proj| !proj.is_dead());
-    }
-}
-
-impl Visit for ProjectileContainer {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.pool.visit("Pool", visitor)?;
-
-        visitor.leave_region()
     }
 }

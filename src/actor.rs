@@ -12,6 +12,7 @@ use fyrox::{
 use std::ops::{Deref, DerefMut};
 
 #[allow(clippy::large_enum_variant)]
+#[derive(Visit)]
 pub enum Actor {
     Bot(Bot),
     Player(Player),
@@ -33,21 +34,6 @@ macro_rules! static_dispatch {
 }
 
 impl Actor {
-    fn from_id(id: u32) -> Result<Self, String> {
-        match id {
-            0 => Ok(Actor::Player(Default::default())),
-            1 => Ok(Actor::Bot(Default::default())),
-            _ => Err(format!("Unknown actor kind {}", id)),
-        }
-    }
-
-    pub fn id(&self) -> u32 {
-        match self {
-            Actor::Player(_) => 0,
-            Actor::Bot(_) => 1,
-        }
-    }
-
     pub fn can_be_removed(&self) -> bool {
         static_dispatch!(self, can_be_removed,)
     }
@@ -77,25 +63,6 @@ impl DerefMut for Actor {
     }
 }
 
-impl Visit for Actor {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        let mut kind_id = self.id();
-        kind_id.visit("KindId", visitor)?;
-        if visitor.is_reading() {
-            *self = Actor::from_id(kind_id)?;
-        }
-
-        match self {
-            Actor::Player(player) => player.visit("Data", visitor)?,
-            Actor::Bot(bot) => bot.visit("Data", visitor)?,
-        }
-
-        visitor.leave_region()
-    }
-}
-
 // Helper struct that used to hold information about possible target for bots
 // it contains all needed information to select suitable target. This is needed
 // because of borrowing rules that does not allows to have a mutable reference
@@ -106,9 +73,10 @@ pub struct TargetDescriptor {
     pub position: Vector3<f32>,
 }
 
-#[derive(Default)]
+#[derive(Default, Visit)]
 pub struct ActorContainer {
     pool: Pool<Actor>,
+    #[visit(skip)]
     target_descriptors: Vec<TargetDescriptor>,
 }
 
@@ -237,15 +205,5 @@ impl ActorContainer {
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Actor> {
         self.pool.iter_mut()
-    }
-}
-
-impl Visit for ActorContainer {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.pool.visit("Pool", visitor)?;
-
-        visitor.leave_region()
     }
 }

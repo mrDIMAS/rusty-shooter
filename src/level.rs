@@ -53,7 +53,7 @@ use std::{
 
 pub const RESPAWN_TIME: f32 = 4.0;
 
-#[derive(Default)]
+#[derive(Default, Visit)]
 pub struct SoundManager {
     reverb: Handle<Effect>,
 }
@@ -123,16 +123,7 @@ impl SoundManager {
     }
 }
 
-impl Visit for SoundManager {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.reverb.visit("Reverb", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
+#[derive(Visit)]
 pub struct Level {
     map_root: Handle<Node>,
     pub scene: Handle<Scene>,
@@ -143,8 +134,10 @@ pub struct Level {
     jump_pads: JumpPadContainer,
     items: ItemContainer,
     spawn_points: Vec<SpawnPoint>,
+    #[visit(skip)]
     sender: Option<Sender<Message>>,
     pub navmesh: Handle<Navmesh>,
+    #[visit(skip)]
     pub control_scheme: Option<Arc<RwLock<ControlScheme>>>,
     death_zones: Vec<DeathZone>,
     pub options: MatchOptions,
@@ -183,46 +176,9 @@ impl Default for Level {
     }
 }
 
-impl Visit for Level {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.scene.visit("Scene", visitor)?;
-        self.map_root.visit("MapRoot", visitor)?;
-        self.player.visit("Player", visitor)?;
-        self.actors.visit("Actors", visitor)?;
-        self.projectiles.visit("Projectiles", visitor)?;
-        self.weapons.visit("Weapons", visitor)?;
-        self.jump_pads.visit("JumpPads", visitor)?;
-        self.spawn_points.visit("SpawnPoints", visitor)?;
-        self.death_zones.visit("DeathZones", visitor)?;
-        self.options.visit("Options", visitor)?;
-        self.time.visit("Time", visitor)?;
-        self.leader_board.visit("LeaderBoard", visitor)?;
-        self.respawn_list.visit("RespawnList", visitor)?;
-        self.spectator_camera.visit("SpectatorCamera", visitor)?;
-        self.target_spectator_position
-            .visit("TargetSpectatorPosition", visitor)?;
-        self.sound_manager.visit("SoundManager", visitor)?;
-        self.items.visit("Items", visitor)?;
-        self.navmesh.visit("Navmesh", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
+#[derive(Visit)]
 pub struct DeathZone {
     bounds: AxisAlignedBoundingBox,
-}
-
-impl Visit for DeathZone {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.bounds.visit("Bounds", visitor)?;
-
-        visitor.leave_region()
-    }
 }
 
 impl Default for DeathZone {
@@ -242,6 +198,7 @@ pub struct UpdateContext<'a> {
     pub weapons: &'a WeaponContainer,
 }
 
+#[derive(Visit)]
 struct PlayerRespawnEntry {
     time_left: f32,
 }
@@ -252,16 +209,7 @@ impl Default for PlayerRespawnEntry {
     }
 }
 
-impl Visit for PlayerRespawnEntry {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.time_left.visit("TimeLeft", visitor)?;
-
-        visitor.leave_region()
-    }
-}
-
+#[derive(Visit)]
 struct BotRespawnEntry {
     name: String,
     kind: BotKind,
@@ -278,21 +226,7 @@ impl Default for BotRespawnEntry {
     }
 }
 
-impl Visit for BotRespawnEntry {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.name.visit("Name", visitor)?;
-        self.time_left.visit("TimeLeft", visitor)?;
-
-        let mut kind_id = self.kind.id();
-        kind_id.visit("Kind", visitor)?;
-        self.kind = BotKind::from_id(kind_id)?;
-
-        visitor.leave_region()
-    }
-}
-
+#[derive(Visit)]
 enum RespawnEntry {
     Bot(BotRespawnEntry),
     Player(PlayerRespawnEntry),
@@ -301,42 +235,6 @@ enum RespawnEntry {
 impl Default for RespawnEntry {
     fn default() -> Self {
         RespawnEntry::Player(PlayerRespawnEntry::default())
-    }
-}
-
-impl RespawnEntry {
-    fn id(&self) -> u32 {
-        match self {
-            RespawnEntry::Bot { .. } => 0,
-            RespawnEntry::Player { .. } => 1,
-        }
-    }
-
-    fn from_id(id: u32) -> Result<Self, String> {
-        match id {
-            0 => Ok(RespawnEntry::Bot(Default::default())),
-            1 => Ok(RespawnEntry::Player(Default::default())),
-            _ => Err(format!("Invalid RespawnEntry type {}", id)),
-        }
-    }
-}
-
-impl Visit for RespawnEntry {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        let mut id = self.id();
-        id.visit("Id", visitor)?;
-        if visitor.is_reading() {
-            *self = Self::from_id(id)?;
-        }
-
-        match self {
-            RespawnEntry::Bot(v) => v.visit("Data", visitor)?,
-            RespawnEntry::Player(v) => v.visit("Data", visitor)?,
-        }
-
-        visitor.leave_region()
     }
 }
 
@@ -1201,7 +1099,7 @@ impl Level {
             let entry = match self.actors.get(actor) {
                 Actor::Bot(bot) => RespawnEntry::Bot(BotRespawnEntry {
                     name,
-                    kind: bot.definition.kind,
+                    kind: bot.definition().kind,
                     time_left: RESPAWN_TIME,
                 }),
                 Actor::Player(player) => {
@@ -1390,24 +1288,7 @@ impl Level {
     }
 }
 
+#[derive(Visit, Default)]
 pub struct SpawnPoint {
     position: Vector3<f32>,
-}
-
-impl Default for SpawnPoint {
-    fn default() -> Self {
-        Self {
-            position: Default::default(),
-        }
-    }
-}
-
-impl Visit for SpawnPoint {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.position.visit("Position", visitor)?;
-
-        visitor.leave_region()
-    }
 }

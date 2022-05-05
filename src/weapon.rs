@@ -335,7 +335,7 @@ impl Weapon {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Visit)]
 pub struct WeaponContainer {
     pool: Pool<Weapon>,
 }
@@ -379,15 +379,5 @@ impl Index<Handle<Weapon>> for WeaponContainer {
 impl IndexMut<Handle<Weapon>> for WeaponContainer {
     fn index_mut(&mut self, index: Handle<Weapon>) -> &mut Self::Output {
         &mut self.pool[index]
-    }
-}
-
-impl Visit for WeaponContainer {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        self.pool.visit("Pool", visitor)?;
-
-        visitor.leave_region()
     }
 }

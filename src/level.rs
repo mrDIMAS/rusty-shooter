@@ -254,12 +254,8 @@ pub async fn analyze(
         let position = node.global_position();
         let name = node.name();
         if name.starts_with("JumpPad") {
-            let begin = scene
-                .graph
-                .find_by_name_from_root(format!("{}_Begin", name).as_str());
-            let end = scene
-                .graph
-                .find_by_name_from_root(format!("{}_End", name).as_str());
+            let begin = scene.graph.find_by_name(handle, "Begin");
+            let end = scene.graph.find_by_name(handle, "End");
             if begin.is_some() && end.is_some() {
                 let begin = scene.graph[begin].global_position();
                 let end = scene.graph[end].global_position();
@@ -267,7 +263,8 @@ pub async fn analyze(
                 let len = d.norm();
                 let force = d.try_normalize(std::f32::EPSILON);
                 let force = force.unwrap_or(Vector3::y()).scale(len * 3.0);
-                result.jump_pads.add(JumpPad::new(Handle::NONE, force)); // TODO: Create shape for jump pads in the editor
+                let collider = scene.graph.find(handle, &mut |n| n.is_collider());
+                result.jump_pads.add(JumpPad::new(collider, force));
             };
         } else if name.starts_with("Medkit") {
             items.push((ItemKind::Medkit, position));

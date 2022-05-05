@@ -170,14 +170,18 @@ impl ActorContainer {
     }
 
     fn handle_event(&mut self, context: &mut UpdateContext) {
-        for actor in self.pool.iter_mut() {
+        for actor in self.pool.iter() {
             let mut velocity = None;
             for contact_manifold in context.scene.graph[actor.collider]
                 .as_collider()
                 .contacts(&context.scene.graph.physics)
             {
                 for jump_pad in context.jump_pads.iter() {
-                    if contact_manifold.collider2 == jump_pad.collider() {
+                    if contact_manifold.collider1 == actor.collider
+                        && contact_manifold.collider2 == jump_pad.collider()
+                        || contact_manifold.collider1 == jump_pad.collider()
+                            && contact_manifold.collider2 == actor.collider
+                    {
                         velocity = Some(jump_pad.velocity());
                     }
                 }

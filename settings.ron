@@ -1,0 +1,50 @@
+(
+    selection: (
+        ignore_back_faces: true,
+    ),
+    graphics: (
+        quality: (
+            point_shadow_map_size: 1024,
+            point_soft_shadows: true,
+            point_shadows_enabled: true,
+            point_shadows_distance: 15,
+            point_shadow_map_precision: Full,
+            spot_shadow_map_size: 1024,
+            spot_soft_shadows: true,
+            spot_shadows_enabled: true,
+            spot_shadows_distance: 15,
+            spot_shadow_map_precision: Full,
+            csm_settings: (
+                enabled: true,
+                size: 2048,
+                precision: Full,
+                pcf: true,
+            ),
+            use_ssao: true,
+            ssao_radius: 0.5,
+            light_scatter_enabled: true,
+            fxaa: true,
+            use_parallax_mapping: false,
+            use_bloom: true,
+        ),
+        z_near: 0.025,
+        z_far: 128,
+    ),
+    debugging: (
+        show_physics: false,
+        show_bounds: false,
+        show_tbn: false,
+    ),
+    move_mode_settings: (
+        grid_snapping: false,
+        x_snap_step: 0.05,
+        y_snap_step: 0.05,
+        z_snap_step: 0.05,
+    ),
+    rotate_mode_settings: (
+        angle_snapping: false,
+        x_snap_step: 2.5,
+        y_snap_step: 2.5,
+        z_snap_step: 2.5,
+    ),
+)

@@ -4,22 +4,28 @@ use crate::{
     level::UpdateContext,
     message::Message,
 };
-use fyrox::scene::collider::{ColliderBuilder, ColliderShape};
-use fyrox::scene::pivot::PivotBuilder;
-use fyrox::scene::rigidbody::{RigidBodyBuilder, RigidBodyType};
-use fyrox::scene::sound::listener::ListenerBuilder;
 use fyrox::{
-    core::rand::Rng,
     core::{
         algebra::{Matrix3, UnitQuaternion, Vector3},
         math::Vector3Ext,
         pool::Handle,
+        rand::Rng,
         visitor::{Visit, VisitResult, Visitor},
     },
     event::{DeviceEvent, ElementState, Event, MouseScrollDelta, WindowEvent},
     rand,
-    scene::transform::TransformBuilder,
-    scene::{base::BaseBuilder, camera::CameraBuilder, node::Node, Scene},
+    scene::{
+        base::BaseBuilder,
+        camera::CameraBuilder,
+        collider::{ColliderBuilder, ColliderShape},
+        graph::physics::CoefficientCombineRule,
+        node::Node,
+        pivot::PivotBuilder,
+        rigidbody::{RigidBodyBuilder, RigidBodyType},
+        sound::listener::ListenerBuilder,
+        transform::TransformBuilder,
+        Scene,
+    },
 };
 use std::{
     ops::{Deref, DerefMut},
@@ -79,7 +85,6 @@ pub struct Player {
     weapon_shake_factor: f32,
     crouch_speed: f32,
     stand_up_speed: f32,
-    listener_basis: Matrix3<f32>,
     #[visit(skip)]
     control_scheme: Option<Arc<RwLock<ControlScheme>>>,
 }
@@ -125,7 +130,6 @@ impl Default for Player {
             weapon_shake_factor: 0.0,
             crouch_speed: 0.15,
             stand_up_speed: 0.12,
-            listener_basis: Default::default(),
             control_scheme: None,
         }
     }
@@ -144,7 +148,7 @@ impl Player {
             {
                 collider = ColliderBuilder::new(BaseBuilder::new())
                     .with_shape(ColliderShape::capsule_y(height * 0.5, 0.35))
-                    .with_friction(0.5)
+                    .with_friction_combine_rule(CoefficientCombineRule::Min)
                     .build(&mut scene.graph);
                 collider
             },
@@ -311,6 +315,14 @@ impl Player {
             self.controller.jump = false;
         }
 
+        // Apply damping in XZ plane to prevent sliding.
+        if has_ground_contact {
+            let mut lin_vel = body.lin_vel();
+            lin_vel.x *= 0.9;
+            lin_vel.z *= 0.9;
+            body.set_lin_vel(lin_vel);
+        }
+
         //self.handle_crouch(body);
 
         self.feet_position = body.global_position();
@@ -369,11 +381,6 @@ impl Player {
         self.head_position = camera_node.global_position();
         self.look_direction = camera_node.look_vector();
         self.up_direction = camera_node.up_vector();
-        self.listener_basis = Matrix3::from_columns(&[
-            camera_node.side_vector(),
-            camera_node.up_vector(),
-            -camera_node.look_vector(),
-        ]);
     }
 
     pub fn can_be_removed(&self) -> bool {

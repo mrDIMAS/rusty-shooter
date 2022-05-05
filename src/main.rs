@@ -27,19 +27,13 @@ use crate::{
     actor::Actor, control_scheme::ControlScheme, hud::Hud, level::Level, menu::Menu,
     message::Message,
 };
-use fyrox::core::futures::executor::block_on;
-use fyrox::engine::resource_manager::ResourceManager;
-use fyrox::engine::{EngineInitParams, SerializationContext};
-use fyrox::scene::base::BaseBuilder;
-use fyrox::scene::node::Node;
-use fyrox::scene::sound::{SoundBuilder, Status};
-use fyrox::scene::SceneLoader;
 use fyrox::{
     core::{
+        futures::executor::block_on,
         pool::Handle,
         visitor::{Visit, VisitResult, Visitor},
     },
-    engine::Engine,
+    engine::{resource_manager::ResourceManager, Engine, EngineInitParams, SerializationContext},
     event::{ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     gui::{
@@ -50,7 +44,12 @@ use fyrox::{
         widget::{WidgetBuilder, WidgetMessage},
         BuildContext, HorizontalAlignment, UiNode, VerticalAlignment,
     },
-    scene::Scene,
+    scene::{
+        base::BaseBuilder,
+        node::Node,
+        sound::{SoundBuilder, Status},
+        Scene, SceneLoader,
+    },
     utils::{
         log::{Log, MessageKind},
         translate_event,

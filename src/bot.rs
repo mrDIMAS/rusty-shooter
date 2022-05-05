@@ -7,6 +7,7 @@ use crate::{
     weapon::WeaponContainer,
     GameTime,
 };
+use fyrox::scene::graph::physics::CoefficientCombineRule;
 use fyrox::{
     animation::{
         machine::{self, Machine, PoseNode, State},
@@ -780,7 +781,7 @@ impl Bot {
                     {
                         collider = ColliderBuilder::new(BaseBuilder::new())
                             .with_shape(ColliderShape::capsule_y(body_height * 0.5, 0.28))
-                            .with_friction(0.0)
+                            .with_friction_combine_rule(CoefficientCombineRule::Min)
                             .build(&mut scene.graph);
                         collider
                     },

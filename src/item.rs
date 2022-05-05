@@ -1,5 +1,4 @@
 use crate::{effects::EffectKind, fyrox::core::math::Vector3Ext, message::Message, GameTime};
-use fyrox::scene::pivot::PivotBuilder;
 use fyrox::{
     core::{
         algebra::Vector3,
@@ -7,7 +6,10 @@ use fyrox::{
         visitor::{Visit, VisitResult, Visitor},
     },
     engine::resource_manager::ResourceManager,
-    scene::{base::BaseBuilder, graph::Graph, node::Node, transform::TransformBuilder, Scene},
+    scene::{
+        base::BaseBuilder, graph::Graph, node::Node, pivot::PivotBuilder,
+        transform::TransformBuilder, Scene,
+    },
 };
 use std::{path::Path, sync::mpsc::Sender};
 

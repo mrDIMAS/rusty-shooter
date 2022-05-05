@@ -41,10 +41,7 @@ use fyrox::{
         transform::TransformBuilder,
         Scene,
     },
-    utils::{
-        log::{Log, MessageKind},
-        navmesh::Navmesh,
-    },
+    utils::log::{Log, MessageKind},
 };
 use std::{
     path::{Path, PathBuf},
@@ -136,7 +133,6 @@ pub struct Level {
     spawn_points: Vec<SpawnPoint>,
     #[visit(skip)]
     sender: Option<Sender<Message>>,
-    pub navmesh: Handle<Navmesh>,
     #[visit(skip)]
     pub control_scheme: Option<Arc<RwLock<ControlScheme>>>,
     death_zones: Vec<DeathZone>,
@@ -162,7 +158,6 @@ impl Default for Level {
             items: ItemContainer::new(),
             spawn_points: Default::default(),
             sender: None,
-            navmesh: Default::default(),
             control_scheme: None,
             death_zones: Default::default(),
             options: Default::default(),
@@ -194,7 +189,6 @@ pub struct UpdateContext<'a> {
     pub scene: &'a mut Scene,
     pub items: &'a ItemContainer,
     pub jump_pads: &'a JumpPadContainer,
-    pub navmesh: Handle<Navmesh>,
     pub weapons: &'a WeaponContainer,
 }
 
@@ -235,24 +229,6 @@ enum RespawnEntry {
 impl Default for RespawnEntry {
     fn default() -> Self {
         RespawnEntry::Player(PlayerRespawnEntry::default())
-    }
-}
-
-fn build_navmesh(scene: &mut Scene) -> Handle<Navmesh> {
-    let navmesh_handle = scene.graph.find_by_name(scene.graph.get_root(), "Navmesh");
-    if navmesh_handle.is_some() {
-        let navmesh_node = &mut scene.graph[navmesh_handle];
-        navmesh_node.set_visibility(false);
-
-        scene
-            .navmeshes
-            .add(Navmesh::from_mesh(navmesh_node.as_mesh()))
-    } else {
-        Log::writeln(
-            MessageKind::Warning,
-            "Unable to find Navmesh node to build navmesh!".to_owned(),
-        );
-        Handle::NONE
     }
 }
 
@@ -571,7 +547,6 @@ impl Level {
             death_zones,
             spawn_points,
             leader_board,
-            navmesh: build_navmesh(&mut scene),
             scene: Handle::NONE, // Filled when scene will be moved to engine.
             sender: Some(sender),
             control_scheme: Some(control_scheme),
@@ -1082,7 +1057,6 @@ impl Level {
             scene,
             items: &self.items,
             jump_pads: &self.jump_pads,
-            navmesh: self.navmesh,
             weapons: &self.weapons,
         };
         self.actors.update(&mut ctx);
@@ -1262,9 +1236,7 @@ impl Level {
 
         scene.graph.physics.draw(drawing_context);
 
-        if self.navmesh.is_some() {
-            let navmesh = &scene.navmeshes[self.navmesh];
-
+        if let Some(navmesh) = scene.navmeshes.at(0) {
             for pt in navmesh.vertices() {
                 for neighbour in pt.neighbours() {
                     drawing_context.add_line(scene::debug::Line {

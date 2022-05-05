@@ -6,7 +6,7 @@ use crate::{
 };
 use fyrox::{
     core::{
-        algebra::{Matrix3, UnitQuaternion, Vector3},
+        algebra::{UnitQuaternion, Vector3},
         math::Vector3Ext,
         pool::Handle,
         rand::Rng,

@@ -277,9 +277,7 @@ pub async fn analyze(
         } else if name.starts_with("SpawnPoint") {
             spawn_points.push(node.global_position())
         } else if name.starts_with("DeathZone") {
-            if node.is_mesh() {
-                //   death_zones.push(handle);
-            }
+            death_zones.push(handle);
         }
     }
 
@@ -299,7 +297,7 @@ pub async fn analyze(
         let node = &mut scene.graph[handle];
         node.set_visibility(false);
         result.death_zones.push(DeathZone {
-            bounds: node.as_mesh().world_bounding_box(),
+            bounds: node.world_bounding_box(),
         });
     }
     result.spawn_points = spawn_points

@@ -8,6 +8,7 @@ use crate::{
     GameTime,
 };
 use fyrox::scene::graph::physics::CoefficientCombineRule;
+use fyrox::utils::navmesh::NavmeshAgent;
 use fyrox::{
     animation::{
         machine::{self, Machine, PoseNode, State},
@@ -89,14 +90,11 @@ pub struct Bot {
     dying_machine: DyingMachine,
     last_health: f32,
     restoration_time: f32,
-    path: Vec<Vector3<f32>>,
-    move_target: Vector3<f32>,
     #[visit(skip)]
-    current_path_point: usize,
+    navmesh_agent: NavmeshAgent,
     frustum: Frustum,
     last_poi_update_time: f64,
     point_of_interest: Vector3<f32>,
-    last_path_rebuild_time: f64,
     last_move_dir: Vector3<f32>,
     spine: Handle<Node>,
     yaw: SmoothAngle,
@@ -129,13 +127,10 @@ impl Default for Bot {
             dying_machine: Default::default(),
             last_health: 0.0,
             restoration_time: 0.0,
-            path: Default::default(),
-            move_target: Default::default(),
-            current_path_point: 0,
+            navmesh_agent: Default::default(),
             frustum: Default::default(),
             last_poi_update_time: -10.0,
             point_of_interest: Default::default(),
-            last_path_rebuild_time: -10.0,
             last_move_dir: Default::default(),
             spine: Default::default(),
             yaw: SmoothAngle {
@@ -674,7 +669,7 @@ impl Bot {
                     left_leg_name: "Mutant:LeftUpLeg",
                     right_leg_name: "Mutant:RightUpLeg",
                     spine: "Mutant:Spine",
-                    walk_speed: 4.0,
+                    walk_speed: 2.0,
                     scale: 0.0085,
                     weapon_scale: 2.6,
                     health: 100.0,
@@ -699,7 +694,7 @@ impl Bot {
                     left_leg_name: "LeftUpLeg",
                     right_leg_name: "RightUpLeg",
                     spine: "Spine",
-                    walk_speed: 4.0,
+                    walk_speed: 2.0,
                     scale: 0.0085,
                     weapon_scale: 2.5,
                     health: 100.0,
@@ -724,7 +719,7 @@ impl Bot {
                     left_leg_name: "LeftUpLeg",
                     right_leg_name: "RightUpLeg",
                     spine: "Spine",
-                    walk_speed: 4.0,
+                    walk_speed: 2.0,
                     scale: 0.0085,
                     weapon_scale: 2.5,
                     health: 100.0,
@@ -788,6 +783,7 @@ impl Bot {
                     model,
                 ]),
         )
+        .with_locked_rotations(true)
         .with_can_sleep(false)
         .build(&mut scene.graph);
 
@@ -935,15 +931,17 @@ impl Bot {
     }
 
     pub fn debug_draw(&self, context: &mut SceneDrawingContext) {
-        for pts in self.path.windows(2) {
+        for pts in self.navmesh_agent.path().windows(2) {
             let a = pts[0];
             let b = pts[1];
             context.add_line(scene::debug::Line {
                 begin: a,
                 end: b,
-                color: Color::from_rgba(255, 0, 0, 255),
+                color: Color::RED,
             });
         }
+
+        context.draw_sphere(self.navmesh_agent.position(), 10, 10, 0.25, Color::RED);
 
         context.draw_frustum(&self.frustum, Color::from_rgba(0, 200, 0, 255));
     }
@@ -990,23 +988,6 @@ impl Bot {
             .set_rotation(UnitQuaternion::from_axis_angle(&Vector3::y_axis(), angle));
     }
 
-    fn rebuild_path(&mut self, position: Vector3<f32>, navmesh: &mut Navmesh, time: GameTime) {
-        let from = position - Vector3::new(0.0, 1.0, 0.0);
-        if let Some(from_index) = navmesh.query_closest(from) {
-            if let Some(to_index) = navmesh.query_closest(self.point_of_interest) {
-                self.current_path_point = 0;
-                // Rebuild path if target path vertex has changed.
-                if navmesh
-                    .build_path(from_index, to_index, &mut self.path)
-                    .is_ok()
-                {
-                    self.path.reverse();
-                    self.last_path_rebuild_time = time.elapsed;
-                }
-            }
-        }
-    }
-
     pub fn update(
         &mut self,
         self_handle: Handle<Actor>,
@@ -1016,6 +997,13 @@ impl Bot {
         if self.character.is_dead() {
             self.dying_machine
                 .apply(context.scene, context.time, self.character.is_dead());
+
+            // Lock dead bot in-place.
+            let body = context.scene.graph[self.body].as_rigid_body_mut();
+            let mut lin_vel = body.lin_vel();
+            lin_vel.x = 0.0;
+            lin_vel.z = 0.0;
+            body.set_lin_vel(lin_vel);
         } else {
             self.select_target(self_handle, context.scene, targets);
             self.select_weapon(context.weapons);
@@ -1034,13 +1022,16 @@ impl Bot {
 
             let position = body.global_position();
 
-            if let Some(path_point) = self.path.get(self.current_path_point) {
-                self.move_target = *path_point;
-                if self.move_target.metric_distance(&position) <= 1.0
-                    && self.current_path_point < self.path.len() - 1
-                {
-                    self.current_path_point += 1;
+            if let Some(navmesh) = context.scene.navmeshes.at_mut(0) {
+                self.navmesh_agent
+                    .set_position(position - Vector3::new(0.0, 0.45, 0.0));
+                if let Some(target) = self.target.as_ref() {
+                    self.navmesh_agent.set_target(target.position);
+                } else {
+                    self.navmesh_agent.set_target(self.point_of_interest);
                 }
+                self.navmesh_agent.set_speed(self.definition().walk_speed);
+                let _ = self.navmesh_agent.update(context.time.delta, navmesh);
             }
 
             let need_jump = look_dir.y >= 0.3 && has_ground_contact && in_close_combat;
@@ -1064,16 +1055,18 @@ impl Bot {
             if !in_close_combat {
                 if has_ground_contact {
                     if let Some(move_dir) =
-                        (self.move_target - position).try_normalize(std::f32::EPSILON)
+                        (self.navmesh_agent.position() - position).try_normalize(f32::EPSILON)
                     {
-                        let mut vel = move_dir.scale(self.definition().walk_speed);
+                        let mut vel = move_dir.scale(1.0 / context.time.delta);
                         vel.y = body.lin_vel().y;
                         body.set_lin_vel(vel);
                         self.last_move_dir = move_dir;
                     }
                 } else {
                     // A bit of air control. This helps jump of ledges when there is jump pad below bot.
-                    let mut vel = self.last_move_dir.scale(self.definition().walk_speed);
+                    let mut vel = self
+                        .last_move_dir
+                        .scale(self.definition().walk_speed / context.time.delta);
                     vel.y = body.lin_vel().y;
                     body.set_lin_vel(vel);
                 }
@@ -1168,11 +1161,6 @@ impl Bot {
                 }
             }
 
-            if context.time.elapsed - self.last_path_rebuild_time >= 1.0 {
-                if let Some(navmesh) = context.scene.navmeshes.at_mut(0) {
-                    self.rebuild_path(position, navmesh, context.time);
-                }
-            }
             self.restoration_time -= context.time.delta;
         }
     }

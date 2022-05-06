@@ -12,6 +12,7 @@ use crate::{
     weapon::{Weapon, WeaponContainer, WeaponKind},
     GameTime, MatchOptions,
 };
+use fyrox::core::algebra::Vector2;
 use fyrox::{
     core::{
         algebra::Point3,
@@ -262,7 +263,7 @@ pub async fn analyze(
                 let d = end - begin;
                 let len = d.norm();
                 let force = d.try_normalize(std::f32::EPSILON);
-                let force = force.unwrap_or(Vector3::y()).scale(len * 3.0);
+                let force = force.unwrap_or(Vector3::y()).scale(len * 2.0);
                 let collider = scene.graph.find(handle, &mut |n| n.is_collider());
                 result.jump_pads.add(JumpPad::new(collider, force));
             };
@@ -495,6 +496,9 @@ impl Level {
             .await
             .unwrap()
             .instantiate_geometry(&mut scene);
+
+        // Make sure global coordinates are calculated.
+        scene.update(Vector2::new(1.0, 1.0), 0.0);
 
         let AnalysisResult {
             jump_pads,

@@ -830,7 +830,7 @@ impl Level {
             let scene = &mut engine.scenes[self.scene];
             let weapon = &mut self.weapons[weapon_handle];
             if weapon.try_shoot(scene, time) {
-                let kind = weapon.definition.projectile;
+                let kind = weapon.definition().projectile;
                 let position = weapon.get_shot_position(&scene.graph);
                 let direction = direction
                     .unwrap_or_else(|| weapon.get_shot_direction(&scene.graph))

@@ -26,7 +26,7 @@ use std::{
     sync::mpsc::Sender,
 };
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Visit)]
 pub enum WeaponKind {
     M4,
     Ak47,
@@ -34,27 +34,7 @@ pub enum WeaponKind {
     RocketLauncher,
 }
 
-impl WeaponKind {
-    pub fn id(self) -> u32 {
-        match self {
-            WeaponKind::M4 => 0,
-            WeaponKind::Ak47 => 1,
-            WeaponKind::PlasmaRifle => 2,
-            WeaponKind::RocketLauncher => 3,
-        }
-    }
-
-    pub fn new(id: u32) -> Result<Self, String> {
-        match id {
-            0 => Ok(WeaponKind::M4),
-            1 => Ok(WeaponKind::Ak47),
-            2 => Ok(WeaponKind::PlasmaRifle),
-            3 => Ok(WeaponKind::RocketLauncher),
-            _ => Err(format!("unknown weapon kind {}", id)),
-        }
-    }
-}
-
+#[derive(Visit)]
 pub struct Weapon {
     kind: WeaponKind,
     model: Handle<Node>,
@@ -66,7 +46,7 @@ pub struct Weapon {
     shot_position: Vector3<f32>,
     owner: Handle<Actor>,
     ammo: u32,
-    pub definition: &'static WeaponDefinition,
+    #[visit(skip)]
     pub sender: Option<Sender<Message>>,
 }
 
@@ -91,32 +71,8 @@ impl Default for Weapon {
             shot_position: Vector3::default(),
             owner: Handle::NONE,
             ammo: 250,
-            definition: Self::get_definition(WeaponKind::M4),
             sender: None,
         }
-    }
-}
-
-impl Visit for Weapon {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        let mut kind_id = self.kind.id();
-        kind_id.visit("KindId", visitor)?;
-        if visitor.is_reading() {
-            self.kind = WeaponKind::new(kind_id)?
-        }
-
-        self.definition = Self::get_definition(self.kind);
-        self.model.visit("Model", visitor)?;
-        self.laser_dot.visit("LaserDot", visitor)?;
-        self.offset.visit("Offset", visitor)?;
-        self.dest_offset.visit("DestOffset", visitor)?;
-        self.last_shot_time.visit("LastShotTime", visitor)?;
-        self.owner.visit("Owner", visitor)?;
-        self.ammo.visit("Ammo", visitor)?;
-
-        visitor.leave_region()
     }
 }
 
@@ -200,7 +156,6 @@ impl Weapon {
             laser_dot,
             model,
             shot_point,
-            definition,
             ammo: definition.ammo,
             sender: Some(sender),
             ..Default::default()
@@ -302,8 +257,13 @@ impl Weapon {
         self.owner = owner;
     }
 
+    pub fn definition(&self) -> &'static WeaponDefinition {
+        Self::get_definition(self.kind)
+    }
+
     pub fn try_shoot(&mut self, scene: &mut Scene, time: GameTime) -> bool {
-        if self.ammo != 0 && time.elapsed - self.last_shot_time >= self.definition.shoot_interval {
+        if self.ammo != 0 && time.elapsed - self.last_shot_time >= self.definition().shoot_interval
+        {
             self.ammo -= 1;
 
             self.offset = Vector3::new(0.0, 0.0, -0.05);
@@ -314,7 +274,7 @@ impl Weapon {
             if let Some(sender) = self.sender.as_ref() {
                 sender
                     .send(Message::PlaySound {
-                        path: PathBuf::from(self.definition.shot_sound),
+                        path: PathBuf::from(self.definition().shot_sound),
                         position,
                         gain: 1.0,
                         rolloff_factor: 5.0,

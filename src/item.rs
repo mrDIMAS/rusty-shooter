@@ -13,7 +13,7 @@ use fyrox::{
 };
 use std::{path::Path, sync::mpsc::Sender};
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Visit)]
 pub enum ItemKind {
     Medkit,
 
@@ -29,35 +29,7 @@ pub enum ItemKind {
     RocketLauncher,
 }
 
-impl ItemKind {
-    fn from_id(id: u32) -> Result<ItemKind, String> {
-        match id {
-            0 => Ok(ItemKind::Medkit),
-            1 => Ok(ItemKind::Plasma),
-            2 => Ok(ItemKind::Ak47Ammo),
-            3 => Ok(ItemKind::M4Ammo),
-            4 => Ok(ItemKind::PlasmaGun),
-            5 => Ok(ItemKind::Ak47),
-            6 => Ok(ItemKind::M4),
-            7 => Ok(ItemKind::RocketLauncher),
-            _ => Err(format!("Unknown item kind {}", id)),
-        }
-    }
-
-    fn id(self) -> u32 {
-        match self {
-            ItemKind::Medkit => 0,
-            ItemKind::Plasma => 1,
-            ItemKind::Ak47Ammo => 2,
-            ItemKind::M4Ammo => 3,
-            ItemKind::PlasmaGun => 4,
-            ItemKind::Ak47 => 5,
-            ItemKind::M4 => 6,
-            ItemKind::RocketLauncher => 7,
-        }
-    }
-}
-
+#[derive(Visit)]
 pub struct Item {
     kind: ItemKind,
     pivot: Handle<Node>,
@@ -67,7 +39,7 @@ pub struct Item {
     offset_factor: f32,
     reactivation_timer: f32,
     active: bool,
-    definition: &'static ItemDefinition,
+    #[visit(skip)]
     pub sender: Option<Sender<Message>>,
     lifetime: Option<f32>,
 }
@@ -83,7 +55,6 @@ impl Default for Item {
             offset_factor: 0.0,
             reactivation_timer: 0.0,
             active: true,
-            definition: Self::get_definition(ItemKind::Medkit),
             sender: None,
             lifetime: None,
         }
@@ -249,8 +220,12 @@ impl Item {
         self.kind
     }
 
+    pub fn definition(&self) -> &'static ItemDefinition {
+        Self::get_definition(self.kind)
+    }
+
     pub fn pick_up(&mut self) {
-        self.reactivation_timer = self.definition.reactivation_interval;
+        self.reactivation_timer = self.definition().reactivation_interval;
         self.active = false;
     }
 
@@ -271,31 +246,6 @@ impl Item {
 
     pub fn set_lifetime(&mut self, lifetime: Option<f32>) {
         self.lifetime = lifetime;
-    }
-}
-
-impl Visit for Item {
-    fn visit(&mut self, name: &str, visitor: &mut Visitor) -> VisitResult {
-        visitor.enter_region(name)?;
-
-        let mut kind = self.kind.id();
-        kind.visit("Kind", visitor)?;
-        if visitor.is_reading() {
-            self.kind = ItemKind::from_id(kind)?;
-        }
-
-        self.definition = Self::get_definition(self.kind);
-        self.model.visit("Model", visitor)?;
-        self.pivot.visit("Pivot", visitor)?;
-        self.offset.visit("Offset", visitor)?;
-        self.offset_factor.visit("OffsetFactor", visitor)?;
-        self.dest_offset.visit("DestOffset", visitor)?;
-        self.reactivation_timer
-            .visit("ReactivationTimer", visitor)?;
-        self.active.visit("Active", visitor)?;
-        self.lifetime.visit("Lifetime", visitor)?;
-
-        visitor.leave_region()
     }
 }
 

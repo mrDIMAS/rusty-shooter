@@ -37,10 +37,7 @@ use fyrox::{
         transform::TransformBuilder,
         Scene,
     },
-    utils::{
-        log::{Log, MessageKind},
-        navmesh::Navmesh,
-    },
+    utils::log::{Log, MessageKind},
 };
 use std::{
     ops::{Deref, DerefMut},

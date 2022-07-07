@@ -271,7 +271,7 @@ impl Game {
                         dt -= fixed_timestep as f64;
                         game.time.elapsed += fixed_timestep as f64;
 
-                        game.update(game.time);
+                        game.update(game.time, control_flow);
 
                         while let Some(ui_event) = game.engine.user_interface.poll_message() {
                             game.menu.handle_ui_event(&mut game.engine, &ui_event);
@@ -451,7 +451,7 @@ impl Game {
         self.menu.is_visible(&self.engine.user_interface)
     }
 
-    pub fn update(&mut self, time: GameTime) {
+    pub fn update(&mut self, time: GameTime, control_flow: &mut ControlFlow) {
         let window = self.engine.get_window();
         window.set_cursor_visible(self.is_menu_visible());
         let _ = window.set_cursor_grab(!self.is_menu_visible());
@@ -482,7 +482,7 @@ impl Game {
             }
         }
 
-        self.engine.update(time.delta);
+        self.engine.update(time.delta, control_flow);
 
         if let Some(ref mut level) = self.level {
             level.update(&mut self.engine, time);

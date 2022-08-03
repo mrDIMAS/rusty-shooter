@@ -1083,8 +1083,8 @@ impl Level {
                     if let Some(spectator_camera) =
                         scene.graph[self.spectator_camera].cast_mut::<Camera>()
                     {
+                        spectator_camera.set_enabled(true);
                         spectator_camera
-                            .set_enabled(true)
                             .local_transform_mut()
                             .set_position(position);
                     }

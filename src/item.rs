@@ -194,10 +194,9 @@ impl Item {
 
         let position = graph[self.pivot].global_position();
 
-        graph[self.model]
-            .set_visibility(!self.is_picked_up())
-            .local_transform_mut()
-            .set_position(self.offset);
+        let model = &mut graph[self.model];
+        model.set_visibility(!self.is_picked_up());
+        model.local_transform_mut().set_position(self.offset);
 
         if !self.active {
             self.reactivation_timer -= time.delta;

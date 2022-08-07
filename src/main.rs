@@ -27,6 +27,7 @@ use crate::{
     actor::Actor, control_scheme::ControlScheme, hud::Hud, level::Level, menu::Menu,
     message::Message,
 };
+use fyrox::window::CursorGrabMode;
 use fyrox::{
     core::{
         futures::executor::block_on,
@@ -454,7 +455,11 @@ impl Game {
     pub fn update(&mut self, time: GameTime, control_flow: &mut ControlFlow) {
         let window = self.engine.get_window();
         window.set_cursor_visible(self.is_menu_visible());
-        let _ = window.set_cursor_grab(!self.is_menu_visible());
+        let _ = window.set_cursor_grab(if !self.is_menu_visible() {
+            CursorGrabMode::Confined
+        } else {
+            CursorGrabMode::None
+        });
 
         if let Some(ctx) = self.load_context.clone() {
             if let Ok(mut ctx) = ctx.try_lock() {

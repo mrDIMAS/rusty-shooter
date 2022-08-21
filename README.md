@@ -8,7 +8,7 @@ Cargo.toml contains hardcoded relative path to engine `fyrox = { path = "../fyro
 
 In other words you can do something like this:
 ```
-git clone https://github.com/mrDIMAS/fyrox
+git clone https://github.com/FyroxEngine/Fyrox
 git clone https://github.com/mrDIMAS/rusty-shooter
 cd rusty-shooter
 cargo run --release

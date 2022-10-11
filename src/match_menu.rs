@@ -179,14 +179,14 @@ impl MatchMenu {
             if message.destination() == self.start_button {
                 let time_limit_minutes =
                     if let Some(scroll_bar) = ui.node(self.sb_time_limit).cast::<ScrollBar>() {
-                        scroll_bar.value()
+                        scroll_bar.value
                     } else {
                         0.0
                     };
 
                 let frag_limit =
                     if let Some(scroll_bar) = ui.node(self.sb_frag_limit).cast::<ScrollBar>() {
-                        scroll_bar.value()
+                        scroll_bar.value
                     } else {
                         0.0
                     };

@@ -487,7 +487,8 @@ impl Game {
             }
         }
 
-        self.engine.update(time.delta, control_flow);
+        let mut lag = 0f32;
+        self.engine.update(time.delta, control_flow, &mut lag);
 
         if let Some(ref mut level) = self.level {
             level.update(&mut self.engine, time);

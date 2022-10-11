@@ -684,7 +684,7 @@ impl OptionsMenu {
         {
             if let Some(button) = ui.node(*btn).cast::<Button>() {
                 ui.send_message(TextMessage::text(
-                    button.content(),
+                    button.content,
                     MessageDirection::ToWidget,
                     def.button.name().to_owned(),
                 ));
@@ -734,7 +734,7 @@ impl OptionsMenu {
                         .cast::<Button>()
                     {
                         engine.user_interface.send_message(TextMessage::text(
-                            button.content(),
+                            button.content,
                             MessageDirection::ToWidget,
                             control_button.name().to_owned(),
                         ));
@@ -812,7 +812,7 @@ impl OptionsMenu {
                 if message.destination() == *button {
                     if let Some(button) = engine.user_interface.node(*button).cast::<Button>() {
                         engine.user_interface.send_message(TextMessage::text(
-                            button.content(),
+                            button.content,
                             MessageDirection::ToWidget,
                             "[WAITING INPUT]".to_owned(),
                         ))

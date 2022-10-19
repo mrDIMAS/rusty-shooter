@@ -4,7 +4,7 @@ Single player 3d shooter written in Rust and based on [fyrox engine](https://git
 
 ## How to build
 
-Cargo.toml contains hardcoded relative path to engine `fyrox = { path = "../fyrox" }`, so you have to change this or put engine folder near the game folder to get game compile, because it always uses latest fyrox which could be not published on crates.io.
+Cargo.toml contains hardcoded relative path to engine `fyrox = { path = "../Fyrox" }`, so you have to change this or put engine folder near the game folder to get game compile, because it always uses latest fyrox which could be not published on crates.io.
 
 In other words you can do something like this:
 ```
